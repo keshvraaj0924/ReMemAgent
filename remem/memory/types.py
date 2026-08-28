@@ -25,6 +25,18 @@ class MemoryStatus(str, Enum):
     RETIRED = "retired"
 
 
+@dataclass(frozen=True, slots=True)
+class RetrievedMemory:
+    """A memory candidate paired with its retrieval relevance score."""
+
+    memory: "MemoryRecord"
+    similarity: float
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.similarity <= 1.0:
+            raise ValueError("similarity must be between 0 and 1")
+
+
 @dataclass(slots=True)
 class MemoryRecord:
     """An experience stored for possible future transfer."""
@@ -57,11 +69,7 @@ class MemoryRecord:
     def transferability(self) -> float:
         """Return observed success when this memory is transferred to new contexts."""
 
-        return (
-            self.transfer_successes / self.transfer_attempts
-            if self.transfer_attempts
-            else 0.5
-        )
+        return self.transfer_successes / self.transfer_attempts if self.transfer_attempts else 0.5
 
     def record_use(self, success: bool, transferred: bool = False) -> None:
         """Record one memory use and optionally attribute it to transfer."""
