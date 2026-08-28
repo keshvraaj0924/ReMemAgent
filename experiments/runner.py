@@ -1,0 +1,78 @@
+"""Reproducible experiment execution and result persistence."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+from pathlib import Path
+import random
+from typing import Callable, Sequence
+
+from experiments.ablations import AblationResult, run_ablations
+from experiments.synthetic_negative_transfer import BenchmarkCase
+from remem.routing.counterfactual import CounterfactualRouter
+
+DEFAULT_SEED = 42
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentConfig:
+    """Configuration that makes a synthetic experiment reproducible."""
+
+    seed: int = DEFAULT_SEED
+    minimum_delta: float = 0.05
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentReport:
+    """Serializable output from one reproducible ablation experiment."""
+
+    seed: int
+    minimum_delta: float
+    case_ids: tuple[str, ...]
+    results: tuple[AblationResult, ...]
+
+
+def run_reproducible_ablation(
+    cases_factory: Callable[[random.Random], Sequence[BenchmarkCase]],
+    config: ExperimentConfig | None = None,
+) -> ExperimentReport:
+    """Run matched ablations with a dedicated seeded random generator."""
+
+    selected_config = config or ExperimentConfig()
+    generator = random.Random(selected_config.seed)
+    cases = list(cases_factory(generator))
+    router = CounterfactualRouter(minimum_delta=selected_config.minimum_delta)
+    results = run_ablations(cases, router)
+    return ExperimentReport(
+        seed=selected_config.seed,
+        minimum_delta=selected_config.minimum_delta,
+        case_ids=tuple(case.case_id for case in cases),
+        results=tuple(results),
+    )
+
+
+def save_report(report: ExperimentReport, output_path: str | Path) -> Path:
+    """Persist an experiment report as deterministic, human-readable JSON."""
+
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "seed": report.seed,
+        "minimum_delta": report.minimum_delta,
+        "case_ids": list(report.case_ids),
+        "results": [
+            {
+                "strategy": result.strategy.value,
+                "total_cases": result.total_cases,
+                "selected_memory": result.selected_memory,
+                "mean_utility": result.mean_utility,
+                "negative_transfer_cases": result.negative_transfer_cases,
+                "selected_negative_transfer_cases": result.selected_negative_transfer_cases,
+                "routing_regret": result.routing_regret,
+            }
+            for result in report.results
+        ],
+    }
+    destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return destination
