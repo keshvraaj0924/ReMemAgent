@@ -5,11 +5,13 @@ on:
     branches: [main, feat/core-memory-engine]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   quality:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
 
@@ -29,7 +31,10 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
-      - name: Check formatting and lint rules
+      - name: Check formatting
+        run: python -m ruff format --check .
+
+      - name: Check lint rules
         run: python -m ruff check .
 
       - name: Check type annotations
