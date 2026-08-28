@@ -9,6 +9,7 @@ import random
 from typing import Callable, Sequence
 
 from experiments.ablations import AblationResult, run_ablations
+from experiments.reproducibility import SCHEMA_VERSION, fingerprint_cases
 from experiments.synthetic_negative_transfer import BenchmarkCase
 from remem.routing.counterfactual import CounterfactualRouter
 
@@ -30,6 +31,7 @@ class ExperimentReport:
     seed: int
     minimum_delta: float
     case_ids: tuple[str, ...]
+    case_fingerprint: str
     results: tuple[AblationResult, ...]
 
 
@@ -40,6 +42,9 @@ def run_reproducible_ablation(
     """Run matched ablations with a dedicated seeded random generator."""
 
     selected_config = config or ExperimentConfig()
+    if selected_config.minimum_delta < 0:
+        raise ValueError("minimum_delta must be non-negative")
+
     generator = random.Random(selected_config.seed)
     cases = list(cases_factory(generator))
     _validate_unique_case_ids(cases)
@@ -49,6 +54,7 @@ def run_reproducible_ablation(
         seed=selected_config.seed,
         minimum_delta=selected_config.minimum_delta,
         case_ids=tuple(case.case_id for case in cases),
+        case_fingerprint=fingerprint_cases(cases),
         results=tuple(results),
     )
 
@@ -59,9 +65,11 @@ def save_report(report: ExperimentReport, output_path: str | Path) -> Path:
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "schema_version": SCHEMA_VERSION,
         "seed": report.seed,
         "minimum_delta": report.minimum_delta,
         "case_ids": list(report.case_ids),
+        "case_fingerprint": report.case_fingerprint,
         "results": [
             {
                 "strategy": result.strategy.value,
