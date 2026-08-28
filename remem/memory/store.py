@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from .types import MemoryRecord
+from .types import MemoryRecord, MemoryStatus
 
 
 class MemoryStore:
-    """Store memory records with explicit lifecycle operations."""
+    """Store memory records with explicit lifecycle-aware operations."""
 
     def __init__(self, memories: Iterable[MemoryRecord] | None = None) -> None:
         self._memories: dict[str, MemoryRecord] = {}
@@ -35,15 +35,22 @@ class MemoryStore:
         return self._memories.pop(memory_id, None)
 
     def active(self) -> list[MemoryRecord]:
-        """Return active memories in deterministic identifier order."""
-        return sorted(
-            (memory for memory in self._memories.values() if memory.kind is not None),
-            key=lambda memory: memory.memory_id,
-        )
+        """Return only active memories in deterministic identifier order."""
+        return self._by_status(MemoryStatus.ACTIVE)
 
     def all(self) -> list[MemoryRecord]:
         """Return all memories in deterministic identifier order."""
         return sorted(self._memories.values(), key=lambda memory: memory.memory_id)
+
+    def by_status(self, status: MemoryStatus) -> list[MemoryRecord]:
+        """Return memories matching an explicit lifecycle status."""
+        return self._by_status(status)
+
+    def _by_status(self, status: MemoryStatus) -> list[MemoryRecord]:
+        return sorted(
+            (memory for memory in self._memories.values() if memory.status is status),
+            key=lambda memory: memory.memory_id,
+        )
 
     def __len__(self) -> int:
         return len(self._memories)
