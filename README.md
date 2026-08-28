@@ -2,66 +2,146 @@
 
 > **Learning when to remember, what to reconstruct, and when to forget.**
 
-ReMemAgent is a research framework for adaptive memory in LLM agents. It extends reconstructive-memory approaches with **counterfactual memory routing**: before relying on retrieved experience, an agent estimates whether memory is likely to improve the current decision or introduce negative transfer.
+[![Status](https://img.shields.io/badge/status-research--prototype-orange)](https://github.com/keshvraaj0924/ReMemAgent)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Research thesis
+ReMemAgent is a research framework for **adaptive, reconstructive memory in LLM agents**.
 
-Most memory-augmented agents treat retrieval as an implicit benefit: retrieve a relevant experience, inject it into context, and continue reasoning. ReMemAgent treats memory as **evidence that must earn trust**.
+Instead of replaying retrieved experiences verbatim, ReMemAgent treats memory as evidence: retrieve it, estimate whether it transfers, reconstruct it against the current state, and reject it when it is likely to cause negative transfer.
+
+## Why ReMemAgent?
+
+Traditional memory-augmented agents often follow:
 
 ```text
-Observation
-    ↓
-Adaptive Retrieval
-    ↓
-Memory Reconstruction
-    ↓
-Trust / Transferability Estimation
-    ↓
-Counterfactual Memory Routing
-    ├── Memory-guided reasoning
-    ├── Memory + self-reasoning
-    └── Self-reasoning only
-    ↓
-Action
-    ↓
-Outcome Attribution
-    ↓
-Memory Consolidation
+retrieve → inject → act
 ```
 
-## Planned contributions
+That assumes a useful past experience remains useful when the current situation changes.
 
-- **Counterfactual Memory Router** — estimate the expected benefit of using memory versus reasoning without it.
-- **Memory Trust & Transferability** — model whether an experience transfers beyond its original context.
-- **Positive + Failure Memory** — retain useful successes and high-value failures/avoidance rules.
-- **Memory Consolidation** — evolve episodic experiences into validated semantic and procedural knowledge.
-- **Negative Transfer Evaluation** — directly measure when memory makes an agent worse.
-- **Adaptive Memory Budgeting** — learn how much memory to retrieve based on task difficulty, confidence, and expected utility.
+ReMemAgent follows:
+
+```text
+observe
+  ↓
+retrieve
+  ↓
+assess trust & transferability
+  ↓
+reconstruct for the current state
+  ↓
+route: memory / hybrid / self-reasoning
+  ↓
+act
+  ↓
+attribute outcome
+  ↓
+consolidate or retire memory
+```
+
+The central research question is:
+
+> **Can an agent learn not only what to remember, but when a memory should influence its reasoning?**
+
+## Core ideas
+
+### Reconstruct, don't replay
+
+Stored experiences are transformed into compact, state-aligned guidance instead of being copied directly into the agent context.
+
+### Memory must earn trust
+
+Retrieval relevance alone is insufficient. ReMemAgent tracks evidence such as empirical success, transferability, confidence, and failure history.
+
+### Counterfactual routing
+
+The router considers whether using memory is expected to outperform self-reasoning. Low-value or risky memories can be rejected.
+
+### Failure memory
+
+Failures are first-class experiences. The system can retain them as avoidance knowledge instead of silently discarding negative outcomes.
+
+### Memory lifecycle
+
+Memories have an explicit lifecycle rather than growing indefinitely:
+
+```text
+capture → validate → retrieve → use → evaluate → consolidate → stale → retire
+```
+
+## Architecture
+
+```text
+                         ┌──────────────────────┐
+                         │      Observation     │
+                         └──────────┬───────────┘
+                                    ↓
+                         ┌──────────────────────┐
+                         │  Memory Retrieval    │
+                         └──────────┬───────────┘
+                                    ↓
+                    ┌──────────────────────────────┐
+                    │ Trust / Transferability      │
+                    └──────────────┬───────────────┘
+                                   ↓
+                    ┌──────────────────────────────┐
+                    │ Memory Reconstruction        │
+                    └──────────────┬───────────────┘
+                                   ↓
+                    ┌──────────────────────────────┐
+                    │ Counterfactual Memory Router │
+                    └──────────────┬───────────────┘
+                                   ↓
+                     ┌─────────────┴─────────────┐
+                     ↓                           ↓
+              Memory / Hybrid              Self-reasoning
+                     └─────────────┬─────────────┘
+                                   ↓
+                                Action
+                                   ↓
+                           Outcome Attribution
+                                   ↓
+                    ┌──────────────┴──────────────┐
+                    ↓                             ↓
+             Consolidate                    Retire / Reject
+```
+
+## Repository structure
+
+```text
+ReMemAgent/
+├── remem/
+│   ├── memory/          # Memory domain, storage, retrieval and reconstruction
+│   └── routing/         # Memory decision and counterfactual routing
+├── experiments/         # Reproducible research experiments
+├── tests/               # Unit and integration tests
+├── README.md
+└── pyproject.toml
+```
+
+## Research status
+
+**Active research prototype.**
+
+The deterministic memory engine is being built first so retrieval, reconstruction, routing, lifecycle behavior, and negative-transfer effects can be tested independently before introducing model-dependent training.
+
+Benchmark results are intentionally not reported until the corresponding experiments are implemented and reproduced.
+
+## Development principles
+
+- **Readable first:** descriptive names, small functions, explicit contracts.
+- **Typed interfaces:** public APIs use Python type annotations.
+- **Deterministic baselines:** research heuristics remain reproducible and independently testable.
+- **Learned components stay isolated:** model-based components can replace heuristics without rewriting the memory domain.
+- **Tests before claims:** experimental improvements must be supported by reproducible evaluation.
+- **Evidence over complexity:** every subsystem must justify its additional latency, tokens, or memory cost.
 
 ## Research lineage
 
-ReMemAgent is an independent research implementation inspired by recent work on reconstructive memory for agents, including [MemHarness](https://github.com/KnowledgeXLab/MemHarness). ReMemAgent will reproduce relevant baselines where practical and clearly separate reproduced components from our extensions.
-
-## Status
-
-🚧 **Research prototype — active development**
-
-The first milestone focuses on a deterministic counterfactual memory engine and evaluation harness before integration with large-scale agent training.
-
-## Roadmap
-
-- [x] Define research hypothesis and architecture
-- [ ] Implement typed memory model
-- [ ] Implement trust / transferability scoring
-- [ ] Implement counterfactual router
-- [ ] Implement failure memory
-- [ ] Implement consolidation lifecycle
-- [ ] Build synthetic negative-transfer benchmark
-- [ ] Add ablation framework
-- [ ] Integrate ALFWorld
-- [ ] Integrate GRPO training
-- [ ] Report latency, token cost, memory growth, and task success
+ReMemAgent is an independent research implementation inspired by reconstructive-memory research, including [MemHarness](https://github.com/KnowledgeXLab/MemHarness). Related ideas are treated as research lineage; implementation and experimental extensions in this repository are developed independently.
 
 ## License
 
-MIT
+MIT License.
+
+See [LICENSE](LICENSE) for the full text.
