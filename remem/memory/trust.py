@@ -1,7 +1,7 @@
 """Context-aware trust and transferability scoring.
 
-This first implementation is intentionally model-agnostic. It provides a
-stable scoring contract that can later be replaced by a learned critic.
+The baseline scorer is deliberately model-agnostic. It exposes a stable
+contract that can later be replaced or augmented by a learned critic.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class TrustScore:
 
 
 class MemoryTrustScorer:
-    """Score whether a retrieved experience deserves to influence reasoning."""
+    """Estimate whether a memory deserves to influence current reasoning."""
 
     def __init__(
         self,
@@ -42,8 +42,8 @@ class MemoryTrustScorer:
             raise ValueError("Trust weights must be non-negative")
         if sum(weights) <= 0:
             raise ValueError("At least one trust weight must be positive")
-        total = sum(weights)
-        self._weights = tuple(weight / total for weight in weights)
+        total_weight = sum(weights)
+        self._weights = tuple(weight / total_weight for weight in weights)
 
     def score(
         self,
@@ -53,20 +53,31 @@ class MemoryTrustScorer:
         transferability: float | None = None,
         freshness: float = 1.0,
     ) -> TrustScore:
-        similarity = _unit(similarity)
-        success = _unit(memory.empirical_success_rate)
-        transfer = _unit(
-            transferability if transferability is not None else memory.metadata.get("transferability", 0.5)
+        """Return a deterministic trust decomposition for ``memory``."""
+        similarity_score = _unit(similarity)
+        historical_success = _unit(memory.empirical_success_rate)
+        transferability_score = _unit(
+            memory.transferability if transferability is None else transferability
         )
-        freshness = _unit(freshness)
+        freshness_score = _unit(freshness)
+        component_scores = (
+            similarity_score,
+            historical_success,
+            transferability_score,
+            freshness_score,
+        )
         confidence = sum(
-            weight * value
-            for weight, value in zip(self._weights, (similarity, success, transfer, freshness))
+            weight * value for weight, value in zip(self._weights, component_scores)
         )
-        return TrustScore(similarity, success, transfer, freshness, confidence)
+        return TrustScore(
+            similarity=similarity_score,
+            historical_success=historical_success,
+            transferability=transferability_score,
+            freshness=freshness_score,
+            confidence=confidence,
+        )
 
 
 def _unit(value: float) -> float:
     """Clamp an arbitrary scalar to the scoring domain [0, 1]."""
-
     return max(0.0, min(1.0, float(value)))
