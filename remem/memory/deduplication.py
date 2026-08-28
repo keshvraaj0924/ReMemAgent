@@ -1,47 +1,65 @@
-"""Memory deduplication primitives.
-
-The default implementation uses token-set Jaccard similarity so the research
-engine remains dependency-free. Production vector backends can implement the
-same protocol with embedding similarity.
-"""
+"""Deterministic semantic-deduplication baseline for memory candidates."""
 
 from __future__ import annotations
 
-import re
-from collections.abc import Sequence
+from dataclasses import dataclass
 
+from .retrieval import lexical_similarity
 from .types import MemoryRecord
 
-_TOKEN_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
 
+@dataclass(frozen=True, slots=True)
+class DeduplicationPolicy:
+    """Controls when two memories are considered near-duplicates."""
 
-def normalized_tokens(text: str) -> set[str]:
-    """Tokenize text into normalized lexical units."""
-    return {token.lower() for token in _TOKEN_PATTERN.findall(text)}
+    similarity_threshold: float = 0.85
 
-
-def lexical_similarity(left_text: str, right_text: str) -> float:
-    """Return token-set Jaccard similarity in the inclusive range [0, 1]."""
-    left_tokens = normalized_tokens(left_text)
-    right_tokens = normalized_tokens(right_text)
-    if not left_tokens and not right_tokens:
-        return 1.0
-    if not left_tokens or not right_tokens:
-        return 0.0
-    return len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.similarity_threshold <= 1.0:
+            raise ValueError("similarity_threshold must be between 0 and 1")
 
 
 class MemoryDeduplicator:
-    """Keep only memories that are sufficiently distinct from existing ones."""
+    """Remove redundant memories while preserving the strongest evidence."""
 
-    def __init__(self, similarity_threshold: float = 0.92) -> None:
-        if not 0.0 <= similarity_threshold <= 1.0:
-            raise ValueError("similarity_threshold must be between 0 and 1")
-        self.similarity_threshold = similarity_threshold
+    def __init__(self, policy: DeduplicationPolicy | None = None) -> None:
+        self.policy = policy or DeduplicationPolicy()
 
-    def is_duplicate(self, candidate: MemoryRecord, existing_memories: Sequence[MemoryRecord]) -> bool:
-        """Check whether candidate content is already represented."""
-        return any(
-            lexical_similarity(candidate.content, existing_memory.content) >= self.similarity_threshold
-            for existing_memory in existing_memories
-        )
+    def deduplicate(self, memories: list[MemoryRecord]) -> list[MemoryRecord]:
+        """Return memories with near-duplicate records removed.
+
+        Records are considered in deterministic identifier order. When two
+        records overlap beyond the configured threshold, the record with the
+        stronger empirical evidence is retained.
+        """
+        retained: list[MemoryRecord] = []
+        for candidate in sorted(memories, key=lambda memory: memory.memory_id):
+            duplicate_index = self._find_duplicate_index(candidate, retained)
+            if duplicate_index is None:
+                retained.append(candidate)
+                continue
+            if self._evidence_score(candidate) > self._evidence_score(retained[duplicate_index]):
+                retained[duplicate_index] = candidate
+        return retained
+
+    def _find_duplicate_index(
+        self,
+        candidate: MemoryRecord,
+        retained: list[MemoryRecord],
+    ) -> int | None:
+        for index, existing in enumerate(retained):
+            similarity = lexical_similarity(
+                self._memory_text(candidate),
+                self._memory_text(existing),
+            )
+            if similarity >= self.policy.similarity_threshold:
+                return index
+        return None
+
+    @staticmethod
+    def _memory_text(memory: MemoryRecord) -> str:
+        return " ".join((memory.state, memory.action, memory.outcome))
+
+    @staticmethod
+    def _evidence_score(memory: MemoryRecord) -> float:
+        return memory.reward + memory.empirical_success_rate + 0.01 * memory.uses
