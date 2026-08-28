@@ -42,6 +42,7 @@ def run_reproducible_ablation(
     selected_config = config or ExperimentConfig()
     generator = random.Random(selected_config.seed)
     cases = list(cases_factory(generator))
+    _validate_unique_case_ids(cases)
     router = CounterfactualRouter(minimum_delta=selected_config.minimum_delta)
     results = run_ablations(cases, router)
     return ExperimentReport(
@@ -76,3 +77,11 @@ def save_report(report: ExperimentReport, output_path: str | Path) -> Path:
     }
     destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return destination
+
+
+def _validate_unique_case_ids(cases: Sequence[BenchmarkCase]) -> None:
+    """Reject duplicate identifiers before an experiment is executed."""
+
+    case_ids = [case.case_id for case in cases]
+    if len(case_ids) != len(set(case_ids)):
+        raise ValueError("benchmark case_id values must be unique")
