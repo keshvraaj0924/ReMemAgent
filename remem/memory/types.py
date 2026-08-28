@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
 
 class MemoryKind(str, Enum):
-    """Stage or semantic role of an experience in the memory lifecycle."""
+    """Semantic role a memory plays in the agent's memory hierarchy."""
 
     EPISODIC = "episodic"
     SEMANTIC = "semantic"
@@ -16,7 +17,15 @@ class MemoryKind(str, Enum):
     FAILURE = "failure"
 
 
-@dataclass(frozen=True, slots=True)
+class MemoryStatus(str, Enum):
+    """Lifecycle state of a stored memory."""
+
+    ACTIVE = "active"
+    STALE = "stale"
+    RETIRED = "retired"
+
+
+@dataclass(slots=True)
 class MemoryRecord:
     """An experience stored for possible future transfer."""
 
@@ -29,40 +38,41 @@ class MemoryRecord:
     uses: int = 0
     successes: int = 0
     failures: int = 0
+    transfer_attempts: int = 0
+    transfer_successes: int = 0
+    confidence: float = 0.5
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_used_at: datetime | None = None
+    status: MemoryStatus = MemoryStatus.ACTIVE
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def empirical_success_rate(self) -> float:
+        """Return the observed success rate, using a neutral prior when unused."""
+
         attempts = self.successes + self.failures
-        return self.successes / attempts if attempts else 0.0
-
-
-@dataclass(frozen=True, slots=True)
-class RetrievedMemory:
-    """A memory candidate returned for the current observation."""
-
-    memory: MemoryRecord
-    similarity: float
-    reconstructed_guidance: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class CounterfactualScore:
-    """Estimated value difference between using and ignoring memory."""
-
-    with_memory: float
-    without_memory: float
+        return self.successes / attempts if attempts else 0.5
 
     @property
-    def delta(self) -> float:
-        return self.with_memory - self.without_memory
+    def transferability(self) -> float:
+        """Return observed success when this memory is transferred to new contexts."""
 
+        return (
+            self.transfer_successes / self.transfer_attempts
+            if self.transfer_attempts
+            else 0.5
+        )
 
-@dataclass(frozen=True, slots=True)
-class MemoryDecision:
-    """Final routing decision for a memory candidate or candidate set."""
+    def record_use(self, success: bool, transferred: bool = False) -> None:
+        """Record one memory use and optionally attribute it to transfer."""
 
-    route: str
-    confidence: float
-    expected_delta: float
-    reason: str
+        self.uses += 1
+        self.last_used_at = datetime.now(timezone.utc)
+        if success:
+            self.successes += 1
+        else:
+            self.failures += 1
+        if transferred:
+            self.transfer_attempts += 1
+            if success:
+                self.transfer_successes += 1
