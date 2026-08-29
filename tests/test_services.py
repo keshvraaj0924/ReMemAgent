@@ -3,30 +3,31 @@
 import pytest
 
 from remem.environments.base import StepResult
-from remem.memory import MemoryStore
+from remem.memory import MemoryGuidedPolicy, MemoryStore
 from remem.services import EpisodeExecutionService
 
 
 class FakeEnvironment:
     """Deterministic environment for service-level tests."""
 
-    def __init__(self) -> None:
+    def __init__(self, initial: str = "start", goal: str = "goal") -> None:
+        self.initial = initial
+        self.goal = goal
         self.actions: list[str] = []
 
-    def reset(self, **kwargs: object) -> str:
+    def reset(self, **_kwargs: object) -> str:
         """Return the configured initial observation."""
 
-        return str(kwargs.get("initial", "start"))
+        return self.initial
 
     def step(self, action: str) -> StepResult:
         """Return a terminal transition after recording the action."""
 
         self.actions.append(action)
-        return StepResult("goal", 1.0, True, False, {})
+        return StepResult(self.goal, 1.0, True, False, {})
 
     def close(self) -> None:
         """Close the test environment."""
-
 
 
 def test_service_executes_policy_and_ingests_trajectory() -> None:
@@ -78,3 +79,37 @@ def test_service_rejects_blank_episode_id_before_execution() -> None:
             max_steps=1,
             success_evaluator=lambda _: True,
         )
+
+
+def test_stored_episode_becomes_guidance_for_later_execution() -> None:
+    store = MemoryStore()
+    service = EpisodeExecutionService()
+
+    service.execute_and_ingest(
+        FakeEnvironment(initial="The cabinet is closed.", goal="The cabinet opened."),
+        lambda _: "open cabinet",
+        store,
+        episode_id="episode-source",
+        max_steps=1,
+        success_evaluator=lambda _: True,
+    )
+
+    guidance_seen: list[str] = []
+
+    def action_policy(_state: str, guidance: str) -> str:
+        guidance_seen.append(guidance)
+        return "open cabinet"
+
+    guided_policy = MemoryGuidedPolicy(store, action_policy)
+    result = service.execute_and_ingest(
+        FakeEnvironment(initial="The cabinet is closed.", goal="The cabinet opened."),
+        guided_policy,
+        store,
+        episode_id="episode-guided",
+        max_steps=1,
+        success_evaluator=lambda _: True,
+    )
+
+    assert result.episode_success is True
+    assert guidance_seen
+    assert "Relevant action: open cabinet" in guidance_seen[0]
