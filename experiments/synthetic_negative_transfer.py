@@ -14,10 +14,13 @@ class BenchmarkCase:
     case_id: str
     utility_with_memory: float
     utility_without_memory: float
+    memory_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.case_id.strip():
             raise ValueError("case_id must not be empty")
+        if self.memory_id is not None and not self.memory_id.strip():
+            raise ValueError("memory_id must not be empty when provided")
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +32,7 @@ class BenchmarkCaseResult:
     utility_delta: float
     negative_transfer: bool
     regret: float
+    memory_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +114,7 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
                 utility_delta=utility_delta,
                 negative_transfer=memory_is_worse,
                 regret=regret,
+                memory_id=case.memory_id,
             )
         )
 
@@ -135,10 +140,10 @@ def _validate_unique_case_ids(cases: list[BenchmarkCase]) -> None:
 
 if __name__ == "__main__":
     benchmark_cases = [
-        BenchmarkCase("positive_1", 0.90, 0.70),
-        BenchmarkCase("positive_2", 0.85, 0.60),
-        BenchmarkCase("negative_1", 0.35, 0.80),
-        BenchmarkCase("negative_2", 0.40, 0.75),
+        BenchmarkCase("positive_1", 0.90, 0.70, memory_id="memory_a"),
+        BenchmarkCase("positive_2", 0.85, 0.60, memory_id="memory_b"),
+        BenchmarkCase("negative_1", 0.35, 0.80, memory_id="memory_a"),
+        BenchmarkCase("negative_2", 0.40, 0.75, memory_id="memory_b"),
     ]
     result = run_benchmark(benchmark_cases, CounterfactualRouter(minimum_delta=0.05))
     print(f"negative_transfer_rate={result.negative_transfer_rate:.3f}")
