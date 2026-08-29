@@ -5,7 +5,7 @@ from .deduplication import MemoryDeduplicator
 from .episode import EpisodeMemoryAttribution, EpisodeMemoryRecorder
 from .failure import FailureMemoryBuilder, FailureObservation
 from .ingestion import EpisodeMemoryIngestor, MemoryIngestionResult
-from .lifecycle import ConsolidationPolicy, MemoryLifecycleManager
+from .lifecycle import LifecyclePolicy, MemoryLifecycle
 from .pipeline import MemoryCandidate, MemoryGuidancePipeline
 from .policy import MemoryGuidanceDecision, MemoryGuidedPolicy
 from .reconstruction import MemoryReconstructor
@@ -23,22 +23,22 @@ from .types import (
 )
 
 __all__ = [
-    "ConsolidationPolicy",
     "CounterfactualScore",
     "EpisodeMemoryAttribution",
     "EpisodeMemoryIngestor",
     "EpisodeMemoryRecorder",
     "FailureMemoryBuilder",
     "FailureObservation",
+    "LifecyclePolicy",
     "MemoryCandidate",
     "MemoryDecision",
     "MemoryDeduplicator",
     "MemoryGuidanceDecision",
     "MemoryGuidancePipeline",
     "MemoryGuidedPolicy",
-    "MemoryKind",
     "MemoryIngestionResult",
-    "MemoryLifecycleManager",
+    "MemoryKind",
+    "MemoryLifecycle",
     "MemoryRecord",
     "MemoryReconstructor",
     "MemoryRetriever",
