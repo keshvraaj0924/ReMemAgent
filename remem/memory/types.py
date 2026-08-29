@@ -37,6 +37,34 @@ class RetrievedMemory:
             raise ValueError("similarity must be between 0 and 1")
 
 
+@dataclass(frozen=True, slots=True)
+class CounterfactualScore:
+    """Utility estimates for memory-guided and self-reasoning paths."""
+
+    with_memory: float
+    without_memory: float
+
+    @property
+    def delta(self) -> float:
+        """Return the estimated utility benefit of using memory."""
+
+        return self.with_memory - self.without_memory
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryDecision:
+    """Routing decision produced by the counterfactual policy."""
+
+    route: str
+    confidence: float
+    expected_delta: float
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be between 0 and 1")
+
+
 @dataclass(slots=True)
 class MemoryRecord:
     """An experience stored for possible future transfer."""
