@@ -3,7 +3,7 @@
 from .attribution import MemoryTransferOutcome, MemoryTransferRecorder
 from .deduplication import MemoryDeduplicator
 from .episode import EpisodeMemoryAttribution, EpisodeMemoryRecorder
-from .failure import FailureMemoryPolicy
+from .failure import FailureMemoryBuilder, FailureObservation
 from .ingestion import EpisodeMemoryIngestor, MemoryIngestionResult
 from .lifecycle import ConsolidationPolicy, MemoryLifecycleManager
 from .pipeline import MemoryCandidate, MemoryGuidancePipeline
@@ -28,7 +28,8 @@ __all__ = [
     "EpisodeMemoryAttribution",
     "EpisodeMemoryIngestor",
     "EpisodeMemoryRecorder",
-    "FailureMemoryPolicy",
+    "FailureMemoryBuilder",
+    "FailureObservation",
     "MemoryCandidate",
     "MemoryDecision",
     "MemoryDeduplicator",
