@@ -27,10 +27,7 @@ def test_reconstructor_rejects_mismatch():
 
 
 def test_consolidation_promotes_episodic_memories():
-    records = [
-        MemoryRecord(str(i), "rule", uses=3, successes=3, confidence=0.7)
-        for i in range(3)
-    ]
+    records = [MemoryRecord(str(i), "rule", uses=3, successes=3, confidence=0.7) for i in range(3)]
     consolidated = MemoryLifecycle().consolidate(records, "semantic-1", "Validated rule")
     assert consolidated.kind is MemoryKind.SEMANTIC
     assert consolidated.outcome == "Validated rule"
