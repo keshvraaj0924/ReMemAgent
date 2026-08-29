@@ -1,6 +1,6 @@
 """Tests for memory-guided policy composition."""
 
-from remem.memory import MemoryRecord, MemoryStore
+from remem.memory import MemoryGuidanceDecision, MemoryRecord, MemoryStore
 from remem.memory.policy import MemoryGuidedPolicy
 from remem.memory.types import MemoryKind
 
@@ -10,12 +10,11 @@ def test_memory_guided_policy_passes_best_guidance_to_action_policy() -> None:
         [
             MemoryRecord(
                 memory_id="memory-1",
-                task="open cabinet",
                 state="The cabinet is closed.",
                 action="open cabinet",
                 outcome="The cabinet opened.",
                 kind=MemoryKind.SUCCESS,
-                empirical_success_rate=1.0,
+                successes=1,
             )
         ]
     )
@@ -32,18 +31,36 @@ def test_memory_guided_policy_passes_best_guidance_to_action_policy() -> None:
     assert "Relevant action: open cabinet" in calls[0][1]
 
 
-def test_memory_guided_policy_allows_action_without_matching_memory() -> None:
-    store = MemoryStore()
-    received_guidance: list[str] = []
+def test_memory_guided_policy_exposes_selected_memory_trace() -> None:
+    store = MemoryStore(
+        [
+            MemoryRecord(
+                memory_id="memory-1",
+                state="The cabinet is closed.",
+                action="open cabinet",
+                outcome="The cabinet opened.",
+                successes=1,
+            )
+        ]
+    )
+    policy = MemoryGuidedPolicy(store, lambda _state, _guidance: "open cabinet")
 
-    def action_policy(_: str, guidance: str) -> str:
-        received_guidance.append(guidance)
-        return "look"
+    decision = policy.select_guidance("The cabinet is closed.")
 
-    policy = MemoryGuidedPolicy(store, action_policy)
+    assert isinstance(decision, MemoryGuidanceDecision)
+    assert decision.memory_id == "memory-1"
+    assert decision.similarity > 0.0
+    assert decision.trust_confidence > 0.0
+    assert "Relevant action: open cabinet" in decision.guidance
 
+
+def test_memory_guided_policy_returns_empty_trace_without_matching_memory() -> None:
+    policy = MemoryGuidedPolicy(MemoryStore(), lambda *_: "look")
+
+    decision = policy.select_guidance("An unfamiliar room.")
+
+    assert decision == MemoryGuidanceDecision(None, "", 0.0, 0.0)
     assert policy("An unfamiliar room.") == "look"
-    assert received_guidance == [""]
 
 
 def test_memory_guided_policy_rejects_empty_action() -> None:
