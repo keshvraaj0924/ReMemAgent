@@ -11,6 +11,7 @@ from .policy import MemoryGuidanceDecision, MemoryGuidedPolicy
 from .reconstruction import MemoryReconstructor
 from .retrieval import MemoryRetriever
 from .store import MemoryStore
+from .transferability import TransferabilityMetrics, measure_transferability
 from .trust import MemoryTrustScorer, TrustScore
 from .types import (
     CounterfactualScore,
@@ -46,5 +47,7 @@ __all__ = [
     "MemoryTransferRecorder",
     "MemoryTrustScorer",
     "RetrievedMemory",
+    "TransferabilityMetrics",
     "TrustScore",
+    "measure_transferability",
 ]
