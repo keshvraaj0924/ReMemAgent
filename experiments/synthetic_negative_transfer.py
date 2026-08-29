@@ -21,6 +21,17 @@ class BenchmarkCase:
 
 
 @dataclass(frozen=True, slots=True)
+class BenchmarkCaseResult:
+    """Auditable routing outcome for one benchmark case."""
+
+    case_id: str
+    selected_route: str
+    utility_delta: float
+    negative_transfer: bool
+    regret: float
+
+
+@dataclass(frozen=True, slots=True)
 class BenchmarkResult:
     """Aggregate routing metrics for a benchmark run."""
 
@@ -31,6 +42,7 @@ class BenchmarkResult:
     selected_negative_transfer_cases: int
     avoided_negative_transfer_cases: int
     routing_regret: float
+    case_results: tuple[BenchmarkCaseResult, ...] = ()
 
     @property
     def negative_transfer_rate(self) -> float:
@@ -68,24 +80,38 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
     selected_negative_transfer_cases = 0
     avoided_negative_transfer_cases = 0
     routing_regret = 0.0
+    case_results: list[BenchmarkCaseResult] = []
 
     for case in cases:
         _, decision = router.route(
             evaluate_with_memory=lambda value=case.utility_with_memory: value,
             evaluate_without_memory=lambda value=case.utility_without_memory: value,
         )
-        memory_is_worse = case.utility_with_memory < case.utility_without_memory
+        utility_delta = case.utility_with_memory - case.utility_without_memory
+        memory_is_worse = utility_delta < 0.0
         if memory_is_worse:
             negative_transfer_cases += 1
         if decision.route == "memory":
             memory_selected += 1
+            regret = max(0.0, -utility_delta)
             if memory_is_worse:
                 selected_negative_transfer_cases += 1
-                routing_regret += case.utility_without_memory - case.utility_with_memory
+                routing_regret += regret
         else:
             self_reasoning_selected += 1
+            regret = max(0.0, utility_delta)
             if memory_is_worse:
                 avoided_negative_transfer_cases += 1
+
+        case_results.append(
+            BenchmarkCaseResult(
+                case_id=case.case_id,
+                selected_route=decision.route,
+                utility_delta=utility_delta,
+                negative_transfer=memory_is_worse,
+                regret=regret,
+            )
+        )
 
     return BenchmarkResult(
         total_cases=len(cases),
@@ -95,6 +121,7 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
         selected_negative_transfer_cases=selected_negative_transfer_cases,
         avoided_negative_transfer_cases=avoided_negative_transfer_cases,
         routing_regret=routing_regret,
+        case_results=tuple(case_results),
     )
 
 
