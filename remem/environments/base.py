@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
@@ -14,7 +14,7 @@ class StepResult:
     reward: float
     terminated: bool
     truncated: bool
-    info: dict[str, Any]
+    info: dict[str, Any] = field(default_factory=dict)
 
     @property
     def done(self) -> bool:
