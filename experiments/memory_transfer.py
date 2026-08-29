@@ -23,7 +23,11 @@ class MemoryTransferSummary:
     def negative_transfer_rate(self) -> float:
         """Return the fraction of this memory's selected cases that harmed utility."""
 
-        return self.negative_transfer_cases / self.transfer_attempts if self.transfer_attempts else 0.0
+        return (
+            self.negative_transfer_cases / self.transfer_attempts
+            if self.transfer_attempts
+            else 0.0
+        )
 
 
 def summarize_memory_transfers(
