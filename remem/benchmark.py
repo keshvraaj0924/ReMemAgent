@@ -2,8 +2,8 @@
 
 This module deliberately does not import ALFWorld, WebShop, or any model SDK.
 Experiments provide concrete environment and policy factories, while the suite
-runner provides deterministic lifecycle, memory persistence, and aggregate
-reporting shared by benchmark implementations.
+runner provides deterministic lifecycle, memory persistence, transfer tracing,
+and aggregate reporting shared by benchmark implementations.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from typing import Any
 
 from remem.environments.base import EnvironmentAdapter
 from remem.execution import EpisodeResult, Policy
+from remem.memory.attribution import MemoryTransferOutcome, MemoryTransferRecorder, TransferSuccessEvaluator
+from remem.memory.policy import MemoryGuidedPolicy
 from remem.memory.store import MemoryStore
 from remem.services import EpisodeExecutionResult, EpisodeExecutionService, SuccessEvaluator
 
@@ -29,6 +31,19 @@ class BenchmarkEpisodeReport:
     episode: EpisodeResult
     episode_success: bool
     retained_memory_count: int
+    transfer_outcomes: tuple[MemoryTransferOutcome, ...] = ()
+
+    @property
+    def transfer_count(self) -> int:
+        """Return the number of memory selections attributed in this episode."""
+
+        return len(self.transfer_outcomes)
+
+    @property
+    def transfer_success_count(self) -> int:
+        """Return the number of successful attributed memory transfers."""
+
+        return sum(outcome.success for outcome in self.transfer_outcomes)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,14 +76,33 @@ class BenchmarkRunReport:
             return 0.0
         return sum(episode.episode.total_reward for episode in self.episodes) / len(self.episodes)
 
+    @property
+    def transfer_count(self) -> int:
+        """Return the total number of attributed memory transfers."""
+
+        return sum(episode.transfer_count for episode in self.episodes)
+
+    @property
+    def transfer_success_rate(self) -> float:
+        """Return observed transfer success, or zero when no transfers occurred."""
+
+        if not self.transfer_count:
+            return 0.0
+        return sum(episode.transfer_success_count for episode in self.episodes) / self.transfer_count
+
 
 class BenchmarkSuiteRunner:
     """Run multiple episodes while sharing one memory store across episodes."""
 
-    def __init__(self, execution_service: EpisodeExecutionService | None = None) -> None:
-        """Create a suite runner with an injectable execution service."""
+    def __init__(
+        self,
+        execution_service: EpisodeExecutionService | None = None,
+        transfer_recorder: MemoryTransferRecorder | None = None,
+    ) -> None:
+        """Create a suite runner with injectable execution and attribution services."""
 
         self.execution_service = execution_service or EpisodeExecutionService()
+        self.transfer_recorder = transfer_recorder or MemoryTransferRecorder()
 
     def run(
         self,
@@ -81,13 +115,14 @@ class BenchmarkSuiteRunner:
         success_evaluator: SuccessEvaluator,
         store: MemoryStore | None = None,
         reset_kwargs: dict[str, Any] | None = None,
+        transfer_success_evaluator: TransferSuccessEvaluator | None = None,
     ) -> BenchmarkRunReport:
-        """Execute a benchmark suite and persist trajectory memories.
+        """Execute a benchmark suite, persist memories, and trace guided transfers.
 
-        The same ``MemoryStore`` is shared across episodes so a policy factory
-        can deliberately expose accumulated experience to later episodes.
-        Environment instances are created per episode and closed when they
-        provide a callable ``close`` method.
+        Policies created as :class:`MemoryGuidedPolicy` expose one guidance
+        decision per executed step. Those decisions are attributed after the
+        episode using the supplied transfer evaluator. Non-memory-guided
+        policies remain fully supported and produce no transfer outcomes.
         """
 
         normalized_name = benchmark_name.strip()
@@ -114,10 +149,17 @@ class BenchmarkSuiteRunner:
                     success_evaluator=success_evaluator,
                     reset_kwargs=reset_kwargs,
                 )
+                transfer_outcomes = _record_transfer_outcomes(
+                    self.transfer_recorder,
+                    memory_store,
+                    policy,
+                    execution_result,
+                    transfer_success_evaluator=transfer_success_evaluator,
+                )
             finally:
                 _close_environment(environment)
 
-            reports.append(_build_episode_report(execution_result))
+            reports.append(_build_episode_report(execution_result, transfer_outcomes))
 
         return BenchmarkRunReport(
             benchmark_name=normalized_name,
@@ -126,7 +168,30 @@ class BenchmarkSuiteRunner:
         )
 
 
-def _build_episode_report(result: EpisodeExecutionResult) -> BenchmarkEpisodeReport:
+def _record_transfer_outcomes(
+    recorder: MemoryTransferRecorder,
+    store: MemoryStore,
+    policy: Policy,
+    result: EpisodeExecutionResult,
+    *,
+    transfer_success_evaluator: TransferSuccessEvaluator | None,
+) -> tuple[MemoryTransferOutcome, ...]:
+    """Attribute traced decisions only for policies that provide memory guidance."""
+
+    if not isinstance(policy, MemoryGuidedPolicy):
+        return ()
+    return recorder.record_episode(
+        store,
+        policy.decision_history,
+        result.episode,
+        success_evaluator=transfer_success_evaluator,
+    )
+
+
+def _build_episode_report(
+    result: EpisodeExecutionResult,
+    transfer_outcomes: tuple[MemoryTransferOutcome, ...] = (),
+) -> BenchmarkEpisodeReport:
     """Convert an execution result into the stable benchmark report contract."""
 
     return BenchmarkEpisodeReport(
@@ -134,6 +199,7 @@ def _build_episode_report(result: EpisodeExecutionResult) -> BenchmarkEpisodeRep
         episode=result.episode,
         episode_success=result.episode_success,
         retained_memory_count=len(result.ingestion.retained_memories),
+        transfer_outcomes=transfer_outcomes,
     )
 
 

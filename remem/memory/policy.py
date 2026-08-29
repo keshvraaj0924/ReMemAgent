@@ -46,6 +46,13 @@ class MemoryGuidedPolicy:
         self.pipeline = pipeline or MemoryGuidancePipeline()
         self.query_builder = query_builder or _default_query_builder
         self.minimum_trust = minimum_trust
+        self._decision_history: list[MemoryGuidanceDecision] = []
+
+    @property
+    def decision_history(self) -> tuple[MemoryGuidanceDecision, ...]:
+        """Return immutable decisions made since this policy was created."""
+
+        return tuple(self._decision_history)
 
     def select_guidance(self, current_state: str) -> MemoryGuidanceDecision:
         """Retrieve and reconstruct the strongest trusted guidance candidate."""
@@ -63,13 +70,16 @@ class MemoryGuidedPolicy:
             minimum_trust=self.minimum_trust,
         )
         if not candidates:
-            return MemoryGuidanceDecision(
+            decision = MemoryGuidanceDecision(
                 memory_id=None,
                 guidance="",
                 similarity=0.0,
                 trust_confidence=0.0,
             )
-        return _decision_from_candidate(candidates[0])
+        else:
+            decision = _decision_from_candidate(candidates[0])
+        self._decision_history.append(decision)
+        return decision
 
     def __call__(self, current_state: str) -> str:
         """Generate an action after retrieving state-aligned memory guidance."""
