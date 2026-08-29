@@ -15,6 +15,7 @@ class MemoryKind(str, Enum):
     SEMANTIC = "semantic"
     PROCEDURAL = "procedural"
     FAILURE = "failure"
+    SUCCESS = "success"
 
 
 class MemoryStatus(str, Enum):
