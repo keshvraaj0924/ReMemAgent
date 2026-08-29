@@ -1,5 +1,7 @@
 from remem.benchmark import BenchmarkSuiteRunner
 from remem.environments.base import StepResult
+from remem.execution import Policy
+from remem.memory.store import MemoryStore
 
 
 class FakeEnvironment:
@@ -33,7 +35,7 @@ def test_benchmark_runner_shares_memory_store_and_closes_environments() -> None:
         environments.append(environment)
         return environment
 
-    def policy_factory(index: int, store: object):
+    def policy_factory(index: int, store: MemoryStore) -> Policy:
         seen_memory_counts.append(len(store.all()))
         return lambda state: f"act-{index}"
 
