@@ -18,7 +18,7 @@ Every record carries empirical success, transferability, confidence, and lifecyc
 
 Benchmark environments implement `EnvironmentAdapter`, which normalizes reset and step behavior into deterministic `StepResult` values. `EpisodeRunner` executes a policy without importing benchmark-specific packages. `EpisodeMemoryRecorder` converts the resulting trajectory into typed episodic memories, and `EpisodeMemoryIngestor` deduplicates those memories before storing them.
 
-`MemoryGuidedPolicy` is the composition boundary between that stored evidence and an action policy. For each state it retrieves and reconstructs the strongest trusted candidate, then supplies the resulting guidance to an injected action policy. The action policy remains responsible for deciding the final environment action; the deterministic memory layer never executes reconstructed text as an action.
+`MemoryGuidedPolicy` is the composition boundary between that stored evidence and an action policy. `select_guidance()` returns a `MemoryGuidanceDecision` containing the selected memory identifier, retrieval similarity, trust confidence, and reconstructed guidance. The callable policy path then passes only the guidance text to the injected action policy. The action policy remains responsible for deciding the final environment action; the deterministic memory layer never executes reconstructed text as an action.
 
 ```text
 EnvironmentAdapter
@@ -33,10 +33,14 @@ EnvironmentAdapter
         |
     MemoryStore
         |
- MemoryGuidedPolicy -> learned / heuristic action policy
+ MemoryGuidedPolicy -- select_guidance() --> traceable memory decision
+        |
+ injected action policy
         |
       action
 ```
+
+A service-level integration test exercises the complete stored-memory loop: one episode creates a memory, a later episode uses `MemoryGuidedPolicy`, retrieval reconstructs the prior experience, and the injected policy receives that guidance. This validates the deterministic research boundary without requiring an external benchmark installation.
 
 This separation allows learned policy components to be introduced later without coupling the memory engine to ALFWorld, WebShop, an LLM provider, or a training framework.
 
