@@ -8,7 +8,7 @@ reporting shared by benchmark implementations.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -98,7 +98,7 @@ class BenchmarkSuiteRunner:
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
 
-        memory_store = store or MemoryStore()
+        memory_store = store if store is not None else MemoryStore()
         reports: list[BenchmarkEpisodeReport] = []
 
         for episode_index in range(episode_count):
