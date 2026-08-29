@@ -8,12 +8,23 @@ state together with deterministic memory guidance selected by the pipeline.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
-from .pipeline import MemoryGuidancePipeline
+from .pipeline import MemoryCandidate, MemoryGuidancePipeline
 from .store import MemoryStore
 
 GuidedActionPolicy = Callable[[str, str], str]
 QueryBuilder = Callable[[str], str]
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryGuidanceDecision:
+    """Traceable memory-selection result supplied to an action policy."""
+
+    memory_id: str | None
+    guidance: str
+    similarity: float
+    trust_confidence: float
 
 
 class MemoryGuidedPolicy:
@@ -36,8 +47,8 @@ class MemoryGuidedPolicy:
         self.query_builder = query_builder or _default_query_builder
         self.minimum_trust = minimum_trust
 
-    def __call__(self, current_state: str) -> str:
-        """Generate an action after retrieving state-aligned memory guidance."""
+    def select_guidance(self, current_state: str) -> MemoryGuidanceDecision:
+        """Retrieve and reconstruct the strongest trusted guidance candidate."""
         if not current_state.strip():
             raise ValueError("current_state must not be empty")
 
@@ -51,11 +62,33 @@ class MemoryGuidedPolicy:
             current_state=current_state,
             minimum_trust=self.minimum_trust,
         )
-        guidance = candidates[0].reconstruction.guidance if candidates else ""
-        action = self.action_policy(current_state, guidance)
+        if not candidates:
+            return MemoryGuidanceDecision(
+                memory_id=None,
+                guidance="",
+                similarity=0.0,
+                trust_confidence=0.0,
+            )
+        return _decision_from_candidate(candidates[0])
+
+    def __call__(self, current_state: str) -> str:
+        """Generate an action after retrieving state-aligned memory guidance."""
+        decision = self.select_guidance(current_state)
+        action = self.action_policy(current_state, decision.guidance)
         if not action.strip():
             raise ValueError("action_policy must return a non-empty action")
         return action
+
+
+def _decision_from_candidate(candidate: MemoryCandidate) -> MemoryGuidanceDecision:
+    """Convert an internal pipeline candidate into the public trace contract."""
+
+    return MemoryGuidanceDecision(
+        memory_id=candidate.memory_id,
+        guidance=candidate.reconstruction.guidance,
+        similarity=candidate.similarity,
+        trust_confidence=candidate.trust.confidence,
+    )
 
 
 def _default_query_builder(current_state: str) -> str:
