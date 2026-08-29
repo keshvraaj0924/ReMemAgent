@@ -14,6 +14,13 @@ def create_memory() -> MemoryRecord:
     )
 
 
+def test_memory_record_supports_legacy_minimal_construction() -> None:
+    memory = MemoryRecord("memory-1", "state")
+
+    assert memory.action == ""
+    assert memory.outcome == ""
+
+
 def test_retrieved_memory_accepts_bounded_similarity() -> None:
     retrieved_memory = RetrievedMemory(memory=create_memory(), similarity=0.8)
 
