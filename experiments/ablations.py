@@ -34,11 +34,7 @@ class AblationResult:
     def negative_transfer_rate(self) -> float:
         """Return the share of cases where the selected path was harmful."""
 
-        return (
-            self.selected_negative_transfer_cases / self.total_cases
-            if self.total_cases
-            else 0.0
-        )
+        return self.selected_negative_transfer_cases / self.total_cases if self.total_cases else 0.0
 
 
 def run_ablations(

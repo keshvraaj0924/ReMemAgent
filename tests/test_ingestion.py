@@ -49,8 +49,12 @@ def test_ingestor_skips_semantic_duplicates() -> None:
     episode = _episode()
     attribution = EpisodeMemoryAttribution(episode_success=True)
 
-    first = ingestor.ingest(store, episode_id="episode-1", episode=episode, attribution=attribution)
-    second = ingestor.ingest(store, episode_id="episode-2", episode=episode, attribution=attribution)
+    first = ingestor.ingest(
+        store, episode_id="episode-1", episode=episode, attribution=attribution
+    )
+    second = ingestor.ingest(
+        store, episode_id="episode-2", episode=episode, attribution=attribution
+    )
 
     assert len(first.retained_memories) == 1
     assert second.retained_memories == ()

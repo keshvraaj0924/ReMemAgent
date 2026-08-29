@@ -45,7 +45,9 @@ def test_alfworld_adapter_normalizes_gymnasium_step() -> None:
 
 
 def test_webshop_adapter_normalizes_legacy_step() -> None:
-    adapter = WebShopAdapter(FakeEnvironment("search page", ("result", 0.5, True, {"query": "shoes"})))
+    adapter = WebShopAdapter(
+        FakeEnvironment("search page", ("result", 0.5, True, {"query": "shoes"}))
+    )
 
     assert adapter.reset() == "search page"
     result = adapter.step("click[12]")

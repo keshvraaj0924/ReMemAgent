@@ -70,7 +70,6 @@ def _wilson_lower_bound(successes: int, attempts: int, z: float) -> float:
     denominator = 1.0 + (z * z / attempts)
     center = (successes / attempts) + (z * z / (2.0 * attempts))
     margin = z * sqrt(
-        (successes * (attempts - successes) / (attempts**3))
-        + (z * z / (4.0 * attempts**2))
+        (successes * (attempts - successes) / (attempts**3)) + (z * z / (4.0 * attempts**2))
     )
     return max(0.0, (center - margin) / denominator)

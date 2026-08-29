@@ -44,14 +44,14 @@ class MemoryRetriever:
             if similarity >= self.policy.minimum_similarity:
                 candidates.append(RetrievedMemory(memory=memory, similarity=similarity))
 
-        candidates.sort(
-            key=lambda candidate: (-candidate.similarity, candidate.memory.memory_id)
-        )
+        candidates.sort(key=lambda candidate: (-candidate.similarity, candidate.memory.memory_id))
         return candidates[: self.policy.top_k]
 
     @staticmethod
     def _search_text(memory: MemoryRecord) -> str:
-        return " ".join((memory.state, memory.action, memory.outcome, memory.metadata.get("summary", "")))
+        return " ".join(
+            (memory.state, memory.action, memory.outcome, memory.metadata.get("summary", ""))
+        )
 
 
 def lexical_similarity(left_text: str, right_text: str) -> float:

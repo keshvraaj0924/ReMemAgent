@@ -14,7 +14,11 @@ from typing import Any
 
 from remem.environments.base import EnvironmentAdapter
 from remem.execution import EpisodeResult, Policy
-from remem.memory.attribution import MemoryTransferOutcome, MemoryTransferRecorder, TransferSuccessEvaluator
+from remem.memory.attribution import (
+    MemoryTransferOutcome,
+    MemoryTransferRecorder,
+    TransferSuccessEvaluator,
+)
 from remem.memory.policy import MemoryGuidedPolicy
 from remem.memory.store import MemoryStore
 from remem.services import EpisodeExecutionResult, EpisodeExecutionService, SuccessEvaluator
@@ -88,7 +92,9 @@ class BenchmarkRunReport:
 
         if not self.transfer_count:
             return 0.0
-        return sum(episode.transfer_success_count for episode in self.episodes) / self.transfer_count
+        return (
+            sum(episode.transfer_success_count for episode in self.episodes) / self.transfer_count
+        )
 
 
 class BenchmarkSuiteRunner:
