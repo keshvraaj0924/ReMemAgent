@@ -71,8 +71,8 @@ class MemoryRecord:
 
     memory_id: str
     state: str
-    action: str
-    outcome: str
+    action: str = ""
+    outcome: str = ""
     kind: MemoryKind = MemoryKind.EPISODIC
     reward: float = 0.0
     uses: int = 0

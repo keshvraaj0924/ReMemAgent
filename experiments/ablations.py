@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from math import fsum
 
 from experiments.synthetic_negative_transfer import BenchmarkCase
 from remem.routing.counterfactual import CounterfactualRouter
@@ -82,7 +83,7 @@ def _evaluate_strategy(
         strategy=strategy,
         total_cases=len(cases),
         selected_memory=selected_memory,
-        mean_utility=sum(utilities) / len(utilities) if utilities else 0.0,
+        mean_utility=fsum(utilities) / len(utilities) if utilities else 0.0,
         negative_transfer_cases=sum(
             case.utility_with_memory < case.utility_without_memory for case in cases
         ),
