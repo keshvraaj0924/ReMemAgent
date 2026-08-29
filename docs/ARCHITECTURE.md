@@ -22,6 +22,8 @@ Benchmark environments implement `EnvironmentAdapter`, which normalizes reset an
 
 When an action is evaluated, `MemoryTransferRecorder` can attribute the observed result to the selected memory. A self-reasoning decision with no selected memory is deliberately ignored, while a selected memory increments both ordinary use statistics and transfer-attempt statistics. This keeps transferability evidence tied to actual memory-guided decisions rather than retrieval alone.
 
+`measure_transferability()` exposes descriptive transfer statistics independently from routing. It reports the empirical transfer success rate and a Wilson lower confidence bound, so downstream experiments can distinguish observed performance from uncertainty caused by sparse evidence. These metrics do not alter routing behavior and can later be compared with a learned transferability estimator.
+
 ```text
 EnvironmentAdapter
         |
