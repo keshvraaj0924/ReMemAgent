@@ -43,6 +43,14 @@ def test_empirical_success_rate_uses_observed_outcomes() -> None:
     assert memory.empirical_success_rate == pytest.approx(2 / 3)
 
 
+def test_empirical_success_compatibility_alias_matches_rate() -> None:
+    memory = create_memory()
+    memory.record_use(success=True)
+    memory.record_use(success=False)
+
+    assert memory.empirical_success == memory.empirical_success_rate
+
+
 def test_transferability_uses_transfer_outcomes_only() -> None:
     memory = create_memory()
     memory.record_use(success=True, transferred=True)
