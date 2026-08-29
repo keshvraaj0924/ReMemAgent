@@ -77,6 +77,7 @@ def test_benchmark_runner_rejects_invalid_configuration() -> None:
     runner = BenchmarkSuiteRunner()
     common = dict(
         benchmark_name="test",
+        episode_count=1,
         max_steps=1,
         environment_factory=lambda index: FakeEnvironment(index),
         policy_factory=lambda index, store: lambda state: "act",
@@ -86,7 +87,7 @@ def test_benchmark_runner_rejects_invalid_configuration() -> None:
     for kwargs in (
         {**common, "benchmark_name": "   "},
         {**common, "episode_count": -1},
-        {**common, "episode_count": 1, "max_steps": 0},
+        {**common, "max_steps": 0},
     ):
         try:
             runner.run(**kwargs)
