@@ -94,6 +94,12 @@ class MemoryRecord:
         return self.successes / attempts if attempts else 0.5
 
     @property
+    def empirical_success(self) -> float:
+        """Return the empirical success score used by legacy routing clients."""
+
+        return self.empirical_success_rate
+
+    @property
     def transferability(self) -> float:
         """Return observed success when this memory is transferred to new contexts."""
 

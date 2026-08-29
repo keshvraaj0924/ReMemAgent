@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from math import fsum
 
 from .types import MemoryKind, MemoryRecord, MemoryStatus
 
@@ -36,27 +37,23 @@ class MemoryLifecycle:
     def __init__(self, policy: LifecyclePolicy | None = None) -> None:
         self.policy = policy or LifecyclePolicy()
 
-    def health_score(
-        self, memory: MemoryRecord, now: datetime | None = None
-    ) -> float:
+    def health_score(self, memory: MemoryRecord, now: datetime | None = None) -> float:
         """Calculate a bounded health score from evidence and freshness."""
 
         current_time = now or datetime.now(timezone.utc)
         age_days = _elapsed_days(memory.created_at, current_time)
-        freshness = max(
-            0.0, 1.0 - age_days / self.policy.retire_after_days
-        )
-        score = (
-            0.35 * memory.empirical_success_rate
-            + 0.30 * memory.transferability
-            + 0.20 * memory.confidence
-            + 0.15 * freshness
+        freshness = max(0.0, 1.0 - age_days / self.policy.retire_after_days)
+        score = fsum(
+            (
+                0.35 * memory.empirical_success_rate,
+                0.30 * memory.transferability,
+                0.20 * memory.confidence,
+                0.15 * freshness,
+            )
         )
         return max(0.0, min(1.0, score))
 
-    def refresh_status(
-        self, memory: MemoryRecord, now: datetime | None = None
-    ) -> MemoryStatus:
+    def refresh_status(self, memory: MemoryRecord, now: datetime | None = None) -> MemoryStatus:
         """Update and return lifecycle status based on usage and transfer evidence."""
 
         current_time = now or datetime.now(timezone.utc)
@@ -88,30 +85,42 @@ class MemoryLifecycle:
         self,
         memories: list[MemoryRecord],
         memory_id: str,
-        state: str,
-        action: str,
-        summary: str,
+        state_or_summary: str,
+        action: str | None = None,
+        summary: str | None = None,
     ) -> MemoryRecord:
-        """Create semantic memory from compatible episodic evidence."""
+        """Create semantic memory from compatible episodic evidence.
+
+        ``state_or_summary`` supports the historical three-argument API where
+        only the consolidated memory identifier and summary were supplied.
+        """
 
         if not self.should_consolidate(memories):
             raise ValueError("insufficient compatible episodic memories for consolidation")
-        if not memory_id.strip() or not summary.strip():
+
+        if summary is None:
+            state = ""
+            consolidated_action = ""
+            consolidated_summary = state_or_summary
+        else:
+            state = state_or_summary
+            consolidated_action = action or ""
+            consolidated_summary = summary
+
+        if not memory_id.strip() or not consolidated_summary.strip():
             raise ValueError("memory_id and summary must not be empty")
 
         total_successes = sum(memory.successes for memory in memories)
         total_failures = sum(memory.failures for memory in memories)
         total_uses = sum(memory.uses for memory in memories)
-        average_reward = sum(memory.reward for memory in memories) / len(memories)
-        confidence = min(
-            0.99, max(memory.confidence for memory in memories) + 0.05
-        )
+        average_reward = fsum(memory.reward for memory in memories) / len(memories)
+        confidence = min(0.99, max(memory.confidence for memory in memories) + 0.05)
 
         consolidated_memory = MemoryRecord(
             memory_id=memory_id,
             state=state,
-            action=action,
-            outcome=summary,
+            action=consolidated_action,
+            outcome=consolidated_summary,
             kind=MemoryKind.SEMANTIC,
             reward=average_reward,
             uses=total_uses,

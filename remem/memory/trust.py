@@ -7,6 +7,7 @@ contract that can later be replaced or augmented by a learned critic.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import fsum
 
 from .types import MemoryRecord
 
@@ -40,9 +41,9 @@ class MemoryTrustScorer:
         )
         if any(weight < 0 for weight in weights):
             raise ValueError("Trust weights must be non-negative")
-        if sum(weights) <= 0:
+        if fsum(weights) <= 0:
             raise ValueError("At least one trust weight must be positive")
-        total_weight = sum(weights)
+        total_weight = fsum(weights)
         self._weights = tuple(weight / total_weight for weight in weights)
 
     def score(
@@ -66,8 +67,9 @@ class MemoryTrustScorer:
             transferability_score,
             freshness_score,
         )
-        confidence = sum(
-            weight * value for weight, value in zip(self._weights, component_scores)
+        confidence = round(
+            fsum(weight * value for weight, value in zip(self._weights, component_scores)),
+            12,
         )
         return TrustScore(
             similarity=similarity_score,
