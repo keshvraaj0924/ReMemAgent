@@ -1,8 +1,37 @@
-    encode_completion=tokenizer.encode_completion,
-    memory_ids=memory_ids,
+# Environment and Training Adapters
+
+ReMemAgent keeps benchmark and training frameworks outside the research core. The adapters normalize external environment results and training trajectories into small, deterministic contracts that can be tested without installing ALFWorld, WebShop, verl, PyTorch, or a tokenizer.
+
+## Environment execution
+
+`EnvironmentAdapter` exposes `reset()` and `step()` and normalizes legacy four-field and Gymnasium five-field APIs into `StepResult`. The ALFWorld and WebShop adapters wrap caller-supplied environments rather than importing benchmark packages.
+
+`BenchmarkSuite` executes matched cases and records measured outcomes. It does not synthesize benchmark scores.
+
+## GRPO
+
+The GRPO integration creates framework-neutral samples and deterministic group-relative advantages. Reward calculation and model optimization remain external concerns.
+
+## verl trajectory boundary
+
+A caller with a real verl `AgentLoopBase` can pass its token-level output through `validate_agent_loop_output()`. The validator requires `prompt_ids`, `response_ids`, and `response_mask`, rejects invalid IDs and masks, and does not decode or re-encode tokens.
+
+For callers that also need a ReMemAgent research record, `adapt_agent_loop_output()` attaches the externally measured reward and provenance metadata to the validated token sequence:
+
+```python
+from remem.integrations import adapt_agent_loop_output
+
+trajectory = adapt_agent_loop_output(
+    agent_loop_output.model_dump(),
+    reward=episode.total_reward,
+    metadata={
+        "memory_ids": memory_ids,
+        "episode_id": episode_id,
+    },
 )
-agent_loop_output = trajectory.to_agent_loop_output()
 ```
+
+The adapter rejects non-finite rewards and copies caller-owned metadata so later top-level mutation cannot alter the stored trajectory record. Token IDs and masks are immutable tuples after validation.
 
 `VerlTrainingBatch` is the next boundary between ReMemAgent's deterministic trajectory representation and external trainer collation. `build_verl_training_batch()` pairs already-encoded trajectories with their precomputed GRPO advantages while preserving order and rejecting alignment errors. It deliberately does not pad, truncate, tensorize, move to devices, or shard data because those operations depend on the selected training stack.
 
@@ -21,17 +50,7 @@ from remem.integrations import dispatch_verl_training_batch
 result = dispatch_verl_training_batch(verl_batch, external_trainer.consume)
 ```
 
-For a real custom verl `AgentLoopBase`, the rollout already owns exact token generation. `validate_agent_loop_output()` validates the resulting `prompt_ids`, `response_ids`, and `response_mask` without decoding or re-encoding them. This is important for multi-turn/tool trajectories because the response mask must distinguish model-generated tokens from environment/tool-response tokens. The validator rejects missing fields, negative/non-integer token IDs, mask length mismatches, and non-binary masks while returning immutable token tuples for downstream research processing.
-
-```python
-from remem.integrations import validate_agent_loop_output
-
-validated = validate_agent_loop_output(agent_loop_output.model_dump())
-```
-
-The resulting records retain reward and memory metadata for offline experiment analysis, while `to_agent_loop_output()` emits only the framework-facing token fields.
-
-This remains a clean integration boundary rather than a vendored GRPO/verl implementation. The external trainer owns model generation, padding/collation, reward computation, advantage application, optimization, and distributed execution. ReMemAgent validates the trajectory contract and keeps memory provenance attached for research analysis.
+This is an integration boundary, not a vendored GRPO/verl implementation. The external stack still owns model generation, environment interaction, padding/collation, reward computation, advantage application, optimization, and distributed execution. ReMemAgent validates the trajectory contract and keeps memory provenance attached for research analysis.
 
 ## Current limitation
 

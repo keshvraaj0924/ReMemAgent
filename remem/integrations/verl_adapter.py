@@ -1,16 +1,18 @@
-"""Framework-facing dispatch boundary for verl-compatible training batches.
+"""Framework-facing dispatch boundary for external verl agent-loop execution.
 
-The adapter deliberately depends only on ReMemAgent's normalized batch contract.
-A caller injects the external trainer/collator, keeping verl, torch, and
-accelerate dependencies outside the research package.
+The adapter validates externally generated token sequences before attaching
+ReMemAgent-owned reward and provenance metadata. Framework-specific generation,
+model execution, batching, and optimization remain outside this package.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from math import isfinite
 from typing import Protocol, TypeVar
 
-from remem.integrations.verl import VerlTrainingBatch
+from remem.integrations.verl import VerlTrainingBatch, VerlTrajectory
+from remem.integrations.verl_contract import validate_agent_loop_output
 
 ConsumerResult_co = TypeVar("ConsumerResult_co", covariant=True)
 
@@ -23,6 +25,33 @@ class VerlTrainingConsumer(Protocol[ConsumerResult_co]):
         rows: tuple[Mapping[str, object], ...],
     ) -> ConsumerResult_co:
         """Consume one ordered batch of serialized training rows."""
+
+
+def adapt_agent_loop_output(
+    output: Mapping[str, Sequence[int]],
+    *,
+    reward: float,
+    metadata: Mapping[str, object] | None = None,
+) -> VerlTrajectory:
+    """Convert a validated external agent-loop output into a trajectory.
+
+    The token fields are validated exactly once and copied into immutable
+    tuples. Reward and provenance metadata are supplied by the caller because
+    the external loop owns environment execution while ReMemAgent owns the
+    research record that links the outcome to memory and episode context.
+    """
+
+    if not isfinite(reward):
+        raise ValueError("reward must be finite")
+
+    validated = validate_agent_loop_output(output)
+    return VerlTrajectory(
+        prompt_ids=validated.prompt_ids,
+        response_ids=validated.response_ids,
+        response_mask=validated.response_mask,
+        reward=reward,
+        metadata=dict(metadata or {}),
+    )
 
 
 def dispatch_verl_training_batch(
