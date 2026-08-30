@@ -10,7 +10,9 @@ from typing import TypeAlias
 from experiments.synthetic_negative_transfer import BenchmarkCase
 
 SCHEMA_VERSION = "2"
-EXPERIMENT_SCHEMA_VERSION = "1"
+EXPERIMENT_SCHEMA_VERSION = "2"
+EXPERIMENT_PROTOCOL_VERSION = "1"
+ROUTING_HEURISTIC_VERSION = "1"
 JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
 
@@ -40,17 +42,19 @@ def fingerprint_experiment_inputs(
     cases: Sequence[BenchmarkCase],
     configuration: Mapping[str, JsonValue],
 ) -> str:
-    """Return a stable fingerprint for benchmark cases and execution configuration.
+    """Return a stable fingerprint for cases, configuration, and protocol versions.
 
     Configuration is canonicalized with sorted mapping keys while benchmark
-    case order remains significant. This makes thresholds, seeds, and other
-    explicitly recorded experiment settings part of the reproducibility
-    identity instead of relying on undocumented runtime defaults.
+    case order remains significant. Protocol and heuristic versions are part
+    of the identity so changes to experiment semantics cannot silently reuse
+    an old fingerprint.
     """
 
     return _fingerprint(
         {
             "schema_version": EXPERIMENT_SCHEMA_VERSION,
+            "protocol_version": EXPERIMENT_PROTOCOL_VERSION,
+            "routing_heuristic_version": ROUTING_HEURISTIC_VERSION,
             "cases": [
                 {
                     "case_id": case.case_id,
