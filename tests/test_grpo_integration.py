@@ -4,7 +4,11 @@ import pytest
 
 from remem.execution import EpisodeResult, EpisodeStep
 from remem.environments.base import StepResult
-from remem.integrations.grpo import build_grpo_samples
+from remem.integrations.grpo import (
+    GrpoSample,
+    build_grpo_samples,
+    compute_group_relative_advantages,
+)
 from remem.memory.policy import MemoryGuidanceDecision
 
 
@@ -57,3 +61,44 @@ def test_build_grpo_samples_allows_shared_group_ids() -> None:
     )
 
     assert [sample.group_id for sample in samples] == ["task-7", "task-7"]
+
+
+def test_compute_group_relative_advantages_normalizes_rewards() -> None:
+    samples = (
+        GrpoSample("prompt", "a", 1.0, "task-1", ()),
+        GrpoSample("prompt", "b", 2.0, "task-1", ()),
+        GrpoSample("prompt", "c", 3.0, "task-1", ()),
+    )
+
+    advantages = compute_group_relative_advantages(samples)
+
+    assert advantages[0] == pytest.approx(-1.2247448714)
+    assert advantages[1] == pytest.approx(0.0)
+    assert advantages[2] == pytest.approx(1.2247448714)
+
+
+def test_compute_group_relative_advantages_keeps_groups_independent() -> None:
+    samples = (
+        GrpoSample("prompt", "a", 0.0, "task-1", ()),
+        GrpoSample("prompt", "b", 2.0, "task-1", ()),
+        GrpoSample("prompt", "c", 10.0, "task-2", ()),
+        GrpoSample("prompt", "d", 14.0, "task-2", ()),
+    )
+
+    advantages = compute_group_relative_advantages(samples)
+
+    assert advantages == pytest.approx((-1.0, 1.0, -1.0, 1.0))
+
+
+def test_compute_group_relative_advantages_zeroes_constant_groups() -> None:
+    samples = (
+        GrpoSample("prompt", "a", 4.0, "task-1", ()),
+        GrpoSample("prompt", "b", 4.0, "task-1", ()),
+    )
+
+    assert compute_group_relative_advantages(samples) == (0.0, 0.0)
+
+
+def test_compute_group_relative_advantages_rejects_non_positive_epsilon() -> None:
+    with pytest.raises(ValueError, match="epsilon must be positive"):
+        compute_group_relative_advantages((GrpoSample("p", "a", 1.0, "g", ()),), epsilon=0.0)
