@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 from remem.routing.counterfactual import CounterfactualRouter
 
@@ -90,11 +89,18 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
     case_results: list[BenchmarkCaseResult] = []
 
     for case in cases:
-        memory_utility = cast("float", case.utility_with_memory)
-        self_reasoning_utility = cast("float", case.utility_without_memory)
+        memory_utility = case.utility_with_memory
+        self_reasoning_utility = case.utility_without_memory
+
+        def evaluate_with_memory() -> float:
+            return memory_utility
+
+        def evaluate_without_memory() -> float:
+            return self_reasoning_utility
+
         _, decision = router.route(
-            evaluate_with_memory=lambda: memory_utility,
-            evaluate_without_memory=lambda: self_reasoning_utility,
+            evaluate_with_memory=evaluate_with_memory,
+            evaluate_without_memory=evaluate_without_memory,
         )
         utility_delta = memory_utility - self_reasoning_utility
         memory_is_worse = utility_delta < 0.0
