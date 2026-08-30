@@ -14,6 +14,7 @@ EXPERIMENT_SCHEMA_VERSION = "2"
 EXPERIMENT_PROTOCOL_VERSION = "1"
 ROUTING_HEURISTIC_VERSION = "1"
 JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = Mapping[str, JsonValue]
 
 
 def fingerprint_cases(cases: Sequence[BenchmarkCase]) -> str:
@@ -70,7 +71,7 @@ def fingerprint_experiment_inputs(
     )
 
 
-def _fingerprint(payload: JsonValue | dict[str, object]) -> str:
+def _fingerprint(payload: JsonObject) -> str:
     """Hash a JSON-compatible payload using deterministic serialization."""
 
     encoded = json.dumps(
