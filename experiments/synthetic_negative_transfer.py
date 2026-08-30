@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from remem.routing.counterfactual import CounterfactualRouter
 
@@ -77,6 +78,15 @@ class BenchmarkResult:
         )
 
 
+def _constant_evaluator(utility: float) -> Callable[[], float]:
+    """Return a zero-argument evaluator bound to one benchmark utility."""
+
+    def evaluate() -> float:
+        return utility
+
+    return evaluate
+
+
 def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> BenchmarkResult:
     """Route matched cases and measure both exposure and avoided negative transfer."""
     _validate_unique_case_ids(cases)
@@ -91,12 +101,8 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
     for case in cases:
         memory_utility = case.utility_with_memory
         self_reasoning_utility = case.utility_without_memory
-
-        def evaluate_with_memory() -> float:
-            return memory_utility
-
-        def evaluate_without_memory() -> float:
-            return self_reasoning_utility
+        evaluate_with_memory = _constant_evaluator(memory_utility)
+        evaluate_without_memory = _constant_evaluator(self_reasoning_utility)
 
         _, decision = router.route(
             evaluate_with_memory=evaluate_with_memory,

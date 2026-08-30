@@ -7,28 +7,28 @@ accelerate dependencies outside the research package.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Protocol, TypeVar
 
 from remem.integrations.verl import VerlTrainingBatch
 
-ConsumerResult = TypeVar("ConsumerResult", covariant=True)
+ConsumerResult_co = TypeVar("ConsumerResult_co", covariant=True)
 
 
-class VerlTrainingConsumer(Protocol[ConsumerResult]):
+class VerlTrainingConsumer(Protocol[ConsumerResult_co]):
     """Callable protocol implemented by an external trainer or collator."""
 
     def __call__(
         self,
         rows: tuple[Mapping[str, object], ...],
-    ) -> ConsumerResult:
+    ) -> ConsumerResult_co:
         """Consume one ordered batch of serialized training rows."""
 
 
 def dispatch_verl_training_batch(
     batch: VerlTrainingBatch,
-    consumer: Callable[[tuple[Mapping[str, object], ...]], ConsumerResult],
-) -> ConsumerResult:
+    consumer: VerlTrainingConsumer[ConsumerResult_co],
+) -> ConsumerResult_co:
     """Send an ordered batch to an injected external trainer.
 
     ReMemAgent owns trajectory/advantage alignment; the injected consumer owns
