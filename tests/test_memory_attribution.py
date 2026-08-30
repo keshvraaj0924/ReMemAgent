@@ -46,9 +46,7 @@ def test_record_episode_does_not_count_intermediate_step_as_transfer_failure() -
     store = MemoryStore([MemoryRecord(memory_id="memory_a", state="state")])
     episode = EpisodeResult(
         initial_observation="start",
-        steps=(
-            EpisodeStep(0, "start", "move", StepResult("next", 0.0, False, False)),
-        ),
+        steps=(EpisodeStep(0, "start", "move", StepResult("next", 0.0, False, False)),),
         total_reward=0.0,
         terminated=False,
         truncated=False,
