@@ -9,7 +9,11 @@ import random
 from typing import Callable, Sequence
 
 from experiments.ablations import AblationResult, run_ablations
-from experiments.reproducibility import SCHEMA_VERSION, fingerprint_cases
+from experiments.reproducibility import (
+    EXPERIMENT_SCHEMA_VERSION,
+    fingerprint_cases,
+    fingerprint_experiment_inputs,
+)
 from experiments.synthetic_negative_transfer import BenchmarkCase
 from remem.routing.counterfactual import CounterfactualRouter
 
@@ -32,6 +36,7 @@ class ExperimentReport:
     minimum_delta: float
     case_ids: tuple[str, ...]
     case_fingerprint: str
+    experiment_fingerprint: str
     results: tuple[AblationResult, ...]
 
 
@@ -50,11 +55,19 @@ def run_reproducible_ablation(
     _validate_unique_case_ids(cases)
     router = CounterfactualRouter(minimum_delta=selected_config.minimum_delta)
     results = run_ablations(cases, router)
+    experiment_fingerprint = fingerprint_experiment_inputs(
+        cases,
+        {
+            "seed": selected_config.seed,
+            "minimum_delta": selected_config.minimum_delta,
+        },
+    )
     return ExperimentReport(
         seed=selected_config.seed,
         minimum_delta=selected_config.minimum_delta,
         case_ids=tuple(case.case_id for case in cases),
         case_fingerprint=fingerprint_cases(cases),
+        experiment_fingerprint=experiment_fingerprint,
         results=tuple(results),
     )
 
@@ -65,11 +78,12 @@ def save_report(report: ExperimentReport, output_path: str | Path) -> Path:
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": EXPERIMENT_SCHEMA_VERSION,
         "seed": report.seed,
         "minimum_delta": report.minimum_delta,
         "case_ids": list(report.case_ids),
         "case_fingerprint": report.case_fingerprint,
+        "experiment_fingerprint": report.experiment_fingerprint,
         "results": [
             {
                 "strategy": result.strategy.value,
@@ -92,4 +106,4 @@ def _validate_unique_case_ids(cases: Sequence[BenchmarkCase]) -> None:
 
     case_ids = [case.case_id for case in cases]
     if len(case_ids) != len(set(case_ids)):
-        raise ValueError("benchmark case_id values must be unique")
+        raise ValueError("case_id values must be unique")
