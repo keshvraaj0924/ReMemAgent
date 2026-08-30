@@ -1,4 +1,4 @@
-"""Framework-facing dispatch boundary for external verl agent-loop execution.
+"""Framework-facing dispatch boundaries for external verl agent-loop execution.
 
 The adapter validates externally generated token sequences before attaching
 ReMemAgent-owned reward and provenance metadata. Framework-specific generation,
@@ -27,6 +27,16 @@ class VerlTrainingConsumer(Protocol[ConsumerResult_co]):
         """Consume one ordered batch of serialized training rows."""
 
 
+class AsyncVerlAgentLoop(Protocol):
+    """Async protocol for a dependency-free wrapper around ``AgentLoopBase``."""
+
+    async def __call__(
+        self,
+        prompt_ids: tuple[int, ...],
+    ) -> Mapping[str, Sequence[int]]:
+        """Run one external agent loop and return its token-level output."""
+
+
 def adapt_agent_loop_output(
     output: Mapping[str, Sequence[int]],
     *,
@@ -52,6 +62,30 @@ def adapt_agent_loop_output(
         reward=reward,
         metadata=dict(metadata or {}),
     )
+
+
+async def run_agent_loop(
+    agent_loop: AsyncVerlAgentLoop,
+    *,
+    prompt_ids: Sequence[int],
+    reward: float,
+    metadata: Mapping[str, object] | None = None,
+) -> VerlTrajectory:
+    """Execute one external async agent loop and normalize its trajectory.
+
+    This is the narrow integration boundary for verl's ``AgentLoopBase.run``
+    coroutine. The external implementation remains responsible for model
+    generation, tool/environment interaction, and reward calculation inputs.
+    ReMemAgent validates the returned token contract and records provenance
+    without importing verl or assuming an inference backend.
+    """
+
+    normalized_prompt_ids = tuple(prompt_ids)
+    if any(not isinstance(token_id, int) or token_id < 0 for token_id in normalized_prompt_ids):
+        raise ValueError("prompt_ids must contain non-negative integer token IDs")
+
+    output = await agent_loop(normalized_prompt_ids)
+    return adapt_agent_loop_output(output, reward=reward, metadata=metadata)
 
 
 def dispatch_verl_training_batch(

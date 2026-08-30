@@ -33,7 +33,26 @@ trajectory = adapt_agent_loop_output(
 
 The adapter rejects non-finite rewards and copies caller-owned metadata so later top-level mutation cannot alter the stored trajectory record. Token IDs and masks are immutable tuples after validation.
 
-`VerlTrainingBatch` is the next boundary between ReMemAgent's deterministic trajectory representation and external trainer collation. `build_verl_training_batch()` pairs already-encoded trajectories with their precomputed GRPO advantages while preserving order and rejecting alignment errors. It deliberately does not pad, truncate, tensorize, move to devices, or shard data because those operations depend on the selected training stack.
+### Async AgentLoop bridge
+
+verl's current `AgentLoopBase` exposes an async `run` boundary that returns one token-level trajectory. ReMemAgent provides `AsyncVerlAgentLoop` and `run_agent_loop()` as a dependency-free bridge for that coroutine. The bridge validates prompt IDs before execution, awaits the external loop, then applies the same output and reward validation used by the synchronous adapter.
+
+```python
+from remem.integrations import run_agent_loop
+
+trajectory = await run_agent_loop(
+    agent_loop.run,
+    prompt_ids=prompt_ids,
+    reward=reward,
+    metadata={"memory_ids": memory_ids},
+)
+```
+
+The external `AgentLoopBase` implementation remains responsible for model generation, tool/environment interaction, and producing the framework's token-level output. ReMemAgent does not import verl, own the inference server, or re-tokenize the trajectory.
+
+## Training handoff
+
+`VerlTrainingBatch` is the boundary between ReMemAgent's deterministic trajectory representation and external trainer collation. `build_verl_training_batch()` pairs already-encoded trajectories with their precomputed GRPO advantages while preserving order and rejecting alignment errors. It deliberately does not pad, truncate, tensorize, move to devices, or shard data because those operations depend on the selected training stack.
 
 ```python
 from remem.integrations import build_verl_training_batch
