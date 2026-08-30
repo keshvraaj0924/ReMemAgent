@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from .types import MemoryRecord, MemoryStatus, MemoryTransferOutcome
+from .types import MemoryRecord, MemoryStatus
 
 
 class MemoryStore:
@@ -31,24 +31,17 @@ class MemoryStore:
         return self._memories.get(memory_id)
 
     def record_transfer_outcome(self, memory_id: str, success: bool) -> None:
-        """Record an observed transfer outcome for a stored memory."""
+        """Record an observed transfer outcome for a stored memory.
 
-        self.record_transfer_observation(
-            MemoryTransferOutcome(memory_id=memory_id, success=success)
-        )
-
-    def record_transfer_observation(self, outcome: MemoryTransferOutcome) -> None:
-        """Record a typed transfer observation against a stored memory.
-
-        The typed boundary allows environment and benchmark adapters to carry
-        episode identity without coupling those integrations to ``MemoryRecord``.
-        Unknown memory IDs are rejected so attribution cannot silently disappear.
+        Transfer outcomes update both the general usage counters and the
+        transfer-specific counters on the memory record. Unknown memory IDs
+        are rejected so benchmark attribution cannot silently disappear.
         """
 
-        memory = self.get(outcome.memory_id)
+        memory = self.get(memory_id)
         if memory is None:
-            raise KeyError(f"Memory '{outcome.memory_id}' does not exist")
-        memory.record_use(success=outcome.success, transferred=True)
+            raise KeyError(f"Memory '{memory_id}' does not exist")
+        memory.record_use(success=success, transferred=True)
 
     def remove(self, memory_id: str) -> MemoryRecord | None:
         """Remove and return a memory when it exists."""
