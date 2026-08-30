@@ -25,3 +25,17 @@ def test_case_fingerprint_preserves_case_order() -> None:
     reversed_cases = list(reversed(first))
 
     assert fingerprint_cases(first) != fingerprint_cases(reversed_cases)
+
+
+def test_case_fingerprint_changes_when_memory_attribution_changes() -> None:
+    original = [BenchmarkCase("a", 0.8, 0.4, memory_id="memory_a")]
+    changed = [BenchmarkCase("a", 0.8, 0.4, memory_id="memory_b")]
+
+    assert fingerprint_cases(original) != fingerprint_cases(changed)
+
+
+def test_case_fingerprint_changes_when_transfer_outcome_changes() -> None:
+    successful = [BenchmarkCase("a", 0.8, 0.4, transfer_success=True)]
+    failed = [BenchmarkCase("a", 0.8, 0.4, transfer_success=False)]
+
+    assert fingerprint_cases(successful) != fingerprint_cases(failed)
