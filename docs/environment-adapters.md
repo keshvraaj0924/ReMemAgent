@@ -107,6 +107,14 @@ verl_batch = build_verl_training_batch(trajectories, batch.advantages)
 rows = verl_batch.to_dicts()
 ```
 
+`dispatch_verl_training_batch()` is the framework-facing handoff. It passes immutable, ordered serialized rows to an injected external consumer, leaving framework-specific collation, tensors, devices, optimization, and distributed execution outside ReMemAgent.
+
+```python
+from remem.integrations import dispatch_verl_training_batch
+
+result = dispatch_verl_training_batch(verl_batch, external_trainer.consume)
+```
+
 `response_mask` is currently all ones because the normalized episode contains only agent actions. A future multi-turn adapter must mark tool/environment response tokens as zero rather than reconstructing token IDs from rendered chat history. This distinction matters for RL training because tokenization and tool parsing can otherwise change the exact sampled trajectory.
 
 The resulting records retain reward and memory metadata for offline experiment analysis, while `to_agent_loop_output()` emits only the framework-facing token fields.

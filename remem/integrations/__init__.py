@@ -13,6 +13,7 @@ from .verl import (
     build_verl_training_batch,
     encode_episode_for_verl,
 )
+from .verl_adapter import dispatch_verl_training_batch
 
 __all__ = [
     "GrpoBatch",
@@ -24,4 +25,5 @@ __all__ = [
     "compute_group_relative_advantages",
     "build_verl_training_batch",
     "encode_episode_for_verl",
+    "dispatch_verl_training_batch",
 ]
