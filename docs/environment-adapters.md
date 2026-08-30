@@ -73,10 +73,13 @@ training_rows = [sample.to_dict() for sample in samples]
 
 The integration also exposes `compute_group_relative_advantages()`. It computes the GRPO-style centered and population-standard-deviation-normalized reward for each sample, preserving input order. Constant-reward groups receive zero advantages. This is a deterministic mathematical boundary; it does not implement a policy-gradient loss, optimizer, rollout engine, or framework-specific trainer.
 
-```python
-from remem.integrations import compute_group_relative_advantages
+`build_grpo_batch()` packages the samples and their computed advantages into an immutable `GrpoBatch`. The batch validates non-empty input and sample/advantage alignment and exposes `to_dicts()` for framework-specific dataset writers. This keeps ordering and reward normalization explicit before a trainer-specific collation step.
 
-advantages = compute_group_relative_advantages(samples)
+```python
+from remem.integrations import build_grpo_batch
+
+batch = build_grpo_batch(samples)
+training_rows = batch.to_dicts()
 ```
 
 ### verl agent-loop boundary
