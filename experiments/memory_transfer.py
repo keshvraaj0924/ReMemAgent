@@ -26,18 +26,17 @@ class MemoryTransferSummary:
     def negative_transfer_rate(self) -> float:
         """Return the fraction of this memory's selected cases that harmed utility."""
 
-        return self.negative_transfer_cases / self.transfer_attempts if self.transfer_attempts else 0.0
+        return (
+            self.negative_transfer_cases / self.transfer_attempts
+            if self.transfer_attempts
+            else 0.0
+        )
 
 
 def summarize_memory_transfers(
     case_results: Iterable["BenchmarkCaseResult"],
 ) -> tuple[MemoryTransferSummary, ...]:
-    """Group selected benchmark outcomes by memory identity.
-
-    Only cases where the router actually selected memory are included. Cases
-    without a memory identity remain useful for aggregate routing metrics but
-    cannot be attributed to an individual memory without inventing evidence.
-    """
+    """Group selected benchmark outcomes by memory identity."""
 
     attempts: defaultdict[str, int] = defaultdict(int)
     negative_cases: defaultdict[str, int] = defaultdict(int)
@@ -66,17 +65,7 @@ def record_transfer_outcomes(
     benchmark_result: "BenchmarkResult",
     memory_store: "MemoryStore",
 ) -> int:
-    """Record only explicit, selected transfer outcomes in the memory store.
-
-    A benchmark case must provide an explicit ``transfer_success`` signal to
-    mutate transferability state. Utility deltas alone describe counterfactual
-    routing quality; they do not necessarily represent task success. Cases
-    without an explicit outcome, without a memory identity, or not selected by
-    the memory route are therefore left untouched.
-
-    Returns:
-        Number of transfer outcomes recorded in ``memory_store``.
-    """
+    """Record only explicit, selected transfer outcomes in the memory store."""
 
     recorded_count = 0
     for case_result in benchmark_result.case_results:
