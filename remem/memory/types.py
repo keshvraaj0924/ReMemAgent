@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -30,7 +30,7 @@ class MemoryStatus(str, Enum):
 class RetrievedMemory:
     """A memory candidate paired with its retrieval relevance score."""
 
-    memory: "MemoryRecord"
+    memory: MemoryRecord
     similarity: float
 
     def __post_init__(self) -> None:
@@ -82,7 +82,7 @@ class MemoryRecord:
     transfer_attempts: int = 0
     transfer_successes: int = 0
     confidence: float = 0.5
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_used_at: datetime | None = None
     status: MemoryStatus = MemoryStatus.ACTIVE
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -110,7 +110,7 @@ class MemoryRecord:
         """Record one memory use and optionally attribute it to transfer."""
 
         self.uses += 1
-        self.last_used_at = datetime.now(timezone.utc)
+        self.last_used_at = datetime.now(UTC)
         if success:
             self.successes += 1
         else:

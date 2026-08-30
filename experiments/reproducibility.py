@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
-import json
 from typing import TypeAlias
 
 from experiments.synthetic_negative_transfer import BenchmarkCase

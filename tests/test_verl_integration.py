@@ -2,8 +2,8 @@
 
 import pytest
 
-from remem.execution import EpisodeResult, EpisodeStep
 from remem.environments.base import StepResult
+from remem.execution import EpisodeResult, EpisodeStep
 from remem.integrations.verl import encode_episode_for_verl
 
 

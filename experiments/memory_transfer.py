@@ -32,7 +32,7 @@ class MemoryTransferSummary:
 
 
 def summarize_memory_transfers(
-    case_results: Iterable["BenchmarkCaseResult"],
+    case_results: Iterable[BenchmarkCaseResult],
 ) -> tuple[MemoryTransferSummary, ...]:
     """Group selected benchmark outcomes by memory identity."""
 
@@ -60,8 +60,8 @@ def summarize_memory_transfers(
 
 
 def record_transfer_outcomes(
-    benchmark_result: "BenchmarkResult",
-    memory_store: "MemoryStore",
+    benchmark_result: BenchmarkResult,
+    memory_store: MemoryStore,
 ) -> int:
     """Record only explicit, selected transfer outcomes in the memory store."""
 

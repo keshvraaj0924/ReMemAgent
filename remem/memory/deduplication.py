@@ -72,7 +72,7 @@ class MemoryDeduplicator:
 
     @staticmethod
     def _memory_text(memory: MemoryRecord) -> str:
-        return " ".join((memory.state, memory.action, memory.outcome))
+        return f"{memory.state} {memory.action} {memory.outcome}"
 
     @staticmethod
     def _evidence_score(memory: MemoryRecord) -> float:

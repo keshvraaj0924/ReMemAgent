@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from math import fsum
 
 from .types import MemoryKind, MemoryRecord, MemoryStatus
@@ -40,7 +40,7 @@ class MemoryLifecycle:
     def health_score(self, memory: MemoryRecord, now: datetime | None = None) -> float:
         """Calculate a bounded health score from evidence and freshness."""
 
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(UTC)
         age_days = _elapsed_days(memory.created_at, current_time)
         freshness = max(0.0, 1.0 - age_days / self.policy.retire_after_days)
         score = fsum(
@@ -56,7 +56,7 @@ class MemoryLifecycle:
     def refresh_status(self, memory: MemoryRecord, now: datetime | None = None) -> MemoryStatus:
         """Update and return lifecycle status based on usage and transfer evidence."""
 
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(UTC)
         last_used_time = memory.last_used_at or memory.created_at
         idle_days = _elapsed_days(last_used_time, current_time)
         transfer_is_poor = (
