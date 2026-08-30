@@ -18,9 +18,9 @@ Every record carries empirical success, transferability, confidence, and lifecyc
 
 Benchmark environments implement `EnvironmentAdapter`, which normalizes reset and step behavior into deterministic `StepResult` values. `EpisodeRunner` executes a policy without importing benchmark-specific packages. `EpisodeMemoryRecorder` converts the resulting trajectory into typed episodic memories, and `EpisodeMemoryIngestor` deduplicates those memories before storing them.
 
-`MemoryGuidedPolicy` is the composition boundary between that stored evidence and an action policy. `select_guidance()` returns a `MemoryGuidanceDecision` containing the selected memory identifier, retrieval similarity, trust confidence, and reconstructed guidance. The callable policy path then passes only the guidance text to the injected action policy. The action policy remains responsible for deciding the final environment action; the deterministic memory layer never executes reconstructed text as an action.
+`MemoryGuidedPolicy` is the composition boundary between that stored evidence and an action policy. `select_guidance()` returns a `MemoryGuidanceDecision` containing the selected memory identifier, retrieval similarity, trust confidence, and reconstructed guidance. The callable policy path then passes only the guidance text to the injected action policy. The deterministic memory layer never executes reconstructed text as an action.
 
-When an action is evaluated, `MemoryTransferRecorder` can attribute the observed result to the selected memory. A self-reasoning decision with no selected memory is deliberately ignored, while a selected memory increments both ordinary use statistics and transfer-attempt statistics. This keeps transferability evidence tied to actual memory-guided decisions rather than retrieval alone.
+When an action is evaluated, `MemoryTransferRecorder` can attribute the observed result to the selected memory. A self-reasoning decision with no selected memory is deliberately ignored. Episode-level attribution also distinguishes measured outcomes from intermediate steps: the default evaluator records only a terminal memory-guided action, while a benchmark-specific evaluator can return `None` for steps where transfer success cannot yet be established. This prevents unmeasured intermediate decisions from being counted as transfer failures.
 
 `measure_transferability()` exposes descriptive transfer statistics independently from routing. It reports the empirical transfer success rate and a Wilson lower confidence bound, so downstream experiments can distinguish observed performance from uncertainty caused by sparse evidence. These metrics do not alter routing behavior and can later be compared with a learned transferability estimator.
 
@@ -42,8 +42,13 @@ EnvironmentAdapter
  injected action policy                        |
         |                               MemoryTransferRecorder
       action                                     |
-        |                               observed success/failure
+        |                               measured outcome
         +----------------------------------------+
+
+Measured transfer evidence
+        |
+        +--> transferability statistics
+        +--> lifecycle / consolidation evidence
 ```
 
 A service-level integration test exercises the stored-memory loop: one episode creates a memory, a later episode uses `MemoryGuidedPolicy`, retrieval reconstructs the prior experience, and the injected policy receives that guidance. Transfer attribution is intentionally a separate operation so experiments can define success without coupling the core memory layer to benchmark-specific reward semantics.
