@@ -7,7 +7,12 @@ from .grpo import (
     build_grpo_samples,
     compute_group_relative_advantages,
 )
-from .verl import VerlTrainingBatch, VerlTrajectory, build_verl_training_batch, encode_episode_for_verl
+from .verl import (
+    VerlTrainingBatch,
+    VerlTrajectory,
+    build_verl_training_batch,
+    encode_episode_for_verl,
+)
 
 __all__ = [
     "GrpoBatch",
