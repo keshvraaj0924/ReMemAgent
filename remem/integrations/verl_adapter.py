@@ -12,7 +12,7 @@ from typing import Protocol, TypeVar
 
 from remem.integrations.verl import VerlTrainingBatch
 
-ConsumerResult = TypeVar("ConsumerResult")
+ConsumerResult = TypeVar("ConsumerResult", covariant=True)
 
 
 class VerlTrainingConsumer(Protocol[ConsumerResult]):
