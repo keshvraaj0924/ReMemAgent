@@ -10,7 +10,7 @@ from remem.execution import EpisodeResult, EpisodeStep
 from .policy import MemoryGuidanceDecision
 from .store import MemoryStore
 
-TransferSuccessEvaluator = Callable[[EpisodeStep, EpisodeResult], bool]
+TransferSuccessEvaluator = Callable[[EpisodeStep, EpisodeResult], bool | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,12 +46,13 @@ class MemoryTransferRecorder:
         *,
         success_evaluator: TransferSuccessEvaluator | None = None,
     ) -> tuple[MemoryTransferOutcome, ...]:
-        """Attribute step-level transfer outcomes for one executed episode.
+        """Attribute measured transfer outcomes for one executed episode.
 
-        Decisions are aligned with executed steps by index. The default
-        evaluator credits only a memory-selected terminal action when the
-        episode ended successfully; benchmark-specific evaluators can provide
-        finer-grained causal criteria.
+        Decisions are aligned with executed steps by index. An evaluator may
+        return ``None`` when a step does not provide enough evidence to judge
+        transfer success; such steps are intentionally excluded rather than
+        counted as failures. The default evaluator measures only the terminal
+        memory-guided action of a successfully completed episode.
         """
 
         if len(decisions) != len(episode.steps):
@@ -59,17 +60,18 @@ class MemoryTransferRecorder:
         evaluator = success_evaluator or _default_transfer_success
         outcomes: list[MemoryTransferOutcome] = []
         for decision, step in zip(decisions, episode.steps):
-            outcome = self.record(
-                store,
-                decision,
-                success=evaluator(step, episode),
-            )
+            success = evaluator(step, episode)
+            if success is None:
+                continue
+            outcome = self.record(store, decision, success=success)
             if outcome is not None:
                 outcomes.append(outcome)
         return tuple(outcomes)
 
 
-def _default_transfer_success(step: EpisodeStep, episode: EpisodeResult) -> bool:
-    """Credit only a successful terminal action under the default policy."""
+def _default_transfer_success(step: EpisodeStep, episode: EpisodeResult) -> bool | None:
+    """Measure transfer only for the terminal action of an episode."""
 
-    return step.result.done and episode.terminated and episode.total_reward > 0.0
+    if not step.result.done:
+        return None
+    return episode.terminated and episode.total_reward > 0.0
