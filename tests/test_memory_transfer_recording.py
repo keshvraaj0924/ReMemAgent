@@ -14,12 +14,8 @@ def test_record_transfer_outcomes_updates_only_explicit_memory_transfers() -> No
     )
     result = run_benchmark(
         [
-            BenchmarkCase(
-                "success", 0.9, 0.7, memory_id="memory_a", transfer_success=True
-            ),
-            BenchmarkCase(
-                "failure", 0.8, 0.7, memory_id="memory_b", transfer_success=False
-            ),
+            BenchmarkCase("success", 0.9, 0.7, memory_id="memory_a", transfer_success=True),
+            BenchmarkCase("failure", 0.8, 0.7, memory_id="memory_b", transfer_success=False),
             BenchmarkCase("unmeasured", 0.9, 0.7, memory_id="memory_a"),
         ],
         CounterfactualRouter(minimum_delta=-0.5),
@@ -42,9 +38,7 @@ def test_record_transfer_outcomes_ignores_self_reasoning_and_unmeasured_cases() 
     store = MemoryStore([MemoryRecord(memory_id="memory_a", state="state a")])
     result = run_benchmark(
         [
-            BenchmarkCase(
-                "avoided", 0.4, 0.8, memory_id="memory_a", transfer_success=True
-            ),
+            BenchmarkCase("avoided", 0.4, 0.8, memory_id="memory_a", transfer_success=True),
             BenchmarkCase("unmeasured", 0.9, 0.7, memory_id="memory_a"),
         ],
         CounterfactualRouter(minimum_delta=0.05),
@@ -59,17 +53,13 @@ def test_record_transfer_outcomes_ignores_self_reasoning_and_unmeasured_cases() 
 def test_record_transfer_outcomes_rejects_unknown_memory_identity() -> None:
     store = MemoryStore()
     result = run_benchmark(
-        [
-            BenchmarkCase(
-                "unknown", 0.9, 0.7, memory_id="missing", transfer_success=True
-            )
-        ],
+        [BenchmarkCase("unknown", 0.9, 0.7, memory_id="missing", transfer_success=True)],
         CounterfactualRouter(minimum_delta=-0.5),
     )
 
     try:
         record_transfer_outcomes(result, store)
     except KeyError as error:
-        assert str(error) == '"Memory \'missing\' does not exist"'
+        assert str(error) == "\"Memory 'missing' does not exist\""
     else:
         raise AssertionError("Expected unknown memory identity to be rejected")
