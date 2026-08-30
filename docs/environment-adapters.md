@@ -79,7 +79,27 @@ from remem.integrations import compute_group_relative_advantages
 advantages = compute_group_relative_advantages(samples)
 ```
 
-This is intentionally a framework-neutral boundary rather than a vendored GRPO or verl dependency. Group identifiers are explicit so multiple completions for the same task can participate in group-relative objectives, while memory metadata remains available for transfer analysis.
+### verl agent-loop boundary
+
+`remem.integrations.verl` adds a dependency-free encoder for the token-level contract expected from a verl `AgentLoopBase`: `prompt_ids`, `response_ids`, and `response_mask`. ReMemAgent does not import verl; the tokenizer is injected by the caller so model and tokenizer choices remain outside the research core.
+
+```python
+from remem.integrations import encode_episode_for_verl
+
+trajectory = encode_episode_for_verl(
+    episode,
+    encode_prompt=tokenizer.encode_prompt,
+    encode_completion=tokenizer.encode_completion,
+    memory_ids=memory_ids,
+)
+agent_loop_output = trajectory.to_agent_loop_output()
+```
+
+`response_mask` is currently all ones because the normalized episode contains only agent actions. A future multi-turn adapter must mark tool/environment response tokens as zero rather than reconstructing token IDs from rendered chat history. This distinction matters for RL training because tokenization and tool parsing can otherwise change the exact sampled trajectory.
+
+The resulting `VerlTrajectory` also retains reward and memory metadata for offline experiment records, while `to_agent_loop_output()` emits only the framework-facing token fields.
+
+This remains a clean integration boundary rather than a vendored GRPO/verl implementation. The external trainer owns model generation, batching, reward computation, advantage application, optimization, and distributed execution.
 
 ## Current limitation
 
