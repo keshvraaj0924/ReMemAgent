@@ -43,6 +43,30 @@ class GrpoSample:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class GrpoBatch:
+    """Ordered GRPO samples with their corresponding group-relative advantages."""
+
+    samples: tuple[GrpoSample, ...]
+    advantages: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        """Validate that every training sample has exactly one advantage."""
+
+        if len(self.samples) != len(self.advantages):
+            raise ValueError("samples and advantages must have equal lengths")
+        if not self.samples:
+            raise ValueError("GRPO batches must contain at least one sample")
+
+    def to_dicts(self) -> tuple[dict[str, object], ...]:
+        """Return ordered rows suitable for a framework-specific dataset writer."""
+
+        return tuple(
+            {**sample.to_dict(), "advantage": advantage}
+            for sample, advantage in zip(self.samples, self.advantages, strict=True)
+        )
+
+
 def build_grpo_samples(
     episodes: Sequence[EpisodeResult],
     *,
@@ -136,6 +160,19 @@ def compute_group_relative_advantages(
         if standard_deviations[sample.group_id] > 0.0
         else 0.0
         for sample in samples
+    )
+
+
+def build_grpo_batch(samples: Sequence[GrpoSample]) -> GrpoBatch:
+    """Build one validated training batch from ordered GRPO samples."""
+
+    normalized_samples = tuple(samples)
+    if not normalized_samples:
+        raise ValueError("cannot build a GRPO batch from zero samples")
+
+    return GrpoBatch(
+        samples=normalized_samples,
+        advantages=compute_group_relative_advantages(normalized_samples),
     )
 
 
