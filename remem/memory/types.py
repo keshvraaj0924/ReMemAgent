@@ -66,6 +66,21 @@ class MemoryDecision:
             raise ValueError("confidence must be between 0 and 1")
 
 
+@dataclass(frozen=True, slots=True)
+class MemoryTransferOutcome:
+    """Observed outcome for one explicit transfer of a stored memory."""
+
+    memory_id: str
+    success: bool
+    episode_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.memory_id.strip():
+            raise ValueError("memory_id must not be empty")
+        if self.episode_id is not None and not self.episode_id.strip():
+            raise ValueError("episode_id must not be empty when provided")
+
+
 @dataclass(slots=True)
 class MemoryRecord:
     """An experience stored for possible future transfer."""
