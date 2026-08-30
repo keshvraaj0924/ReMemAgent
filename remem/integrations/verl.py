@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from remem.execution import EpisodeResult
+from remem.integrations.grpo import GrpoBatch
 
 TokenEncoder = Callable[[str], Sequence[int]]
 
@@ -42,6 +43,30 @@ class VerlTrajectory:
             "reward": self.reward,
             "metadata": dict(self.metadata),
         }
+
+
+@dataclass(frozen=True, slots=True)
+class VerlTrainingBatch:
+    """Ordered token trajectories paired with their GRPO advantages."""
+
+    trajectories: tuple[VerlTrajectory, ...]
+    advantages: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        """Validate one advantage exists for every encoded trajectory."""
+
+        if not self.trajectories:
+            raise ValueError("verl training batches must contain at least one trajectory")
+        if len(self.trajectories) != len(self.advantages):
+            raise ValueError("trajectories and advantages must have equal lengths")
+
+    def to_dicts(self) -> tuple[dict[str, object], ...]:
+        """Return ordered rows for framework-specific collation."""
+
+        return tuple(
+            {**trajectory.to_dict(), "advantage": advantage}
+            for trajectory, advantage in zip(self.trajectories, self.advantages, strict=True)
+        )
 
 
 def encode_episode_for_verl(
@@ -80,6 +105,42 @@ def encode_episode_for_verl(
             "terminated": episode.terminated,
             "truncated": episode.truncated,
         },
+    )
+
+
+def build_verl_training_batch(
+    batch: GrpoBatch,
+    *,
+    encode_prompt: TokenEncoder,
+    encode_completion: TokenEncoder,
+) -> VerlTrainingBatch:
+    """Encode a validated GRPO batch for a framework-specific verl adapter.
+
+    Sample order is preserved exactly, so each GRPO advantage remains attached
+    to the trajectory from which it was computed. Memory identifiers already
+    carried by each sample become trajectory metadata. The function does not
+    pad, truncate, or move tensors because those operations depend on the
+    external trainer's collation and device strategy.
+    """
+
+    trajectories = tuple(
+        encode_episode_for_verl(
+            _episode_from_sample(sample),
+            encode_prompt=encode_prompt,
+            encode_completion=encode_completion,
+            memory_ids=sample.memory_ids,
+        )
+        for sample in batch.samples
+    )
+    return VerlTrainingBatch(trajectories=trajectories, advantages=batch.advantages)
+
+
+def _episode_from_sample(sample: object) -> EpisodeResult:
+    """Reject unsupported conversion rather than inventing an episode history."""
+
+    raise TypeError(
+        "build_verl_training_batch requires EpisodeResult-backed GRPO samples; "
+        "use build_verl_training_samples for the current text-only boundary"
     )
 
 
