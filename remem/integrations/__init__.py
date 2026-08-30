@@ -14,10 +14,12 @@ from .verl import (
     encode_episode_for_verl,
 )
 from .verl_adapter import VerlTrainingConsumer, dispatch_verl_training_batch
+from .verl_contract import ValidatedAgentLoopOutput, validate_agent_loop_output
 
 __all__ = [
     "GrpoBatch",
     "GrpoSample",
+    "ValidatedAgentLoopOutput",
     "VerlTrainingBatch",
     "VerlTrainingConsumer",
     "VerlTrajectory",
@@ -27,4 +29,5 @@ __all__ = [
     "build_verl_training_batch",
     "encode_episode_for_verl",
     "dispatch_verl_training_batch",
+    "validate_agent_loop_output",
 ]
