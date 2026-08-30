@@ -13,12 +13,13 @@ from .verl import (
     build_verl_training_batch,
     encode_episode_for_verl,
 )
-from .verl_adapter import dispatch_verl_training_batch
+from .verl_adapter import VerlTrainingConsumer, dispatch_verl_training_batch
 
 __all__ = [
     "GrpoBatch",
     "GrpoSample",
     "VerlTrainingBatch",
+    "VerlTrainingConsumer",
     "VerlTrajectory",
     "build_grpo_batch",
     "build_grpo_samples",

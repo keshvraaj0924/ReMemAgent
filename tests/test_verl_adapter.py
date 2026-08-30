@@ -50,3 +50,20 @@ def test_dispatch_rejects_missing_consumer() -> None:
         assert str(error) == "consumer must be provided"
     else:
         raise AssertionError("missing consumer should be rejected")
+
+
+def test_dispatch_isolates_consumer_mutation_from_source_batch() -> None:
+    batch = build_verl_training_batch((_trajectory(2.0),), (0.5,))
+
+    def mutate(rows: tuple[object, ...]) -> None:
+        row = rows[0]
+        assert isinstance(row, dict)
+        row["reward"] = 99.0
+        metadata = row["metadata"]
+        assert isinstance(metadata, dict)
+        metadata["memory_ids"] = ["mutated"]
+
+    dispatch_verl_training_batch(batch, mutate)
+
+    assert batch.trajectories[0].reward == 2.0
+    assert batch.trajectories[0].metadata["memory_ids"] == []
