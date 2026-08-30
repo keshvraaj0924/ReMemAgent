@@ -10,7 +10,9 @@ from typing import Callable, Sequence
 
 from experiments.ablations import AblationResult, run_ablations
 from experiments.reproducibility import (
+    EXPERIMENT_PROTOCOL_VERSION,
     EXPERIMENT_SCHEMA_VERSION,
+    ROUTING_HEURISTIC_VERSION,
     fingerprint_cases,
     fingerprint_experiment_inputs,
 )
@@ -79,6 +81,8 @@ def save_report(report: ExperimentReport, output_path: str | Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": EXPERIMENT_SCHEMA_VERSION,
+        "protocol_version": EXPERIMENT_PROTOCOL_VERSION,
+        "routing_heuristic_version": ROUTING_HEURISTIC_VERSION,
         "seed": report.seed,
         "minimum_delta": report.minimum_delta,
         "case_ids": list(report.case_ids),
