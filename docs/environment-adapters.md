@@ -56,6 +56,23 @@ Observations are converted to text because the current ReMemAgent memory domain 
 
 The adapters do not install, configure, or import ALFWorld or WebShop. That setup belongs to benchmark-specific experiment code. This keeps the deterministic research core dependency-free and makes unit tests runnable without external benchmark installations.
 
+## GRPO / agent-training boundary
+
+The `remem.integrations.grpo` module provides a dependency-free conversion from completed `EpisodeResult` trajectories to `GrpoSample` records. Each record contains the initial observation as the prompt, the executed action sequence as the completion, the episode reward, a caller-controlled group identifier, and the memory identifiers that influenced the trajectory.
+
+```python
+from remem.integrations import build_grpo_samples
+
+samples = build_grpo_samples(
+    episodes,
+    decision_histories=decision_histories,
+    group_id_builder=lambda index, episode: task_ids[index],
+)
+training_rows = [sample.to_dict() for sample in samples]
+```
+
+This is intentionally a framework-neutral boundary rather than a vendored GRPO or verl dependency. The resulting records can be mapped by an experiment to the exact dataset schema required by its chosen trainer. Group identifiers are explicit so multiple completions for the same task can participate in group-relative objectives, while memory metadata remains available for transfer analysis.
+
 ## Current limitation
 
-These adapters and the shared runner provide an execution boundary, not benchmark results. No ALFWorld or WebShop performance claim is made until real benchmark environments are installed and matched experiments are executed.
+These adapters and integration records provide execution and data-conversion boundaries, not benchmark or training results. No ALFWorld, WebShop, GRPO, or verl performance claim is made until real benchmark environments and training runs are installed and matched experiments are executed.
