@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from experiments.synthetic_negative_transfer import BenchmarkCaseResult, BenchmarkResult
+    from remem.memory.store import MemoryStore
+
 
 @dataclass(frozen=True, slots=True)
 class MemoryTransferSummary:
@@ -23,11 +26,7 @@ class MemoryTransferSummary:
     def negative_transfer_rate(self) -> float:
         """Return the fraction of this memory's selected cases that harmed utility."""
 
-        return (
-            self.negative_transfer_cases / self.transfer_attempts
-            if self.transfer_attempts
-            else 0.0
-        )
+        return self.negative_transfer_cases / self.transfer_attempts if self.transfer_attempts else 0.0
 
 
 def summarize_memory_transfers(
@@ -61,3 +60,35 @@ def summarize_memory_transfers(
         )
         for memory_id in sorted(attempts)
     )
+
+
+def record_transfer_outcomes(
+    benchmark_result: "BenchmarkResult",
+    memory_store: "MemoryStore",
+) -> int:
+    """Record only explicit, selected transfer outcomes in the memory store.
+
+    A benchmark case must provide an explicit ``transfer_success`` signal to
+    mutate transferability state. Utility deltas alone describe counterfactual
+    routing quality; they do not necessarily represent task success. Cases
+    without an explicit outcome, without a memory identity, or not selected by
+    the memory route are therefore left untouched.
+
+    Returns:
+        Number of transfer outcomes recorded in ``memory_store``.
+    """
+
+    recorded_count = 0
+    for case_result in benchmark_result.case_results:
+        if (
+            case_result.selected_route != "memory"
+            or case_result.memory_id is None
+            or case_result.transfer_success is None
+        ):
+            continue
+        memory_store.record_transfer_outcome(
+            case_result.memory_id,
+            success=case_result.transfer_success,
+        )
+        recorded_count += 1
+    return recorded_count

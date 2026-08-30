@@ -15,6 +15,7 @@ class BenchmarkCase:
     utility_with_memory: float
     utility_without_memory: float
     memory_id: str | None = None
+    transfer_success: bool | None = None
 
     def __post_init__(self) -> None:
         if not self.case_id.strip():
@@ -33,6 +34,7 @@ class BenchmarkCaseResult:
     negative_transfer: bool
     regret: float
     memory_id: str | None = None
+    transfer_success: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +117,7 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
                 negative_transfer=memory_is_worse,
                 regret=regret,
                 memory_id=case.memory_id,
+                transfer_success=case.transfer_success,
             )
         )
 
