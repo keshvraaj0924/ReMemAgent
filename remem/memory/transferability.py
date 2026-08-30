@@ -12,7 +12,6 @@ from math import sqrt
 
 from .types import MemoryRecord
 
-
 DEFAULT_CONFIDENCE_Z = 1.96
 
 
