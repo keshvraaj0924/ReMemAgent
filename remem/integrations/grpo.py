@@ -1,16 +1,18 @@
 """Framework-neutral trajectory records for GRPO-style training loops.
 
 The integration deliberately has no dependency on GRPO or verl. It converts a
-completed ReMemAgent episode into the small prompt/completion/reward contract
-that training frameworks can map to their own dataset schemas. Memory
+completed ReMemAgent episode into the small prompt/completion/reward/group
+contract that training frameworks can map to their own dataset schemas. Memory
 identifiers are retained as metadata so experiments can analyze whether
 training examples were memory-guided.
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from math import sqrt
 
 from remem.execution import EpisodeResult
 from remem.memory.policy import MemoryGuidanceDecision
@@ -97,6 +99,44 @@ def build_grpo_samples(
         )
 
     return tuple(samples)
+
+
+def compute_group_relative_advantages(
+    samples: Sequence[GrpoSample],
+    *,
+    epsilon: float = 1e-8,
+) -> tuple[float, ...]:
+    """Compute deterministic group-normalized rewards for GRPO-style training.
+
+    For each group, rewards are centered by the group mean and normalized by
+    the population standard deviation. A zero-variance group receives zero
+    advantages rather than producing NaNs. The returned tuple preserves the
+    input sample order so callers can attach each value to the corresponding
+    training row without reordering the dataset.
+    """
+
+    if epsilon <= 0.0:
+        raise ValueError("epsilon must be positive")
+
+    rewards_by_group: dict[str, list[float]] = defaultdict(list)
+    for sample in samples:
+        rewards_by_group[sample.group_id].append(sample.reward)
+
+    means: dict[str, float] = {}
+    standard_deviations: dict[str, float] = {}
+    for group_id, rewards in rewards_by_group.items():
+        mean = sum(rewards) / len(rewards)
+        variance = sum((reward - mean) ** 2 for reward in rewards) / len(rewards)
+        means[group_id] = mean
+        standard_deviations[group_id] = sqrt(variance)
+
+    return tuple(
+        (sample.reward - means[sample.group_id])
+        / max(standard_deviations[sample.group_id], epsilon)
+        if standard_deviations[sample.group_id] > 0.0
+        else 0.0
+        for sample in samples
+    )
 
 
 def _default_prompt_builder(episode: EpisodeResult) -> str:
