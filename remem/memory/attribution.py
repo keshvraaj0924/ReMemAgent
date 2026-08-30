@@ -35,11 +35,8 @@ class MemoryTransferRecorder:
 
         if decision.memory_id is None:
             return None
-        memory = store.get(decision.memory_id)
-        if memory is None:
-            raise KeyError(f"Memory '{decision.memory_id}' does not exist")
-        memory.record_use(success=success, transferred=True)
-        return MemoryTransferOutcome(memory_id=memory.memory_id, success=success)
+        store.record_transfer_outcome(decision.memory_id, success=success)
+        return MemoryTransferOutcome(memory_id=decision.memory_id, success=success)
 
     def record_episode(
         self,

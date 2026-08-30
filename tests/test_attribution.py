@@ -66,3 +66,24 @@ def test_missing_selected_memory_is_rejected() -> None:
 
     with pytest.raises(KeyError, match="missing"):
         MemoryTransferRecorder().record(MemoryStore(), decision, success=True)
+
+
+def test_recorder_uses_store_transfer_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
+    memory = MemoryRecord(memory_id="m1", state="state")
+    store = MemoryStore([memory])
+    decision = MemoryGuidanceDecision(
+        memory_id="m1",
+        guidance="guidance",
+        similarity=0.9,
+        trust_confidence=0.8,
+    )
+    calls: list[tuple[str, bool]] = []
+
+    def record_transfer_outcome(memory_id: str, success: bool) -> None:
+        calls.append((memory_id, success))
+
+    monkeypatch.setattr(store, "record_transfer_outcome", record_transfer_outcome)
+
+    MemoryTransferRecorder().record(store, decision, success=False)
+
+    assert calls == [("m1", False)]
