@@ -98,11 +98,20 @@ trajectory = encode_episode_for_verl(
 agent_loop_output = trajectory.to_agent_loop_output()
 ```
 
+`VerlTrainingBatch` is the next boundary between ReMemAgent's deterministic trajectory representation and external trainer collation. `build_verl_training_batch()` pairs already-encoded trajectories with their precomputed GRPO advantages while preserving order and rejecting alignment errors. It deliberately does not pad, truncate, tensorize, move to devices, or shard data because those operations depend on the selected training stack.
+
+```python
+from remem.integrations import build_verl_training_batch
+
+verl_batch = build_verl_training_batch(trajectories, batch.advantages)
+rows = verl_batch.to_dicts()
+```
+
 `response_mask` is currently all ones because the normalized episode contains only agent actions. A future multi-turn adapter must mark tool/environment response tokens as zero rather than reconstructing token IDs from rendered chat history. This distinction matters for RL training because tokenization and tool parsing can otherwise change the exact sampled trajectory.
 
-The resulting `VerlTrajectory` also retains reward and memory metadata for offline experiment records, while `to_agent_loop_output()` emits only the framework-facing token fields.
+The resulting records retain reward and memory metadata for offline experiment analysis, while `to_agent_loop_output()` emits only the framework-facing token fields.
 
-This remains a clean integration boundary rather than a vendored GRPO/verl implementation. The external trainer owns model generation, batching, reward computation, advantage application, optimization, and distributed execution.
+This remains a clean integration boundary rather than a vendored GRPO/verl implementation. The external trainer owns model generation, padding/collation, reward computation, advantage application, optimization, and distributed execution.
 
 ## Current limitation
 
