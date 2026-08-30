@@ -21,11 +21,17 @@ from remem.integrations import dispatch_verl_training_batch
 result = dispatch_verl_training_batch(verl_batch, external_trainer.consume)
 ```
 
-`response_mask` is currently all ones because the normalized episode contains only agent actions. A future multi-turn adapter must mark tool/environment response tokens as zero rather than reconstructing token IDs from rendered chat history. This distinction matters for RL training because tokenization and tool parsing can otherwise change the exact sampled trajectory.
+For a real custom verl `AgentLoopBase`, the rollout already owns exact token generation. `validate_agent_loop_output()` validates the resulting `prompt_ids`, `response_ids`, and `response_mask` without decoding or re-encoding them. This is important for multi-turn/tool trajectories because the response mask must distinguish model-generated tokens from environment/tool-response tokens. The validator rejects missing fields, negative/non-integer token IDs, mask length mismatches, and non-binary masks while returning immutable token tuples for downstream research processing.
+
+```python
+from remem.integrations import validate_agent_loop_output
+
+validated = validate_agent_loop_output(agent_loop_output.model_dump())
+```
 
 The resulting records retain reward and memory metadata for offline experiment analysis, while `to_agent_loop_output()` emits only the framework-facing token fields.
 
-This remains a clean integration boundary rather than a vendored GRPO/verl implementation. The external trainer owns model generation, padding/collation, reward computation, advantage application, optimization, and distributed execution.
+This remains a clean integration boundary rather than a vendored GRPO/verl implementation. The external trainer owns model generation, padding/collation, reward computation, advantage application, optimization, and distributed execution. ReMemAgent validates the trajectory contract and keeps memory provenance attached for research analysis.
 
 ## Current limitation
 
