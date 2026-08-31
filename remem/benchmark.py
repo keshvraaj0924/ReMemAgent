@@ -169,6 +169,7 @@ class BenchmarkSuiteRunner:
                         environment,
                         memory_store,
                         factory_seed,
+                        episode_index,
                         normalized_name,
                         max_steps,
                         policy_factory,
@@ -182,6 +183,7 @@ class BenchmarkSuiteRunner:
                             environment,
                             memory_store,
                             factory_seed,
+                            episode_index,
                             normalized_name,
                             max_steps,
                             policy_factory,
@@ -217,6 +219,7 @@ class BenchmarkSuiteRunner:
         environment: EnvironmentAdapter,
         memory_store: MemoryStore,
         factory_seed: int,
+        episode_index: int,
         benchmark_name: str,
         max_steps: int,
         policy_factory: PolicyFactory,
@@ -231,7 +234,7 @@ class BenchmarkSuiteRunner:
             environment,
             policy,
             memory_store,
-            episode_id=f"{benchmark_name}:{factory_seed}",
+            episode_id=f"{benchmark_name}:{episode_index}",
             max_steps=max_steps,
             success_evaluator=success_evaluator,
             reset_kwargs=reset_kwargs,
@@ -241,7 +244,7 @@ class BenchmarkSuiteRunner:
             memory_store,
             policy,
             execution_result,
-            transfer_success_evaluator=transfer_success_evaluator,
+            success_evaluator=transfer_success_evaluator,
         )
         return execution_result, transfer_outcomes
 
@@ -252,7 +255,7 @@ def _record_transfer_outcomes(
     policy: Policy,
     result: EpisodeExecutionResult,
     *,
-    transfer_success_evaluator: TransferSuccessEvaluator | None,
+    success_evaluator: TransferSuccessEvaluator | None,
 ) -> tuple[MemoryTransferOutcome, ...]:
     """Attribute traced decisions only for policies that provide memory guidance."""
 
@@ -262,7 +265,7 @@ def _record_transfer_outcomes(
         store,
         policy.decision_history,
         result.episode,
-        success_evaluator=transfer_success_evaluator,
+        success_evaluator=success_evaluator,
     )
 
 
