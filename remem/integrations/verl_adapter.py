@@ -7,7 +7,9 @@ model execution, batching, and optimization remain outside this package.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Mapping, Sequence
+from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any, Protocol, TypeVar
 
@@ -36,6 +38,16 @@ class AsyncVerlAgentLoop(Protocol):
         **kwargs: Any,
     ) -> Awaitable[Mapping[str, Sequence[int]]]:
         """Run one external agent loop and return its token-level output."""
+
+
+@dataclass(frozen=True, slots=True)
+class AgentLoopRequest:
+    """One ordered request for an external async agent loop."""
+
+    sampling_params: Mapping[str, Any]
+    reward: float
+    metadata: Mapping[str, object] = field(default_factory=dict)
+    kwargs: Mapping[str, Any] = field(default_factory=dict)
 
 
 def adapt_agent_loop_output(
@@ -84,6 +96,46 @@ async def run_agent_loop(
 
     output = await agent_loop(sampling_params, **kwargs)
     return adapt_agent_loop_output(output, reward=reward, metadata=metadata)
+
+
+async def run_agent_loop_batch(
+    agent_loop: AsyncVerlAgentLoop,
+    requests: Sequence[AgentLoopRequest],
+    *,
+    max_concurrency: int | None = None,
+) -> tuple[VerlTrajectory, ...]:
+    """Execute ordered agent-loop requests concurrently and preserve input order.
+
+    Concurrency is bounded only when ``max_concurrency`` is supplied. The
+    external framework remains responsible for inference-server scheduling;
+    this helper only coordinates independent requests and normalizes their
+    results into deterministic trajectory records.
+    """
+
+    if max_concurrency is not None and max_concurrency <= 0:
+        raise ValueError("max_concurrency must be positive when provided")
+
+    semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency is not None else None
+
+    async def execute(request: AgentLoopRequest) -> VerlTrajectory:
+        if semaphore is None:
+            return await run_agent_loop(
+                agent_loop,
+                sampling_params=request.sampling_params,
+                reward=request.reward,
+                metadata=request.metadata,
+                **request.kwargs,
+            )
+        async with semaphore:
+            return await run_agent_loop(
+                agent_loop,
+                sampling_params=request.sampling_params,
+                reward=request.reward,
+                metadata=request.metadata,
+                **request.kwargs,
+            )
+
+    return tuple(await asyncio.gather(*(execute(request) for request in requests)))
 
 
 def dispatch_verl_training_batch(
