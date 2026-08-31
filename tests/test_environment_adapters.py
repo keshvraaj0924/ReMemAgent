@@ -14,11 +14,13 @@ class FakeEnvironment:
         self.reset_result = reset_result
         self.step_result = step_result
         self.closed = False
+        self.actions: list[object] = []
 
     def reset(self, **_kwargs: object) -> object:
         return self.reset_result
 
-    def step(self, _action: str) -> object:
+    def step(self, action: object) -> object:
+        self.actions.append(action)
         return self.step_result
 
     def close(self) -> None:
@@ -40,8 +42,26 @@ def test_alfworld_adapter_normalizes_gymnasium_step() -> None:
         truncated=False,
         info={"score": 1},
     )
+    assert environment.actions == [["take object"]]
     adapter.close()
     assert environment.closed
+
+
+def test_alfworld_adapter_unwraps_upstream_single_item_batches() -> None:
+    environment = FakeEnvironment(
+        (["look around"], {"episode": [7]}),
+        (["found object"], [1.0], [True], [False], {"score": [1], "won": [True]}),
+    )
+    adapter = AlfWorldAdapter(environment)
+
+    assert adapter.reset() == "look around"
+    assert adapter.step("take object") == StepResult(
+        observation="found object",
+        reward=1.0,
+        terminated=True,
+        truncated=False,
+        info={"score": 1, "won": True},
+    )
 
 
 def test_webshop_adapter_normalizes_legacy_step() -> None:
