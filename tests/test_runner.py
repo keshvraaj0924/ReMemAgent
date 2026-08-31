@@ -2,7 +2,13 @@ import json
 
 import pytest
 
-from experiments.runner import ExperimentConfig, run_reproducible_ablation, save_report
+from experiments.runner import (
+    ExperimentConfig,
+    run_repeated_ablations,
+    run_reproducible_ablation,
+    save_repeated_reports,
+    save_report,
+)
 from experiments.synthetic_negative_transfer import BenchmarkCase
 
 
@@ -62,3 +68,43 @@ def test_runner_rejects_invalid_case_factory_output() -> None:
 
     with pytest.raises(ValueError, match="case_id values must be unique"):
         run_reproducible_ablation(duplicate_cases)
+
+
+def test_repeated_runner_preserves_requested_seed_order() -> None:
+    reports = run_repeated_ablations(_make_cases, [11, 7, 19])
+
+    assert [report.seed for report in reports] == [11, 7, 19]
+    assert len({report.experiment_fingerprint for report in reports}) == 3
+
+
+def test_repeated_runner_uses_shared_protocol_configuration() -> None:
+    reports = run_repeated_ablations(
+        _make_cases,
+        [1, 2],
+        ExperimentConfig(minimum_delta=0.2),
+    )
+
+    assert all(report.minimum_delta == 0.2 for report in reports)
+
+
+@pytest.mark.parametrize("seeds", [[], [3, 3]])
+def test_repeated_runner_rejects_invalid_seed_sets(seeds) -> None:
+    with pytest.raises(ValueError, match="seeds"):
+        run_repeated_ablations(_make_cases, seeds)
+
+
+def test_save_repeated_reports_preserves_each_report(tmp_path) -> None:
+    reports = run_repeated_ablations(_make_cases, [5, 6])
+    output_path = save_repeated_reports(reports, tmp_path / "reports.json")
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["seeds"] == [5, 6]
+    assert [item["seed"] for item in payload["reports"]] == [5, 6]
+    assert payload["reports"][0]["experiment_fingerprint"] == reports[0].experiment_fingerprint
+
+
+def test_save_repeated_reports_rejects_duplicate_seed_reports(tmp_path) -> None:
+    report = run_reproducible_ablation(_make_cases, ExperimentConfig(seed=4))
+
+    with pytest.raises(ValueError, match="report seeds"):
+        save_repeated_reports([report, report], tmp_path / "reports.json")
