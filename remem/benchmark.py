@@ -58,6 +58,7 @@ class BenchmarkRunReport:
     benchmark_name: str
     episodes: tuple[BenchmarkEpisodeReport, ...]
     final_memory_count: int
+    seed: int | None = None
 
     @property
     def success_count(self) -> int:
@@ -125,6 +126,7 @@ class BenchmarkSuiteRunner:
         store: MemoryStore | None = None,
         reset_kwargs: dict[str, Any] | None = None,
         transfer_success_evaluator: TransferSuccessEvaluator | None = None,
+        seed: int | None = None,
     ) -> BenchmarkRunReport:
         """Execute a benchmark suite, persist memories, and trace guided transfers.
 
@@ -135,6 +137,12 @@ class BenchmarkSuiteRunner:
         When an :class:`ObservationCollector` is configured, the runner records
         suite and episode counters plus aggregate episode duration without
         changing benchmark behavior.
+
+        If ``seed`` is supplied, factories receive ``seed + episode_index`` as
+        their episode seed. This gives externally owned benchmark integrations a
+        deterministic seed contract without introducing a global random-state
+        dependency. When omitted, factories retain the historical episode-index
+        argument.
         """
 
         normalized_name = benchmark_name.strip()
@@ -151,7 +159,8 @@ class BenchmarkSuiteRunner:
             self.observation_collector.increment("benchmark.runs")
 
         for episode_index in range(episode_count):
-            environment = environment_factory(episode_index)
+            factory_seed = episode_index if seed is None else seed + episode_index
+            environment = environment_factory(factory_seed)
             if self.observation_collector is not None:
                 self.observation_collector.increment("benchmark.episodes.started")
             try:
@@ -159,7 +168,7 @@ class BenchmarkSuiteRunner:
                     execution_result = self._execute_episode(
                         environment,
                         memory_store,
-                        episode_index,
+                        factory_seed,
                         normalized_name,
                         max_steps,
                         policy_factory,
@@ -172,7 +181,7 @@ class BenchmarkSuiteRunner:
                         execution_result = self._execute_episode(
                             environment,
                             memory_store,
-                            episode_index,
+                            factory_seed,
                             normalized_name,
                             max_steps,
                             policy_factory,
@@ -200,13 +209,14 @@ class BenchmarkSuiteRunner:
             benchmark_name=normalized_name,
             episodes=tuple(reports),
             final_memory_count=len(memory_store.all()),
+            seed=seed,
         )
 
     def _execute_episode(
         self,
         environment: EnvironmentAdapter,
         memory_store: MemoryStore,
-        episode_index: int,
+        factory_seed: int,
         benchmark_name: str,
         max_steps: int,
         policy_factory: PolicyFactory,
@@ -216,12 +226,12 @@ class BenchmarkSuiteRunner:
     ) -> tuple[EpisodeExecutionResult, tuple[MemoryTransferOutcome, ...]]:
         """Execute one episode and attribute memory transfers."""
 
-        policy = policy_factory(episode_index, memory_store)
+        policy = policy_factory(factory_seed, memory_store)
         execution_result = self.execution_service.execute_and_ingest(
             environment,
             policy,
             memory_store,
-            episode_id=f"{benchmark_name}:{episode_index}",
+            episode_id=f"{benchmark_name}:{factory_seed}",
             max_steps=max_steps,
             success_evaluator=success_evaluator,
             reset_kwargs=reset_kwargs,
