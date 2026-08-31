@@ -1,88 +1,127 @@
-"""Run real benchmark suites from externally supplied factory callables.
+"""Executable boundary for caller-owned external benchmark integrations.
 
-The benchmark dependencies and model implementations remain outside this package.
-A callable specification in ``module:attribute`` form provides a small, explicit
-integration boundary that can execute the real ALFWorld/WebShop setup without
-vendoring their dependency trees into ReMemAgent.
+The framework does not install ALFWorld, WebShop, model SDKs, or checkpoints.
+Instead, this module resolves explicit ``module:attribute`` specifications and
+hands the resulting factories to the normalized benchmark runner. This keeps
+third-party dependencies outside the core package while making the experiment
+entrypoint reproducible and testable.
 """
 
 from __future__ import annotations
 
 import importlib
-from collections.abc import Callable
-from typing import Any, TypeVar, cast
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, cast
 
-from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner
-from remem.environments.base import EnvironmentAdapter
+from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner, EnvironmentFactory, PolicyFactory
 from remem.execution import Policy
 from remem.memory.attribution import TransferSuccessEvaluator
-from remem.memory.store import MemoryStore
 from remem.services import SuccessEvaluator
 
-CallableT = TypeVar("CallableT", bound=Callable[..., Any])
+
+@dataclass(frozen=True, slots=True)
+class ExternalBenchmarkSpec:
+    """Fully qualified callables required to execute one external benchmark."""
+
+    benchmark_name: str
+    episode_count: int
+    max_steps: int
+    environment_factory: str
+    policy_factory: str
+    success_evaluator: str
+    transfer_success_evaluator: str | None = None
+    seed: int | None = None
 
 
-def load_callable(specification: str) -> Callable[..., Any]:
-    """Load a callable from an explicit ``module:attribute`` specification."""
+def resolve_callable(specification: str) -> Callable[..., Any]:
+    """Resolve a callable from ``module:attribute`` notation."""
 
-    module_name, separator, attribute_name = specification.partition(":")
-    if not separator or not module_name.strip() or not attribute_name.strip():
-        raise ValueError("callable specification must use the form 'module:attribute'")
+    module_name, separator, attribute_path = specification.partition(":")
+    if not separator or not module_name.strip() or not attribute_path.strip():
+        raise ValueError(f"invalid callable specification: {specification!r}")
 
-    module = importlib.import_module(module_name.strip())
-    target: Any = module
-    for component in attribute_name.strip().split("."):
-        if not component:
-            raise ValueError("callable attribute path must not contain empty components")
+    module = importlib.import_module(module_name)
+    value: Any = module
+    for attribute_name in attribute_path.split("."):
+        if not attribute_name.strip():
+            raise ValueError(f"invalid callable specification: {specification!r}")
         try:
-            target = getattr(target, component)
+            value = getattr(value, attribute_name)
         except AttributeError as exc:
-            raise AttributeError(
-                f"callable '{specification}' does not expose '{component}'"
+            raise ValueError(
+                f"callable attribute not found: {specification!r}"
             ) from exc
 
-    if not callable(target):
-        raise TypeError(f"callable '{specification}' resolved to a non-callable object")
-    return target
-
-
-def load_typed_callable(specification: str) -> CallableT:
-    """Load a callable while preserving the caller's static callable contract."""
-
-    return cast(CallableT, load_callable(specification))
+    if not callable(value):
+        raise TypeError(f"resolved value is not callable: {specification!r}")
+    return cast(Callable[..., Any], value)
 
 
 def run_external_benchmark(
+    spec: ExternalBenchmarkSpec,
     *,
-    benchmark_name: str,
-    episode_count: int,
-    max_steps: int,
-    environment_factory: Callable[[int], EnvironmentAdapter],
-    policy_factory: Callable[[int, MemoryStore], Policy],
-    success_evaluator: SuccessEvaluator,
-    store: MemoryStore | None = None,
-    reset_kwargs: dict[str, Any] | None = None,
-    transfer_success_evaluator: TransferSuccessEvaluator | None = None,
-    seed: int | None = None,
+    runner: BenchmarkSuiteRunner | None = None,
 ) -> BenchmarkRunReport:
-    """Execute a benchmark using real caller-owned environments and policies.
+    """Execute an external benchmark through the normalized ReMemAgent runner.
 
-    This function intentionally performs no synthetic scoring or dependency
-    discovery. The supplied factories own benchmark setup, model inference,
-    checkpoint selection, and environment configuration. When ``seed`` is
-    supplied, the suite runner forwards deterministic per-episode seeds to both
-    factories and records the run-level seed in the report.
+    The supplied environment and policy factories own all third-party setup.
+    ReMemAgent only enforces the normalized factory signatures and benchmark
+    lifecycle, so no external dependency is silently imported or fabricated.
     """
 
-    return BenchmarkSuiteRunner().run(
-        benchmark_name=benchmark_name,
-        episode_count=episode_count,
-        max_steps=max_steps,
+    selected_runner = runner or BenchmarkSuiteRunner()
+    environment_factory = cast(EnvironmentFactory, resolve_callable(spec.environment_factory))
+    policy_factory = cast(PolicyFactory, resolve_callable(spec.policy_factory))
+    success_evaluator = cast(SuccessEvaluator, resolve_callable(spec.success_evaluator))
+    transfer_success_evaluator = (
+        cast(TransferSuccessEvaluator, resolve_callable(spec.transfer_success_evaluator))
+        if spec.transfer_success_evaluator is not None
+        else None
+    )
+    return selected_runner.run(
+        benchmark_name=spec.benchmark_name,
+        episode_count=spec.episode_count,
+        max_steps=spec.max_steps,
         environment_factory=environment_factory,
         policy_factory=policy_factory,
         success_evaluator=success_evaluator,
-        store=store,
-        reset_kwargs=reset_kwargs,
         transfer_success_evaluator=transfer_success_evaluator,
-        seed=seed,
+        seed=spec.seed,
     )
+
+
+def save_benchmark_report(report: BenchmarkRunReport, output_path: str | Path) -> Path:
+    """Persist measured benchmark output as deterministic JSON."""
+
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    import json
+
+    payload = {
+        "benchmark_name": report.benchmark_name,
+        "seed": report.seed,
+        "final_memory_count": report.final_memory_count,
+        "success_count": report.success_count,
+        "success_rate": report.success_rate,
+        "mean_reward": report.mean_reward,
+        "transfer_count": report.transfer_count,
+        "transfer_success_rate": report.transfer_success_rate,
+        "episodes": [
+            {
+                "episode_id": episode.episode_id,
+                "episode_success": episode.episode_success,
+                "retained_memory_count": episode.retained_memory_count,
+                "total_reward": episode.episode.total_reward,
+                "step_count": len(episode.episode.steps),
+                "terminated": episode.episode.terminated,
+                "truncated": episode.episode.truncated,
+                "transfer_count": episode.transfer_count,
+                "transfer_success_count": episode.transfer_success_count,
+            }
+            for episode in report.episodes
+        ],
+    }
+    destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return destination

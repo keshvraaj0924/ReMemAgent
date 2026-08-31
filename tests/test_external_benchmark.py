@@ -1,78 +1,104 @@
-"""Tests for externally supplied benchmark execution boundaries."""
-
-from __future__ import annotations
-
-import sys
-import types
+from pathlib import Path
 
 import pytest
 
-from experiments.external_benchmark import load_callable, run_external_benchmark
+from experiments.external_benchmark import (
+    ExternalBenchmarkSpec,
+    resolve_callable,
+    run_external_benchmark,
+    save_benchmark_report,
+)
+from remem.benchmark import BenchmarkSuiteRunner
 from remem.environments.base import StepResult
+from remem.memory.store import MemoryStore
 
 
-class _Environment:
-    """Minimal environment used to exercise the real suite runner."""
-
-    def __init__(self) -> None:
+class FakeEnvironment:
+    def __init__(self, seed: int) -> None:
+        self.seed = seed
         self.closed = False
 
-    def reset(self) -> str:
-        return "task"
+    def reset(self, **kwargs: object) -> str:
+        return f"seed-{self.seed}"
 
     def step(self, action: str) -> StepResult:
-        return StepResult("done", 1.0, True, False, {"action": action})
+        return StepResult(
+            observation="done",
+            reward=1.0,
+            terminated=True,
+            truncated=False,
+        )
 
     def close(self) -> None:
         self.closed = True
 
 
-def _environment_factory(_: int) -> _Environment:
-    return _Environment()
+def make_environment(seed: int) -> FakeEnvironment:
+    return FakeEnvironment(seed)
 
 
-def _policy_factory(_: int, _store: object):
-    return lambda _observation: "finish"
+def make_policy(seed: int, store: MemoryStore):
+    del store
+    return lambda state: f"act-{seed}"
 
 
-def _success_evaluator(episode: object) -> bool:
-    return bool(getattr(episode, "terminated"))
+def evaluate_success(episode) -> bool:
+    return episode.total_reward > 0
 
 
-def test_load_callable_supports_nested_attributes(monkeypatch: pytest.MonkeyPatch) -> None:
-    module = types.ModuleType("test_external_factory_module")
-    module.factory = types.SimpleNamespace(value=_environment_factory)
-    monkeypatch.setitem(sys.modules, module.__name__, module)
-
-    assert load_callable("test_external_factory_module:factory.value") is _environment_factory
+def test_resolve_callable_supports_nested_attributes() -> None:
+    assert resolve_callable("tests.test_external_benchmark:make_environment") is make_environment
 
 
-def test_load_callable_rejects_malformed_specification() -> None:
-    with pytest.raises(ValueError, match="module:attribute"):
-        load_callable("not-a-spec")
+def test_resolve_callable_rejects_malformed_specification() -> None:
+    with pytest.raises(ValueError, match="invalid callable specification"):
+        resolve_callable("tests.test_external_benchmark")
 
 
-def test_load_callable_rejects_non_callable_target(monkeypatch: pytest.MonkeyPatch) -> None:
-    module = types.ModuleType("test_non_callable_module")
-    module.value = 42
-    monkeypatch.setitem(sys.modules, module.__name__, module)
-
-    with pytest.raises(TypeError, match="non-callable"):
-        load_callable("test_non_callable_module:value")
+def test_resolve_callable_rejects_non_callable_attribute() -> None:
+    with pytest.raises(TypeError, match="not callable"):
+        resolve_callable("tests.test_external_benchmark:FakeEnvironment")
 
 
-def test_run_external_benchmark_executes_supplied_environment_and_policy() -> None:
-    report = run_external_benchmark(
+def test_run_external_benchmark_passes_seed_to_factories() -> None:
+    spec = ExternalBenchmarkSpec(
         benchmark_name="external-smoke",
         episode_count=2,
-        max_steps=3,
-        environment_factory=_environment_factory,
-        policy_factory=_policy_factory,
-        success_evaluator=_success_evaluator,
+        max_steps=1,
+        environment_factory="tests.test_external_benchmark:make_environment",
+        policy_factory="tests.test_external_benchmark:make_policy",
+        success_evaluator="tests.test_external_benchmark:evaluate_success",
+        seed=100,
     )
 
-    assert report.benchmark_name == "external-smoke"
-    assert len(report.episodes) == 2
-    assert report.success_count == 2
-    assert report.mean_reward == 1.0
-    assert all(episode.episode.terminated for episode in report.episodes)
+    report = run_external_benchmark(spec)
+
+    assert report.seed == 100
+    assert [episode.episode.initial_observation for episode in report.episodes] == [
+        "seed-100",
+        "seed-101",
+    ]
+    assert [episode.episode.steps[0].action for episode in report.episodes] == [
+        "act-100",
+        "act-101",
+    ]
+
+
+def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
+    spec = ExternalBenchmarkSpec(
+        benchmark_name="external-smoke",
+        episode_count=1,
+        max_steps=1,
+        environment_factory="tests.test_external_benchmark:make_environment",
+        policy_factory="tests.test_external_benchmark:make_policy",
+        success_evaluator="tests.test_external_benchmark:evaluate_success",
+        seed=7,
+    )
+    report = run_external_benchmark(spec, runner=BenchmarkSuiteRunner())
+
+    output = save_benchmark_report(report, tmp_path / "report.json")
+    payload = output.read_text(encoding="utf-8")
+
+    assert '"benchmark_name": "external-smoke"' in payload
+    assert '"seed": 7' in payload
+    assert '"success_rate": 1.0' in payload
