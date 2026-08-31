@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 from experiments.synthetic_negative_transfer import BenchmarkCase
 
@@ -51,6 +51,7 @@ def fingerprint_experiment_inputs(
     an old fingerprint.
     """
 
+    normalized_configuration = cast(dict[str, JsonValue], dict(configuration))
     return _fingerprint(
         {
             "schema_version": EXPERIMENT_SCHEMA_VERSION,
@@ -66,7 +67,7 @@ def fingerprint_experiment_inputs(
                 }
                 for case in cases
             ],
-            "configuration": dict(configuration),
+            "configuration": normalized_configuration,
         }
     )
 
