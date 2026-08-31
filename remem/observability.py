@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from math import isfinite
 from threading import Lock
 from time import monotonic
+from typing import Self
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +77,7 @@ class ObservationCollector:
                 durations_seconds=dict(self._durations_seconds),
             )
 
-    def timed(self, name: str) -> "ObservationTimer":
+    def timed(self, name: str) -> ObservationTimer:
         """Create a monotonic timer that records its duration on exit."""
 
         return ObservationTimer(self, name)
@@ -92,7 +93,7 @@ class ObservationTimer:
         self._name = name
         self._started_at: float | None = None
 
-    def __enter__(self) -> "ObservationTimer":
+    def __enter__(self) -> Self:
         self._started_at = monotonic()
         return self
 
