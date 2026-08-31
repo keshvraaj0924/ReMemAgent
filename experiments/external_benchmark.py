@@ -9,13 +9,13 @@ entrypoint reproducible and testable.
 
 from __future__ import annotations
 
-import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
 from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner, PolicyFactory
 from remem.integrations.benchmarks import load_benchmark_environment_factory
+from remem.integrations.loading import resolve_callable, split_callable_specification
 from remem.memory.attribution import TransferSuccessEvaluator
 from remem.services import SuccessEvaluator
 
@@ -54,23 +54,10 @@ class ExternalBenchmarkSpec:
             )
 
 
-def resolve_callable(specification: str) -> Callable[..., Any]:
-    """Resolve a callable from ``module:attribute`` notation."""
+def resolve_callable_specification(specification: str) -> Callable[..., Any]:
+    """Resolve a caller-owned callable using the shared integration loader."""
 
-    module_name, attribute_path = _split_callable_specification(specification)
-    module = importlib.import_module(module_name)
-    value: Any = module
-    for attribute_name in attribute_path.split("."):
-        if not attribute_name.strip():
-            raise ValueError(f"invalid callable specification: {specification!r}")
-        try:
-            value = getattr(value, attribute_name)
-        except AttributeError as exc:
-            raise ValueError(f"callable attribute not found: {specification!r}") from exc
-
-    if not callable(value):
-        raise TypeError(f"resolved value is not callable: {specification!r}")
-    return cast(Callable[..., Any], value)
+    return resolve_callable(specification)
 
 
 def run_external_benchmark(
@@ -110,19 +97,10 @@ def run_external_benchmark(
     )
 
 
-def _split_callable_specification(specification: str) -> tuple[str, str]:
-    """Validate and split explicit ``module:attribute`` callable notation."""
-
-    module_name, separator, attribute_path = specification.partition(":")
-    if not separator or not module_name.strip() or not attribute_path.strip():
-        raise ValueError(f"invalid callable specification: {specification!r}")
-    return module_name.strip(), attribute_path.strip()
-
-
 def _validate_callable_specification(field_name: str, specification: str) -> None:
     """Validate that a configured callable field uses explicit import notation."""
 
     try:
-        _split_callable_specification(specification)
+        split_callable_specification(specification)
     except ValueError as exc:
         raise ValueError(f"{field_name} must use module:attribute notation") from exc
