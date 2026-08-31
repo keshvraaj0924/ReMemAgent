@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -100,8 +101,8 @@ def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
     assert '"success_rate": 1.0' in payload
 
 
-def _build_spec(**overrides: object) -> ExternalBenchmarkSpec:
-    values: dict[str, object] = {
+def _build_spec(**overrides: Any) -> ExternalBenchmarkSpec:
+    values: dict[str, Any] = {
         "benchmark_name": "webshop-smoke",
         "episode_count": 1,
         "max_steps": 1,
