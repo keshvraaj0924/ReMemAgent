@@ -6,7 +6,12 @@ import asyncio
 
 import pytest
 
-from remem.integrations import AgentLoopRequest, adapt_agent_loop_output, run_agent_loop, run_agent_loop_batch
+from remem.integrations import (
+    AgentLoopRequest,
+    adapt_agent_loop_output,
+    run_agent_loop,
+    run_agent_loop_batch,
+)
 
 
 def test_adapt_agent_loop_output_preserves_tokens_and_metadata() -> None:
