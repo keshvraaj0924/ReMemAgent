@@ -19,6 +19,8 @@ The framework currently provides deterministic implementations for:
 - reproducible single-run and explicit multi-seed experiment execution with provenance-preserving JSON serialization;
 - backend-neutral observability primitives.
 
+Integration callable loading is now centralized in `remem.integrations.loading`, so benchmark environment factories and external policy/evaluator factories share one explicit `module:attribute` resolution contract.
+
 These capabilities are intentionally separated from model SDKs and external benchmark packages where practical.
 
 ## What has not been established
@@ -43,7 +45,7 @@ Research results should be recorded with:
 - serialized per-run metrics;
 - enough input metadata to reconstruct the run.
 
-The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner also accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed. Benchmark integrations now provide a typed factory that resolves a caller-owned raw environment factory and wraps each created environment with the correct ALFWorld or WebShop adapter. This establishes deterministic seed and adapter plumbing without introducing benchmark-package dependencies into the core library. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
+The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner also accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed. Benchmark integrations now provide a typed factory that resolves a caller-owned raw environment factory and wraps each created environment with the correct ALFWorld or WebShop adapter. Shared callable loading keeps those integration boundaries consistent without introducing benchmark-package dependencies into the core library. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
 
 ## Engineering gates
 
