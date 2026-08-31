@@ -26,7 +26,7 @@ def fingerprint_cases(cases: Sequence[BenchmarkCase]) -> str:
     fingerprint accidentally.
     """
 
-    payload = [_case_to_json(case) for case in cases]
+    payload: list[JsonValue] = [_case_to_json(case) for case in cases]
     return _fingerprint({"schema_version": SCHEMA_VERSION, "cases": payload})
 
 
