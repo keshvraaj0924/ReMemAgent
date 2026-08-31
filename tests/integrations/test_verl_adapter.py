@@ -55,11 +55,15 @@ def test_adapt_agent_loop_output_rejects_non_finite_reward() -> None:
         )
 
 
-def test_run_agent_loop_normalizes_async_external_output() -> None:
-    """The async bridge awaits the external loop and preserves its token output."""
+def test_run_agent_loop_forwards_sampling_params_and_dataset_fields() -> None:
+    """The async bridge matches the external AgentLoopBase invocation boundary."""
 
-    async def agent_loop(prompt_ids: tuple[int, ...]) -> dict[str, list[int]]:
-        assert prompt_ids == (4, 5)
+    async def agent_loop(
+        sampling_params: dict[str, object],
+        **kwargs: object,
+    ) -> dict[str, list[int]]:
+        assert sampling_params == {"temperature": 0.2}
+        assert kwargs == {"raw_prompt": [{"role": "user", "content": "hello"}]}
         return {
             "prompt_ids": [4, 5],
             "response_ids": [8, 9],
@@ -69,9 +73,10 @@ def test_run_agent_loop_normalizes_async_external_output() -> None:
     trajectory = asyncio.run(
         run_agent_loop(
             agent_loop,
-            prompt_ids=(4, 5),
+            sampling_params={"temperature": 0.2},
             reward=0.5,
             metadata={"episode_id": "episode-9"},
+            raw_prompt=[{"role": "user", "content": "hello"}],
         )
     )
 
@@ -81,21 +86,18 @@ def test_run_agent_loop_normalizes_async_external_output() -> None:
     assert trajectory.reward == 0.5
 
 
-def test_run_agent_loop_rejects_invalid_prompt_ids_before_execution() -> None:
-    """Invalid prompt IDs are rejected before an external rollout is started."""
+def test_run_agent_loop_rejects_invalid_external_output() -> None:
+    """Invalid token contracts are rejected after the external loop completes."""
 
-    called = False
-
-    async def agent_loop(prompt_ids: tuple[int, ...]) -> dict[str, list[int]]:
-        nonlocal called
-        called = True
+    async def agent_loop(
+        sampling_params: dict[str, object],
+        **kwargs: object,
+    ) -> dict[str, list[int]]:
         return {
-            "prompt_ids": list(prompt_ids),
-            "response_ids": [1],
+            "prompt_ids": [4, -1],
+            "response_ids": [8],
             "response_mask": [1],
         }
 
     with pytest.raises(ValueError, match="prompt_ids must contain non-negative integer token IDs"):
-        asyncio.run(run_agent_loop(agent_loop, prompt_ids=(1, -1), reward=0.0))
-
-    assert called is False
+        asyncio.run(run_agent_loop(agent_loop, sampling_params={}, reward=0.0))
