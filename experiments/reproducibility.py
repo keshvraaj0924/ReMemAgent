@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
-from typing import TypeAlias, cast
+from typing import TypeAlias
 
 from experiments.synthetic_negative_transfer import BenchmarkCase
 
@@ -26,16 +26,7 @@ def fingerprint_cases(cases: Sequence[BenchmarkCase]) -> str:
     fingerprint accidentally.
     """
 
-    payload = [
-        {
-            "case_id": case.case_id,
-            "utility_with_memory": case.utility_with_memory,
-            "utility_without_memory": case.utility_without_memory,
-            "memory_id": case.memory_id,
-            "transfer_success": case.transfer_success,
-        }
-        for case in cases
-    ]
+    payload = [_case_to_json(case) for case in cases]
     return _fingerprint({"schema_version": SCHEMA_VERSION, "cases": payload})
 
 
@@ -51,25 +42,27 @@ def fingerprint_experiment_inputs(
     an old fingerprint.
     """
 
-    normalized_configuration = cast(dict[str, JsonValue], dict(configuration))
-    return _fingerprint(
-        {
-            "schema_version": EXPERIMENT_SCHEMA_VERSION,
-            "protocol_version": EXPERIMENT_PROTOCOL_VERSION,
-            "routing_heuristic_version": ROUTING_HEURISTIC_VERSION,
-            "cases": [
-                {
-                    "case_id": case.case_id,
-                    "utility_with_memory": case.utility_with_memory,
-                    "utility_without_memory": case.utility_without_memory,
-                    "memory_id": case.memory_id,
-                    "transfer_success": case.transfer_success,
-                }
-                for case in cases
-            ],
-            "configuration": normalized_configuration,
-        }
-    )
+    normalized_configuration = dict(configuration)
+    payload: dict[str, JsonValue] = {
+        "schema_version": EXPERIMENT_SCHEMA_VERSION,
+        "protocol_version": EXPERIMENT_PROTOCOL_VERSION,
+        "routing_heuristic_version": ROUTING_HEURISTIC_VERSION,
+        "cases": [_case_to_json(case) for case in cases],
+        "configuration": normalized_configuration,
+    }
+    return _fingerprint(payload)
+
+
+def _case_to_json(case: BenchmarkCase) -> dict[str, JsonValue]:
+    """Convert a benchmark case to the canonical JSON-compatible shape."""
+
+    return {
+        "case_id": case.case_id,
+        "utility_with_memory": case.utility_with_memory,
+        "utility_without_memory": case.utility_without_memory,
+        "memory_id": case.memory_id,
+        "transfer_success": case.transfer_success,
+    }
 
 
 def _fingerprint(payload: JsonObject) -> str:
