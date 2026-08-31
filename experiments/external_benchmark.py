@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner
 from remem.environments.base import EnvironmentAdapter
@@ -27,9 +27,7 @@ def load_callable(specification: str) -> Callable[..., Any]:
 
     module_name, separator, attribute_name = specification.partition(":")
     if not separator or not module_name.strip() or not attribute_name.strip():
-        raise ValueError(
-            "callable specification must use the form 'module:attribute'"
-        )
+        raise ValueError("callable specification must use the form 'module:attribute'")
 
     module = importlib.import_module(module_name.strip())
     target: Any = module
@@ -51,7 +49,7 @@ def load_callable(specification: str) -> Callable[..., Any]:
 def load_typed_callable(specification: str) -> CallableT:
     """Load a callable while preserving the caller's static callable contract."""
 
-    return load_callable(specification)  # type: ignore[return-value]
+    return cast(CallableT, load_callable(specification))
 
 
 def run_external_benchmark(
