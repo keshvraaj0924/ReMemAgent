@@ -43,7 +43,7 @@ Research results should be recorded with:
 - serialized per-run metrics;
 - enough input metadata to reconstruct the run.
 
-The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner now also accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed. This establishes deterministic seed plumbing without introducing a global random-state dependency. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
+The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner also accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed. Benchmark integrations now provide a typed factory that resolves a caller-owned raw environment factory and wraps each created environment with the correct ALFWorld or WebShop adapter. This establishes deterministic seed and adapter plumbing without introducing benchmark-package dependencies into the core library. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
 
 ## Engineering gates
 
@@ -51,4 +51,4 @@ Before promoting a research result, run the complete local quality suite and the
 
 ## Next milestone
 
-The next highest-value milestone is **real benchmark execution and reproducible reporting**: connect concrete ALFWorld/WebShop factories and model policies, execute controlled multi-seed runs, record the required provenance, and publish only measured results. The same provenance boundary should then be applied to full GRPO/verl runs, with observability attached at the integration boundary.
+The next highest-value milestone is **real benchmark execution and reproducible reporting**: connect caller-owned ALFWorld/WebShop environment factories and model policies to the external benchmark CLI, execute controlled multi-seed runs, record the required provenance, and publish only measured results. The same provenance boundary should then be applied to full GRPO/verl runs, with observability attached at the integration boundary.
