@@ -6,7 +6,24 @@ ReMemAgent keeps benchmark and training frameworks outside the research core. Th
 
 `EnvironmentAdapter` exposes `reset()` and `step()` and normalizes legacy four-field and Gymnasium five-field step APIs into `StepResult`. The ALFWorld and WebShop adapters wrap caller-supplied environments rather than importing benchmark packages.
 
-`BenchmarkSuite` executes matched cases and records measured outcomes. It does not synthesize benchmark scores.
+`BenchmarkSuiteRunner` executes matched cases and records measured outcomes. It does not synthesize benchmark scores. `experiments.external_benchmark.run_external_benchmark()` is the explicit boundary for executing real benchmark environments supplied by an experiment. `load_callable()` can resolve a factory from `module:attribute` notation, allowing benchmark dependencies and model checkpoints to remain in the experiment environment rather than the research package.
+
+For example, an experiment module can expose the concrete ALFWorld or WebShop setup:
+
+```python
+from experiments.external_benchmark import run_external_benchmark
+
+report = run_external_benchmark(
+    benchmark_name="alfworld-eval",
+    episode_count=100,
+    max_steps=50,
+    environment_factory=make_environment,
+    policy_factory=make_policy,
+    success_evaluator=is_success,
+)
+```
+
+The supplied `environment_factory` is responsible for constructing the actual benchmark environment and wrapping it with `AlfWorldAdapter` or `WebShopAdapter`. The supplied `policy_factory` is responsible for the real model/checkpoint and action generation. This boundary therefore executes measured episodes without introducing benchmark-specific imports into the core package.
 
 ## GRPO
 
@@ -73,18 +90,12 @@ trajectories = await run_agent_loop_batch(agent_loop.run, requests, max_concurre
 
 `VerlTrainingBatch` is the boundary between ReMemAgent's deterministic trajectory representation and external trainer collation. `build_verl_training_batch()` pairs already-encoded trajectories with their precomputed GRPO advantages while preserving order and rejecting alignment errors. It deliberately does not pad, truncate, tensorize, move to devices, or shard data because those operations depend on the selected training stack.
 
-```python
-from remem.integrations import build_verl_training_batch
-
-verl_batch = build_verl_training_batch(trajectories, batch.advantages)
-rows = verl_batch.to_dicts()
-```
-
 `dispatch_verl_training_batch()` is the framework-facing handoff. It passes fresh serialized rows to an injected external consumer, leaving framework-specific collation, tensors, devices, optimization, and distributed execution outside ReMemAgent. The source `VerlTrainingBatch` remains isolated from consumer-side dictionary mutation.
 
 ```python
-from remem.integrations import dispatch_verl_training_batch
+from remem.integrations import build_verl_training_batch, dispatch_verl_training_batch
 
+verl_batch = build_verl_training_batch(trajectories, batch.advantages)
 result = dispatch_verl_training_batch(verl_batch, external_trainer.consume)
 ```
 
@@ -92,4 +103,4 @@ This is an integration boundary, not a vendored GRPO/verl implementation. The ex
 
 ## Current limitation
 
-These adapters and integration records provide execution and data-conversion boundaries, not benchmark or training results. No ALFWorld, WebShop, GRPO, or verl performance claim is made until real benchmark environments and training runs are installed and matched experiments are executed.
+The external benchmark boundary can execute caller-owned ALFWorld/WebShop environments, but the repository does not ship benchmark datasets, model checkpoints, inference servers, or benchmark-specific experiment modules. No ALFWorld, WebShop, GRPO, or verl performance claim is made until real benchmark environments and training runs are installed and matched experiments are executed.
