@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from remem.integrations import adapt_agent_loop_output, run_agent_loop
+from remem.integrations import AgentLoopRequest, adapt_agent_loop_output, run_agent_loop, run_agent_loop_batch
 
 
 def test_adapt_agent_loop_output_preserves_tokens_and_metadata() -> None:
@@ -101,3 +101,42 @@ def test_run_agent_loop_rejects_invalid_external_output() -> None:
 
     with pytest.raises(ValueError, match="prompt_ids must contain non-negative integer token IDs"):
         asyncio.run(run_agent_loop(agent_loop, sampling_params={}, reward=0.0))
+
+
+def test_run_agent_loop_batch_preserves_request_order() -> None:
+    """Concurrent completion order cannot change the deterministic batch order."""
+
+    async def agent_loop(
+        sampling_params: dict[str, object],
+        **kwargs: object,
+    ) -> dict[str, list[int]]:
+        await asyncio.sleep(float(kwargs["delay"]))
+        token_id = int(sampling_params["token_id"])
+        return {
+            "prompt_ids": [token_id],
+            "response_ids": [token_id + 10],
+            "response_mask": [1],
+        }
+
+    requests = (
+        AgentLoopRequest(sampling_params={"token_id": 1}, reward=0.1, kwargs={"delay": 0.02}),
+        AgentLoopRequest(sampling_params={"token_id": 2}, reward=0.2, kwargs={"delay": 0.0}),
+    )
+
+    trajectories = asyncio.run(run_agent_loop_batch(agent_loop, requests, max_concurrency=2))
+
+    assert [trajectory.prompt_ids for trajectory in trajectories] == [(1,), (2,)]
+    assert [trajectory.reward for trajectory in trajectories] == [0.1, 0.2]
+
+
+def test_run_agent_loop_batch_rejects_non_positive_concurrency() -> None:
+    """An invalid concurrency limit fails before external execution begins."""
+
+    async def agent_loop(
+        sampling_params: dict[str, object],
+        **kwargs: object,
+    ) -> dict[str, list[int]]:
+        return {"prompt_ids": [], "response_ids": [1], "response_mask": [1]}
+
+    with pytest.raises(ValueError, match="max_concurrency must be positive"):
+        asyncio.run(run_agent_loop_batch(agent_loop, (), max_concurrency=0))
