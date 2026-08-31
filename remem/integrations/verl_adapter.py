@@ -7,9 +7,9 @@ model execution, batching, and optimization remain outside this package.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Mapping, Sequence
 from math import isfinite
-from typing import Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from remem.integrations.verl import VerlTrainingBatch, VerlTrajectory
 from remem.integrations.verl_contract import validate_agent_loop_output
@@ -28,12 +28,13 @@ class VerlTrainingConsumer(Protocol[ConsumerResult_co]):
 
 
 class AsyncVerlAgentLoop(Protocol):
-    """Async protocol for a dependency-free wrapper around ``AgentLoopBase``."""
+    """Protocol matching the async callable shape of a verl ``AgentLoopBase.run`` method."""
 
-    async def __call__(
+    def __call__(
         self,
-        prompt_ids: tuple[int, ...],
-    ) -> Mapping[str, Sequence[int]]:
+        sampling_params: Mapping[str, Any],
+        **kwargs: Any,
+    ) -> Awaitable[Mapping[str, Sequence[int]]]:
         """Run one external agent loop and return its token-level output."""
 
 
@@ -67,24 +68,21 @@ def adapt_agent_loop_output(
 async def run_agent_loop(
     agent_loop: AsyncVerlAgentLoop,
     *,
-    prompt_ids: Sequence[int],
+    sampling_params: Mapping[str, Any],
     reward: float,
     metadata: Mapping[str, object] | None = None,
+    **kwargs: Any,
 ) -> VerlTrajectory:
-    """Execute one external async agent loop and normalize its trajectory.
+    """Execute a verl-compatible async agent loop and normalize its trajectory.
 
-    This is the narrow integration boundary for verl's ``AgentLoopBase.run``
-    coroutine. The external implementation remains responsible for model
-    generation, tool/environment interaction, and reward calculation inputs.
-    ReMemAgent validates the returned token contract and records provenance
-    without importing verl or assuming an inference backend.
+    The bridge mirrors verl's real ``AgentLoopBase.run`` boundary: sampling
+    parameters are passed explicitly and dataset-specific fields are forwarded
+    through ``kwargs``. ReMemAgent does not construct prompts, tokenize inputs,
+    or assume a particular inference server. It only validates and records the
+    token-level output after the external loop completes.
     """
 
-    normalized_prompt_ids = tuple(prompt_ids)
-    if any(not isinstance(token_id, int) or token_id < 0 for token_id in normalized_prompt_ids):
-        raise ValueError("prompt_ids must contain non-negative integer token IDs")
-
-    output = await agent_loop(normalized_prompt_ids)
+    output = await agent_loop(sampling_params, **kwargs)
     return adapt_agent_loop_output(output, reward=reward, metadata=metadata)
 
 
