@@ -14,15 +14,18 @@ from .verl import (
     encode_episode_for_verl,
 )
 from .verl_adapter import (
+    AgentLoopRequest,
     AsyncVerlAgentLoop,
     VerlTrainingConsumer,
     adapt_agent_loop_output,
     dispatch_verl_training_batch,
     run_agent_loop,
+    run_agent_loop_batch,
 )
 from .verl_contract import ValidatedAgentLoopOutput, validate_agent_loop_output
 
 __all__ = [
+    "AgentLoopRequest",
     "AsyncVerlAgentLoop",
     "GrpoBatch",
     "GrpoSample",
@@ -38,5 +41,6 @@ __all__ = [
     "dispatch_verl_training_batch",
     "encode_episode_for_verl",
     "run_agent_loop",
+    "run_agent_loop_batch",
     "validate_agent_loop_output",
 ]
