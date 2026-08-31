@@ -18,7 +18,11 @@ snapshot = collector.snapshot()
 
 The collector is thread-safe and uses `time.monotonic()` for durations. It rejects empty metric names, non-finite counter values, and invalid durations.
 
-This layer intentionally does not depend on OpenTelemetry, Prometheus, logging vendors, or a benchmark platform. A future application can export snapshots to its preferred backend without changing the research core.
+## Benchmark integration
+
+`BenchmarkSuiteRunner` accepts an optional `ObservationCollector`. When supplied, it records suite starts, episode starts/completions, successful episodes, attributed memory transfers, and aggregate episode duration. The instrumentation is deliberately additive: benchmark reports and memory behavior are unchanged when no collector is supplied.
+
+This provides a useful research boundary for measuring execution overhead and memory-transfer activity without coupling the benchmark runner to a metrics vendor or external tracing SDK.
 
 ## Current limitation
 
