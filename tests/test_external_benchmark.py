@@ -62,7 +62,7 @@ def test_resolve_callable_rejects_non_callable_attribute() -> None:
 
 def test_run_external_benchmark_passes_seed_to_factories() -> None:
     spec = ExternalBenchmarkSpec(
-        benchmark_name="external-smoke",
+        benchmark_name="alfworld-smoke",
         episode_count=2,
         max_steps=1,
         environment_factory="tests.test_external_benchmark:make_environment",
@@ -86,7 +86,7 @@ def test_run_external_benchmark_passes_seed_to_factories() -> None:
 
 def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
     spec = ExternalBenchmarkSpec(
-        benchmark_name="external-smoke",
+        benchmark_name="webshop-smoke",
         episode_count=1,
         max_steps=1,
         environment_factory="tests.test_external_benchmark:make_environment",
@@ -99,6 +99,6 @@ def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
     output = save_benchmark_report(report, tmp_path / "report.json")
     payload = output.read_text(encoding="utf-8")
 
-    assert '"benchmark_name": "external-smoke"' in payload
+    assert '"benchmark_name": "webshop-smoke"' in payload
     assert '"seed": 7' in payload
     assert '"success_rate": 1.0' in payload
