@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from math import isfinite
 from threading import Lock
 from time import monotonic
-from typing import Mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +45,7 @@ class ObservationCollector:
 
         if not event.name:
             raise ValueError("event name must not be empty")
-        if not event.value == event.value or event.value in (float("inf"), float("-inf")):
+        if not isfinite(event.value):
             raise ValueError("event value must be finite")
         with self._lock:
             self._counters[event.name] = self._counters.get(event.name, 0.0) + event.value
@@ -59,10 +60,12 @@ class ObservationCollector:
 
         if not name:
             raise ValueError("duration name must not be empty")
-        if not duration_seconds >= 0.0 or duration_seconds in (float("inf"), float("-inf")):
+        if not isfinite(duration_seconds) or duration_seconds < 0.0:
             raise ValueError("duration must be finite and non-negative")
         with self._lock:
-            self._durations_seconds[name] = self._durations_seconds.get(name, 0.0) + duration_seconds
+            self._durations_seconds[name] = (
+                self._durations_seconds.get(name, 0.0) + duration_seconds
+            )
 
     def snapshot(self) -> ObservationSnapshot:
         """Return an isolated snapshot suitable for serialization or reporting."""
