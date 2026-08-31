@@ -4,7 +4,7 @@ ReMemAgent keeps benchmark and training frameworks outside the research core. Th
 
 ## Environment execution
 
-`EnvironmentAdapter` exposes `reset()` and `step()` and normalizes legacy four-field and Gymnasium five-field APIs into `StepResult`. The ALFWorld and WebShop adapters wrap caller-supplied environments rather than importing benchmark packages.
+`EnvironmentAdapter` exposes `reset()` and `step()` and normalizes legacy four-field and Gymnasium five-field step APIs into `StepResult`. The ALFWorld and WebShop adapters wrap caller-supplied environments rather than importing benchmark packages.
 
 `BenchmarkSuite` executes matched cases and records measured outcomes. It does not synthesize benchmark scores.
 
@@ -50,6 +50,24 @@ trajectory = await run_agent_loop(
 ```
 
 The external `AgentLoopBase` implementation remains responsible for chat templating, tokenization, model generation, tool/environment interaction, and constructing the token-level output. ReMemAgent does not invent prompt IDs, re-tokenize messages, own the inference server, or perform padding. It validates the returned trajectory only after the external coroutine completes.
+
+### Ordered async batch execution
+
+`AgentLoopRequest` captures the external sampling parameters, dataset fields, reward, and research provenance for one rollout. `run_agent_loop_batch()` executes requests concurrently while returning trajectories in the same order as the input sequence. An optional `max_concurrency` provides a lightweight client-side bound; the external inference stack remains responsible for server-side scheduling and batching.
+
+```python
+from remem.integrations import AgentLoopRequest, run_agent_loop_batch
+
+requests = [
+    AgentLoopRequest(
+        sampling_params={"temperature": 0.7},
+        kwargs={"raw_prompt": messages},
+        reward=episode.total_reward,
+        metadata={"episode_id": episode_id},
+    )
+]
+trajectories = await run_agent_loop_batch(agent_loop.run, requests, max_concurrency=8)
+```
 
 ## Training handoff
 
