@@ -131,7 +131,7 @@ def test_run_agent_loop_rejects_invalid_external_output() -> None:
             "response_mask": [1],
         }
 
-    with pytest.raises(ValueError, match="prompt_ids must contain non-negative integer token IDs"):
+    with pytest.raises(ValueError, match="prompt_ids must contain non-negative token IDs"):
         asyncio.run(run_agent_loop(agent_loop, sampling_params={}, reward=0.0))
 
 
