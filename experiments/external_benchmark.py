@@ -10,10 +10,8 @@ entrypoint reproducible and testable.
 from __future__ import annotations
 
 import importlib
-import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, cast
 
 from remem.benchmark import (
@@ -47,7 +45,7 @@ def resolve_callable(specification: str) -> Callable[..., Any]:
     if not separator or not module_name.strip() or not attribute_path.strip():
         raise ValueError(f"invalid callable specification: {specification!r}")
 
-    module = importlib.import_module(module_name)
+    module = importlib.import_module(module_name.strip())
     value: Any = module
     for attribute_name in attribute_path.split("."):
         if not attribute_name.strip():
@@ -93,36 +91,3 @@ def run_external_benchmark(
         transfer_success_evaluator=transfer_success_evaluator,
         seed=spec.seed,
     )
-
-
-def save_benchmark_report(report: BenchmarkRunReport, output_path: str | Path) -> Path:
-    """Persist measured benchmark output as deterministic JSON."""
-
-    destination = Path(output_path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "benchmark_name": report.benchmark_name,
-        "seed": report.seed,
-        "final_memory_count": report.final_memory_count,
-        "success_count": report.success_count,
-        "success_rate": report.success_rate,
-        "mean_reward": report.mean_reward,
-        "transfer_count": report.transfer_count,
-        "transfer_success_rate": report.transfer_success_rate,
-        "episodes": [
-            {
-                "episode_id": episode.episode_id,
-                "episode_success": episode.episode_success,
-                "retained_memory_count": episode.retained_memory_count,
-                "total_reward": episode.episode.total_reward,
-                "step_count": len(episode.episode.steps),
-                "terminated": episode.episode.terminated,
-                "truncated": episode.episode.truncated,
-                "transfer_count": episode.transfer_count,
-                "transfer_success_count": episode.transfer_success_count,
-            }
-            for episode in report.episodes
-        ],
-    }
-    destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return destination
