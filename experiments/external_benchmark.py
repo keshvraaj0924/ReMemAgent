@@ -10,13 +10,18 @@ entrypoint reproducible and testable.
 from __future__ import annotations
 
 import importlib
-from collections.abc import Callable, Mapping, Sequence
+import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner, EnvironmentFactory, PolicyFactory
-from remem.execution import Policy
+from remem.benchmark import (
+    BenchmarkRunReport,
+    BenchmarkSuiteRunner,
+    EnvironmentFactory,
+    PolicyFactory,
+)
 from remem.memory.attribution import TransferSuccessEvaluator
 from remem.services import SuccessEvaluator
 
@@ -50,9 +55,7 @@ def resolve_callable(specification: str) -> Callable[..., Any]:
         try:
             value = getattr(value, attribute_name)
         except AttributeError as exc:
-            raise ValueError(
-                f"callable attribute not found: {specification!r}"
-            ) from exc
+            raise ValueError(f"callable attribute not found: {specification!r}") from exc
 
     if not callable(value):
         raise TypeError(f"resolved value is not callable: {specification!r}")
@@ -97,8 +100,6 @@ def save_benchmark_report(report: BenchmarkRunReport, output_path: str | Path) -
 
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    import json
-
     payload = {
         "benchmark_name": report.benchmark_name,
         "seed": report.seed,
