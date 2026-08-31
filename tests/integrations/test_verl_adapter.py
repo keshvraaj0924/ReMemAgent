@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 
 import pytest
 
@@ -33,6 +34,32 @@ def test_adapt_agent_loop_output_preserves_tokens_and_metadata() -> None:
     assert trajectory.response_mask == (1, 0)
     assert trajectory.reward == 0.75
     assert trajectory.metadata == metadata
+
+
+def test_adapt_agent_loop_output_accepts_model_dump_objects() -> None:
+    """A real verl-style Pydantic output can cross the boundary without conversion by callers."""
+
+    @dataclass(frozen=True)
+    class AgentLoopOutput:
+        prompt_ids: tuple[int, ...]
+        response_ids: tuple[int, ...]
+        response_mask: tuple[int, ...]
+
+        def model_dump(self) -> dict[str, tuple[int, ...]]:
+            return {
+                "prompt_ids": self.prompt_ids,
+                "response_ids": self.response_ids,
+                "response_mask": self.response_mask,
+            }
+
+    trajectory = adapt_agent_loop_output(
+        AgentLoopOutput((1, 2), (3, 4), (1, 0)),
+        reward=0.25,
+    )
+
+    assert trajectory.prompt_ids == (1, 2)
+    assert trajectory.response_ids == (3, 4)
+    assert trajectory.response_mask == (1, 0)
 
 
 def test_adapt_agent_loop_output_copies_metadata() -> None:
