@@ -46,6 +46,21 @@ def evaluate_success(episode) -> bool:
     return episode.total_reward > 0
 
 
+def test_external_benchmark_spec_rejects_invalid_episode_count() -> None:
+    with pytest.raises(ValueError, match="episode_count"):
+        _build_spec(episode_count=-1)
+
+
+def test_external_benchmark_spec_rejects_invalid_max_steps() -> None:
+    with pytest.raises(ValueError, match="max_steps"):
+        _build_spec(max_steps=0)
+
+
+def test_external_benchmark_spec_rejects_invalid_callable_field() -> None:
+    with pytest.raises(ValueError, match="policy_factory"):
+        _build_spec(policy_factory="not-a-callable-spec")
+
+
 def test_resolve_callable_supports_nested_attributes() -> None:
     assert resolve_callable("tests.test_external_benchmark:make_environment") is make_environment
 
@@ -61,17 +76,7 @@ def test_resolve_callable_rejects_non_callable_attribute() -> None:
 
 
 def test_run_external_benchmark_passes_seed_to_factories() -> None:
-    spec = ExternalBenchmarkSpec(
-        benchmark_name="alfworld-smoke",
-        episode_count=2,
-        max_steps=1,
-        environment_factory="tests.test_external_benchmark:make_environment",
-        policy_factory="tests.test_external_benchmark:make_policy",
-        success_evaluator="tests.test_external_benchmark:evaluate_success",
-        seed=100,
-    )
-
-    report = run_external_benchmark(spec)
+    report = run_external_benchmark(_build_spec(seed=100, episode_count=2))
 
     assert report.seed == 100
     assert [episode.episode.initial_observation for episode in report.episodes] == [
@@ -85,16 +90,7 @@ def test_run_external_benchmark_passes_seed_to_factories() -> None:
 
 
 def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
-    spec = ExternalBenchmarkSpec(
-        benchmark_name="webshop-smoke",
-        episode_count=1,
-        max_steps=1,
-        environment_factory="tests.test_external_benchmark:make_environment",
-        policy_factory="tests.test_external_benchmark:make_policy",
-        success_evaluator="tests.test_external_benchmark:evaluate_success",
-        seed=7,
-    )
-    report = run_external_benchmark(spec, runner=BenchmarkSuiteRunner())
+    report = run_external_benchmark(_build_spec(seed=7), runner=BenchmarkSuiteRunner())
 
     output = save_benchmark_report(report, tmp_path / "report.json")
     payload = output.read_text(encoding="utf-8")
@@ -102,3 +98,17 @@ def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
     assert '"benchmark_name": "webshop-smoke"' in payload
     assert '"seed": 7' in payload
     assert '"success_rate": 1.0' in payload
+
+
+def _build_spec(**overrides: object) -> ExternalBenchmarkSpec:
+    values: dict[str, object] = {
+        "benchmark_name": "webshop-smoke",
+        "episode_count": 1,
+        "max_steps": 1,
+        "environment_factory": "tests.test_external_benchmark:make_environment",
+        "policy_factory": "tests.test_external_benchmark:make_policy",
+        "success_evaluator": "tests.test_external_benchmark:evaluate_success",
+        "seed": 7,
+    }
+    values.update(overrides)
+    return ExternalBenchmarkSpec(**values)
