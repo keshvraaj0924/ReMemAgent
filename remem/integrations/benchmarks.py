@@ -8,7 +8,7 @@ adapter, making the boundary explicit and testable.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from remem.environments import AlfWorldAdapter, EnvironmentAdapter, WebShopAdapter
 from remem.integrations.loading import resolve_callable
@@ -58,4 +58,4 @@ def load_benchmark_environment_factory(
 def resolve_environment_factory(specification: str) -> RawEnvironmentFactory:
     """Resolve a callable environment factory from ``module:attribute`` notation."""
 
-    return resolve_callable(specification)  # type: ignore[return-value]
+    return cast(RawEnvironmentFactory, resolve_callable(specification))
