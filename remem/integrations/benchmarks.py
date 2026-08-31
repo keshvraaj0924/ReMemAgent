@@ -7,11 +7,11 @@ adapter, making the boundary explicit and testable.
 
 from __future__ import annotations
 
-import importlib
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
 from remem.environments import AlfWorldAdapter, EnvironmentAdapter, WebShopAdapter
+from remem.integrations.loading import resolve_callable
 
 RawEnvironmentFactory = Callable[[int], Any]
 SUPPORTED_BENCHMARKS = ("alfworld", "webshop")
@@ -58,22 +58,4 @@ def load_benchmark_environment_factory(
 def resolve_environment_factory(specification: str) -> RawEnvironmentFactory:
     """Resolve a callable environment factory from ``module:attribute`` notation."""
 
-    module_name, separator, attribute_path = specification.partition(":")
-    if not separator or not module_name.strip() or not attribute_path.strip():
-        raise ValueError(f"invalid environment factory specification: {specification!r}")
-
-    module = importlib.import_module(module_name.strip())
-    value: Any = module
-    for attribute_name in attribute_path.split("."):
-        if not attribute_name.strip():
-            raise ValueError(f"invalid environment factory specification: {specification!r}")
-        try:
-            value = getattr(value, attribute_name)
-        except AttributeError as exc:
-            raise ValueError(
-                f"environment factory attribute not found: {specification!r}"
-            ) from exc
-
-    if not callable(value):
-        raise TypeError(f"resolved environment factory is not callable: {specification!r}")
-    return cast(RawEnvironmentFactory, value)
+    return resolve_callable(specification)  # type: ignore[return-value]
