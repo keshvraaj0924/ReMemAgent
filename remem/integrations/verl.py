@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from remem.execution import EpisodeResult
+from remem.integrations.grpo import GrpoBatch, GrpoSample
 
 TokenEncoder = Callable[[str], Sequence[int]]
 
@@ -103,6 +104,67 @@ def encode_episode_for_verl(
             "step_count": len(episode.steps),
             "terminated": episode.terminated,
             "truncated": episode.truncated,
+        },
+    )
+
+
+def encode_grpo_batch_for_verl(
+    batch: GrpoBatch,
+    *,
+    encode_prompt: TokenEncoder,
+    encode_completion: TokenEncoder,
+) -> VerlTrainingBatch:
+    """Encode an existing GRPO batch while preserving order and advantages.
+
+    This is the explicit handoff between ReMemAgent's framework-neutral GRPO
+    representation and verl's token-level representation. Tokenization is
+    injected by the caller; memory provenance is copied from each GRPO sample
+    into trajectory metadata, and the already-computed advantage remains paired
+    with the same sample.
+    """
+
+    trajectories = tuple(
+        _encode_grpo_sample_for_verl(
+            sample,
+            encode_prompt=encode_prompt,
+            encode_completion=encode_completion,
+        )
+        for sample in batch.samples
+    )
+    return VerlTrainingBatch(trajectories=trajectories, advantages=batch.advantages)
+
+
+def _encode_grpo_sample_for_verl(
+    sample: GrpoSample,
+    *,
+    encode_prompt: TokenEncoder,
+    encode_completion: TokenEncoder,
+) -> VerlTrajectory:
+    """Encode one framework-neutral GRPO sample into token-level fields."""
+
+    if not sample.prompt.strip():
+        raise ValueError("GRPO sample prompt must not be empty")
+    if not sample.completion.strip():
+        raise ValueError("GRPO sample completion must not be empty")
+    if not sample.group_id.strip():
+        raise ValueError("GRPO sample group_id must not be empty")
+
+    prompt_ids = _validate_token_ids(encode_prompt(sample.prompt), "prompt")
+    response_ids = _validate_token_ids(encode_completion(sample.completion), "response")
+    if not response_ids:
+        raise ValueError("encode_completion must return at least one token")
+    normalized_memory_ids = tuple(sample.memory_ids)
+    if any(not memory_id.strip() for memory_id in normalized_memory_ids):
+        raise ValueError("memory_ids must contain non-empty identifiers")
+
+    return VerlTrajectory(
+        prompt_ids=prompt_ids,
+        response_ids=response_ids,
+        response_mask=(1,) * len(response_ids),
+        reward=sample.reward,
+        metadata={
+            "group_id": sample.group_id,
+            "memory_ids": list(normalized_memory_ids),
         },
     )
 

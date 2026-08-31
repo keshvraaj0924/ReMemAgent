@@ -4,7 +4,8 @@ import pytest
 
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
-from remem.integrations.verl import encode_episode_for_verl
+from remem.integrations.grpo import GrpoBatch, GrpoSample
+from remem.integrations.verl import encode_episode_for_verl, encode_grpo_batch_for_verl
 
 
 def _episode() -> EpisodeResult:
@@ -81,4 +82,42 @@ def test_encode_episode_rejects_blank_memory_identifiers() -> None:
             encode_prompt=lambda _: [1],
             encode_completion=lambda _: [2],
             memory_ids=("",),
+        )
+
+
+def test_encode_grpo_batch_for_verl_preserves_alignment_and_provenance() -> None:
+    samples = (
+        GrpoSample("prompt-a", "action-a", 1.0, "group-a", ("memory-a",)),
+        GrpoSample("prompt-b", "action-b", 0.0, "group-a", ()),
+    )
+    batch = GrpoBatch(samples=samples, advantages=(1.0, -1.0))
+
+    trajectory_batch = encode_grpo_batch_for_verl(
+        batch,
+        encode_prompt=lambda text: [len(text)],
+        encode_completion=lambda text: [len(text)],
+    )
+
+    assert trajectory_batch.advantages == (1.0, -1.0)
+    assert trajectory_batch.trajectories[0].prompt_ids == (8,)
+    assert trajectory_batch.trajectories[0].response_ids == (8,)
+    assert trajectory_batch.trajectories[0].metadata == {
+        "group_id": "group-a",
+        "memory_ids": ["memory-a"],
+    }
+    assert trajectory_batch.trajectories[1].prompt_ids == (8,)
+    assert trajectory_batch.trajectories[1].response_ids == (8,)
+
+
+def test_encode_grpo_batch_for_verl_rejects_empty_completion_tokens() -> None:
+    batch = GrpoBatch(
+        samples=(GrpoSample("prompt", "action", 1.0, "group", ()),),
+        advantages=(0.0,),
+    )
+
+    with pytest.raises(ValueError, match="at least one token"):
+        encode_grpo_batch_for_verl(
+            batch,
+            encode_prompt=lambda _: [1],
+            encode_completion=lambda _: [],
         )

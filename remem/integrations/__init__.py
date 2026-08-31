@@ -12,6 +12,7 @@ from .verl import (
     VerlTrajectory,
     build_verl_training_batch,
     encode_episode_for_verl,
+    encode_grpo_batch_for_verl,
 )
 from .verl_adapter import (
     AgentLoopRequest,
@@ -40,6 +41,7 @@ __all__ = [
     "compute_group_relative_advantages",
     "dispatch_verl_training_batch",
     "encode_episode_for_verl",
+    "encode_grpo_batch_for_verl",
     "run_agent_loop",
     "run_agent_loop_batch",
     "validate_agent_loop_output",
