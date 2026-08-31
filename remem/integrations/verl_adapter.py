@@ -11,7 +11,7 @@ import asyncio
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, cast
 
 from remem.integrations.verl import VerlTrainingBatch, VerlTrajectory
 from remem.integrations.verl_contract import validate_agent_loop_output
@@ -29,6 +29,13 @@ class VerlTrainingConsumer(Protocol[ConsumerResult_co]):
         """Consume one ordered batch of serialized training rows."""
 
 
+class AgentLoopOutputLike(Protocol):
+    """Minimal protocol for the model-backed output returned by verl AgentLoopBase."""
+
+    def model_dump(self) -> Mapping[str, object]:
+        """Serialize the external output into a field mapping."""
+
+
 class AsyncVerlAgentLoop(Protocol):
     """Protocol matching the async callable shape of a verl ``AgentLoopBase.run`` method."""
 
@@ -36,7 +43,7 @@ class AsyncVerlAgentLoop(Protocol):
         self,
         sampling_params: Mapping[str, Any],
         **kwargs: Any,
-    ) -> Awaitable[Mapping[str, Sequence[int]]]:
+    ) -> Awaitable[Mapping[str, Sequence[int]] | AgentLoopOutputLike]:
         """Run one external agent loop and return its token-level output."""
 
 
@@ -50,8 +57,22 @@ class AgentLoopRequest:
     kwargs: Mapping[str, Any] = field(default_factory=dict)
 
 
+def _normalize_agent_loop_output(
+    output: Mapping[str, Sequence[int]] | AgentLoopOutputLike,
+) -> Mapping[str, Sequence[int]]:
+    """Normalize a mapping or a verl-style model output into a field mapping."""
+
+    if isinstance(output, Mapping):
+        return output
+
+    dumped_output = output.model_dump()
+    if not isinstance(dumped_output, Mapping):
+        raise TypeError("agent loop model_dump() must return a mapping")
+    return cast(Mapping[str, Sequence[int]], dumped_output)
+
+
 def adapt_agent_loop_output(
-    output: Mapping[str, Sequence[int]],
+    output: Mapping[str, Sequence[int]] | AgentLoopOutputLike,
     *,
     reward: float,
     metadata: Mapping[str, object] | None = None,
@@ -67,7 +88,7 @@ def adapt_agent_loop_output(
     if not isfinite(reward):
         raise ValueError("reward must be finite")
 
-    validated = validate_agent_loop_output(output)
+    validated = validate_agent_loop_output(_normalize_agent_loop_output(output))
     return VerlTrajectory(
         prompt_ids=validated.prompt_ids,
         response_ids=validated.response_ids,
@@ -91,7 +112,7 @@ async def run_agent_loop(
     parameters are passed explicitly and dataset-specific fields are forwarded
     through ``kwargs``. ReMemAgent does not construct prompts, tokenize inputs,
     or assume a particular inference server. It only validates and records the
-    token-level output after the external loop completes.
+    token-level output after the external coroutine completes.
     """
 
     output = await agent_loop(sampling_params, **kwargs)
