@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
+from experiments.benchmark_report import save_benchmark_report
 from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
     resolve_callable,
     run_external_benchmark,
-    save_benchmark_report,
 )
 from remem.benchmark import BenchmarkSuiteRunner
 from remem.environments.base import StepResult
