@@ -47,16 +47,16 @@ def test_runner_records_trajectory_until_termination() -> None:
     assert result.completed is True
 
 
-def test_runner_stops_at_step_limit_without_fabricating_completion() -> None:
+def test_runner_marks_step_limit_as_truncation() -> None:
     environment = FakeEnvironment([StepResult("next", 0.25, False, False, {})])
 
     result = EpisodeRunner().run(environment, lambda _: "wait", max_steps=1)
 
     assert len(result.steps) == 1
     assert result.total_reward == 0.25
-    assert result.completed is False
+    assert result.completed is True
     assert result.terminated is False
-    assert result.truncated is False
+    assert result.truncated is True
 
 
 @pytest.mark.parametrize("max_steps", [0, -1])
@@ -70,5 +70,5 @@ def test_runner_rejects_invalid_step_limit(max_steps: int) -> None:
 def test_runner_rejects_empty_policy_action() -> None:
     environment = FakeEnvironment([])
 
-    with pytest.raises(ValueError, match="non-empty action"):
+    with pytest.raises(ValueError, match="non-empty string action"):
         EpisodeRunner().run(environment, lambda _: "  ", max_steps=1)

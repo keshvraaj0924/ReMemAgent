@@ -62,8 +62,8 @@ class EpisodeRunner:
 
         for step_index in range(max_steps):
             action = policy(observation)
-            if not action.strip():
-                raise ValueError("policy must return a non-empty action")
+            if not isinstance(action, str) or not action.strip():
+                raise ValueError("policy must return a non-empty string action")
 
             result = environment.step(action)
             steps.append(EpisodeStep(step_index, observation, action, result))
@@ -84,5 +84,5 @@ class EpisodeRunner:
             steps=tuple(steps),
             total_reward=total_reward,
             terminated=False,
-            truncated=False,
+            truncated=True,
         )
