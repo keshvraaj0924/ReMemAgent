@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
 
 from experiments.benchmark_report import save_benchmark_report
 from experiments.external_benchmark import load_callable, load_typed_callable, run_external_benchmark
 from remem.memory.attribution import TransferSuccessEvaluator
-from remem.services import SuccessEvaluator
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
