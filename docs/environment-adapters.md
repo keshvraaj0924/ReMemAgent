@@ -35,20 +35,21 @@ The adapter rejects non-finite rewards and copies caller-owned metadata so later
 
 ### Async AgentLoop bridge
 
-verl's current `AgentLoopBase` exposes an async `run` boundary that returns one token-level trajectory. ReMemAgent provides `AsyncVerlAgentLoop` and `run_agent_loop()` as a dependency-free bridge for that coroutine. The bridge validates prompt IDs before execution, awaits the external loop, then applies the same output and reward validation used by the synchronous adapter.
+verl's `AgentLoopBase.run` is an async boundary that receives sampling parameters plus dataset-specific keyword fields and returns one token-level `AgentLoopOutput`. ReMemAgent's `AsyncVerlAgentLoop` protocol and `run_agent_loop()` mirror that boundary without importing verl.
 
 ```python
 from remem.integrations import run_agent_loop
 
 trajectory = await run_agent_loop(
     agent_loop.run,
-    prompt_ids=prompt_ids,
-    reward=reward,
-    metadata={"memory_ids": memory_ids},
+    sampling_params={"temperature": 0.7},
+    raw_prompt=messages,
+    reward=episode.total_reward,
+    metadata={"memory_ids": memory_ids, "episode_id": episode_id},
 )
 ```
 
-The external `AgentLoopBase` implementation remains responsible for model generation, tool/environment interaction, and producing the framework's token-level output. ReMemAgent does not import verl, own the inference server, or re-tokenize the trajectory.
+The external `AgentLoopBase` implementation remains responsible for chat templating, tokenization, model generation, tool/environment interaction, and constructing the token-level output. ReMemAgent does not invent prompt IDs, re-tokenize messages, own the inference server, or perform padding. It validates the returned trajectory only after the external coroutine completes.
 
 ## Training handoff
 
