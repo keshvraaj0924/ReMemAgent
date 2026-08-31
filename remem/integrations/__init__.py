@@ -1,5 +1,11 @@
 """Optional integrations for external agent-training frameworks."""
 
+from .benchmarks import (
+    BenchmarkEnvironmentFactory,
+    RawEnvironmentFactory,
+    load_benchmark_environment_factory,
+    resolve_environment_factory,
+)
 from .grpo import (
     GrpoBatch,
     GrpoSample,
@@ -28,8 +34,10 @@ from .verl_contract import ValidatedAgentLoopOutput, validate_agent_loop_output
 __all__ = [
     "AgentLoopRequest",
     "AsyncVerlAgentLoop",
+    "BenchmarkEnvironmentFactory",
     "GrpoBatch",
     "GrpoSample",
+    "RawEnvironmentFactory",
     "ValidatedAgentLoopOutput",
     "VerlTrainingBatch",
     "VerlTrainingConsumer",
@@ -42,6 +50,8 @@ __all__ = [
     "dispatch_verl_training_batch",
     "encode_episode_for_verl",
     "encode_grpo_batch_for_verl",
+    "load_benchmark_environment_factory",
+    "resolve_environment_factory",
     "run_agent_loop",
     "run_agent_loop_batch",
     "validate_agent_loop_output",
