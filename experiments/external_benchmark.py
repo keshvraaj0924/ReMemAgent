@@ -63,12 +63,15 @@ def run_external_benchmark(
     store: MemoryStore | None = None,
     reset_kwargs: dict[str, Any] | None = None,
     transfer_success_evaluator: TransferSuccessEvaluator | None = None,
+    seed: int | None = None,
 ) -> BenchmarkRunReport:
     """Execute a benchmark using real caller-owned environments and policies.
 
     This function intentionally performs no synthetic scoring or dependency
     discovery. The supplied factories own benchmark setup, model inference,
-    checkpoint selection, and environment configuration.
+    checkpoint selection, and environment configuration. When ``seed`` is
+    supplied, the suite runner forwards deterministic per-episode seeds to both
+    factories and records the run-level seed in the report.
     """
 
     return BenchmarkSuiteRunner().run(
@@ -81,4 +84,5 @@ def run_external_benchmark(
         store=store,
         reset_kwargs=reset_kwargs,
         transfer_success_evaluator=transfer_success_evaluator,
+        seed=seed,
     )
