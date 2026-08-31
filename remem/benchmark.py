@@ -3,7 +3,7 @@
 This module deliberately does not import ALFWorld, WebShop, or any model SDK.
 Experiments provide concrete environment and policy factories, while the suite
 runner provides deterministic lifecycle, memory persistence, transfer tracing,
-and aggregate reporting shared by benchmark implementations.
+aggregate reporting, and optional low-dependency observability.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from remem.memory.attribution import (
 )
 from remem.memory.policy import MemoryGuidedPolicy
 from remem.memory.store import MemoryStore
+from remem.observability import ObservationCollector
 from remem.services import EpisodeExecutionResult, EpisodeExecutionService, SuccessEvaluator
 
 EnvironmentFactory = Callable[[int], EnvironmentAdapter]
@@ -104,11 +105,13 @@ class BenchmarkSuiteRunner:
         self,
         execution_service: EpisodeExecutionService | None = None,
         transfer_recorder: MemoryTransferRecorder | None = None,
+        observation_collector: ObservationCollector | None = None,
     ) -> None:
-        """Create a suite runner with injectable execution and attribution services."""
+        """Create a suite runner with injectable execution and observability services."""
 
         self.execution_service = execution_service or EpisodeExecutionService()
         self.transfer_recorder = transfer_recorder or MemoryTransferRecorder()
+        self.observation_collector = observation_collector
 
     def run(
         self,
@@ -129,6 +132,9 @@ class BenchmarkSuiteRunner:
         decision per executed step. Those decisions are attributed after the
         episode using the supplied transfer evaluator. Non-memory-guided
         policies remain fully supported and produce no transfer outcomes.
+        When an :class:`ObservationCollector` is configured, the runner records
+        suite and episode counters plus aggregate episode duration without
+        changing benchmark behavior.
         """
 
         normalized_name = benchmark_name.strip()
@@ -141,37 +147,93 @@ class BenchmarkSuiteRunner:
 
         memory_store = store if store is not None else MemoryStore()
         reports: list[BenchmarkEpisodeReport] = []
+        if self.observation_collector is not None:
+            self.observation_collector.increment("benchmark.runs")
 
         for episode_index in range(episode_count):
             environment = environment_factory(episode_index)
+            if self.observation_collector is not None:
+                self.observation_collector.increment("benchmark.episodes.started")
             try:
-                policy = policy_factory(episode_index, memory_store)
-                execution_result = self.execution_service.execute_and_ingest(
-                    environment,
-                    policy,
-                    memory_store,
-                    episode_id=f"{normalized_name}:{episode_index}",
-                    max_steps=max_steps,
-                    success_evaluator=success_evaluator,
-                    reset_kwargs=reset_kwargs,
-                )
-                transfer_outcomes = _record_transfer_outcomes(
-                    self.transfer_recorder,
-                    memory_store,
-                    policy,
-                    execution_result,
-                    transfer_success_evaluator=transfer_success_evaluator,
-                )
+                if self.observation_collector is None:
+                    execution_result = self._execute_episode(
+                        environment,
+                        memory_store,
+                        episode_index,
+                        normalized_name,
+                        max_steps,
+                        policy_factory,
+                        success_evaluator,
+                        reset_kwargs,
+                        transfer_success_evaluator,
+                    )
+                else:
+                    with self.observation_collector.timed("benchmark.episode.duration_seconds"):
+                        execution_result = self._execute_episode(
+                            environment,
+                            memory_store,
+                            episode_index,
+                            normalized_name,
+                            max_steps,
+                            policy_factory,
+                            success_evaluator,
+                            reset_kwargs,
+                            transfer_success_evaluator,
+                        )
             finally:
                 _close_environment(environment)
 
-            reports.append(_build_episode_report(execution_result, transfer_outcomes))
+            transfer_outcomes = execution_result[1]
+            if self.observation_collector is not None:
+                self.observation_collector.increment("benchmark.episodes.completed")
+                self.observation_collector.increment(
+                    "benchmark.transfers.attributed",
+                    float(len(transfer_outcomes)),
+                )
+                self.observation_collector.increment(
+                    "benchmark.episodes.successful",
+                    float(execution_result[0].episode_success),
+                )
+            reports.append(_build_episode_report(execution_result[0], transfer_outcomes))
 
         return BenchmarkRunReport(
             benchmark_name=normalized_name,
             episodes=tuple(reports),
             final_memory_count=len(memory_store.all()),
         )
+
+    def _execute_episode(
+        self,
+        environment: EnvironmentAdapter,
+        memory_store: MemoryStore,
+        episode_index: int,
+        benchmark_name: str,
+        max_steps: int,
+        policy_factory: PolicyFactory,
+        success_evaluator: SuccessEvaluator,
+        reset_kwargs: dict[str, Any] | None,
+        transfer_success_evaluator: TransferSuccessEvaluator | None,
+    ) -> tuple[EpisodeExecutionResult, tuple[MemoryTransferOutcome, ...]]:
+        """Execute one episode and attribute memory transfers."""
+
+        policy = policy_factory(episode_index, memory_store)
+        execution_result = self.execution_service.execute_and_ingest(
+            environment,
+            policy,
+            memory_store,
+            episode_id=f"{benchmark_name}:{episode_index}",
+            max_steps=max_steps,
+            success_evaluator=success_evaluator,
+            reset_kwargs=reset_kwargs,
+        )
+        transfer_outcomes = _record_transfer_outcomes(
+            self.transfer_recorder,
+            memory_store,
+            policy,
+            execution_result,
+            transfer_success_evaluator=transfer_success_evaluator,
+        )
+        return execution_result, transfer_outcomes
 
 
 def _record_transfer_outcomes(
