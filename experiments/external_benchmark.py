@@ -54,12 +54,6 @@ class ExternalBenchmarkSpec:
             )
 
 
-def resolve_callable_specification(specification: str) -> Callable[..., Any]:
-    """Resolve a caller-owned callable using the shared integration loader."""
-
-    return resolve_callable(specification)
-
-
 def run_external_benchmark(
     spec: ExternalBenchmarkSpec,
     *,
@@ -104,3 +98,6 @@ def _validate_callable_specification(field_name: str, specification: str) -> Non
         split_callable_specification(specification)
     except ValueError as exc:
         raise ValueError(f"{field_name} must use module:attribute notation") from exc
+
+
+__all__ = ["ExternalBenchmarkSpec", "resolve_callable", "run_external_benchmark"]
