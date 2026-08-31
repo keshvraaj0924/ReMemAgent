@@ -33,6 +33,26 @@ class ExternalBenchmarkSpec:
     transfer_success_evaluator: str | None = None
     seed: int | None = None
 
+    def __post_init__(self) -> None:
+        """Reject invalid experiment configuration before resolving dependencies."""
+
+        if not self.benchmark_name.strip():
+            raise ValueError("benchmark_name must not be empty")
+        if self.episode_count < 0:
+            raise ValueError("episode_count must be non-negative")
+        if self.max_steps <= 0:
+            raise ValueError("max_steps must be positive")
+        for field_name in (
+            "environment_factory",
+            "policy_factory",
+            "success_evaluator",
+        ):
+            _validate_callable_specification(field_name, getattr(self, field_name))
+        if self.transfer_success_evaluator is not None:
+            _validate_callable_specification(
+                "transfer_success_evaluator", self.transfer_success_evaluator
+            )
+
 
 def resolve_callable(specification: str) -> Callable[..., Any]:
     """Resolve a callable from ``module:attribute`` notation."""
@@ -97,3 +117,12 @@ def _split_callable_specification(specification: str) -> tuple[str, str]:
     if not separator or not module_name.strip() or not attribute_path.strip():
         raise ValueError(f"invalid callable specification: {specification!r}")
     return module_name.strip(), attribute_path.strip()
+
+
+def _validate_callable_specification(field_name: str, specification: str) -> None:
+    """Validate that a configured callable field uses explicit import notation."""
+
+    try:
+        _split_callable_specification(specification)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must use module:attribute notation") from exc
