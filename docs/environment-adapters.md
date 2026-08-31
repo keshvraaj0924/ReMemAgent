@@ -25,6 +25,23 @@ report = run_external_benchmark(
 
 The supplied `environment_factory` is responsible for constructing the actual benchmark environment and wrapping it with `AlfWorldAdapter` or `WebShopAdapter`. The supplied `policy_factory` is responsible for the real model/checkpoint and action generation. This boundary therefore executes measured episodes without introducing benchmark-specific imports into the core package.
 
+### Command-line execution and persisted reports
+
+The `remem-benchmark` entry point exposes the same boundary for reproducible external experiments. Factories and evaluators are supplied explicitly as `module:attribute` specifications:
+
+```bash
+remem-benchmark \
+  --benchmark alfworld-eval \
+  --episodes 100 \
+  --max-steps 50 \
+  --environment-factory my_experiment:make_environment \
+  --policy-factory my_experiment:make_policy \
+  --success-evaluator my_experiment:is_success \
+  --output artifacts/alfworld-eval.json
+```
+
+The persisted report contains measured episode outcomes and the core trajectory fields needed for analysis. Benchmark-specific `StepResult.info` payloads are deliberately excluded because external environments may place arbitrary non-JSON objects there; this keeps the artifact deterministic without inventing a serialization policy for third-party objects. The benchmark environment, model checkpoint, dependency versions, and experiment configuration remain caller-owned provenance and should be recorded alongside the report.
+
 ## GRPO
 
 The GRPO integration creates framework-neutral samples and deterministic group-relative advantages. Reward calculation and model optimization remain external concerns.
