@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", required=True)
     parser.add_argument("--episodes", type=int, required=True)
     parser.add_argument("--max-steps", type=int, required=True)
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--environment-factory", required=True)
     parser.add_argument("--policy-factory", required=True)
     parser.add_argument("--success-evaluator", required=True)
@@ -46,6 +47,7 @@ def main() -> int:
         policy_factory=policy_factory,
         success_evaluator=success_evaluator,
         transfer_success_evaluator=transfer_success_evaluator,
+        seed=arguments.seed,
     )
     output_path = save_benchmark_report(report, arguments.output)
     print(f"saved benchmark report: {output_path}")
