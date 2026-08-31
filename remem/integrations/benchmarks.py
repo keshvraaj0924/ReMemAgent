@@ -14,6 +14,17 @@ from typing import Any, cast
 from remem.environments import AlfWorldAdapter, EnvironmentAdapter, WebShopAdapter
 
 RawEnvironmentFactory = Callable[[int], Any]
+SUPPORTED_BENCHMARKS = ("alfworld", "webshop")
+
+
+def _benchmark_family(benchmark_name: str) -> str:
+    """Return the supported benchmark family from a benchmark identifier."""
+
+    normalized_name = benchmark_name.strip().lower()
+    for benchmark in SUPPORTED_BENCHMARKS:
+        if normalized_name == benchmark or normalized_name.startswith(f"{benchmark}-"):
+            return benchmark
+    raise ValueError(f"unsupported benchmark: {benchmark_name!r}")
 
 
 class BenchmarkEnvironmentFactory:
@@ -22,17 +33,14 @@ class BenchmarkEnvironmentFactory:
     def __init__(self, benchmark_name: str, raw_factory: RawEnvironmentFactory) -> None:
         """Initialize a factory for one supported benchmark family."""
 
-        normalized_name = benchmark_name.strip().lower()
-        if normalized_name not in {"alfworld", "webshop"}:
-            raise ValueError(f"unsupported benchmark: {benchmark_name!r}")
-        self._benchmark_name = normalized_name
+        self._benchmark_family = _benchmark_family(benchmark_name)
         self._raw_factory = raw_factory
 
     def __call__(self, seed: int) -> EnvironmentAdapter:
         """Create and adapt one environment using the supplied episode seed."""
 
         environment = self._raw_factory(seed)
-        if self._benchmark_name == "alfworld":
+        if self._benchmark_family == "alfworld":
             return AlfWorldAdapter(environment)
         return WebShopAdapter(environment)
 
