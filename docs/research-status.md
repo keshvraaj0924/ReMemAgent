@@ -43,7 +43,7 @@ Research results should be recorded with:
 - serialized per-run metrics;
 - enough input metadata to reconstruct the run.
 
-The repository provides a multi-seed runner that gives each seed an isolated random generator and preserves per-run case and experiment fingerprints. It does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
+The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner now also accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed. This establishes deterministic seed plumbing without introducing a global random-state dependency. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
 
 ## Engineering gates
 
