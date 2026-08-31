@@ -2,6 +2,7 @@ from remem.benchmark import BenchmarkSuiteRunner
 from remem.environments.base import StepResult
 from remem.execution import Policy
 from remem.memory.store import MemoryStore
+from remem.observability import ObservationCollector
 
 
 class FakeEnvironment:
@@ -55,6 +56,28 @@ def test_benchmark_runner_shares_memory_store_and_closes_environments() -> None:
     assert report.final_memory_count == 2
     assert seen_memory_counts == [0, 1]
     assert all(environment.closed for environment in environments)
+
+
+def test_benchmark_runner_records_observability_counters_and_duration() -> None:
+    collector = ObservationCollector()
+
+    report = BenchmarkSuiteRunner(observation_collector=collector).run(
+        benchmark_name="observed-smoke",
+        episode_count=2,
+        max_steps=1,
+        environment_factory=lambda index: FakeEnvironment(index),
+        policy_factory=lambda index, store: lambda state: "act",
+        success_evaluator=lambda episode: True,
+    )
+
+    snapshot = collector.snapshot()
+    assert report.success_count == 2
+    assert snapshot.counters["benchmark.runs"] == 1.0
+    assert snapshot.counters["benchmark.episodes.started"] == 2.0
+    assert snapshot.counters["benchmark.episodes.completed"] == 2.0
+    assert snapshot.counters["benchmark.episodes.successful"] == 2.0
+    assert snapshot.counters["benchmark.transfers.attributed"] == 0.0
+    assert snapshot.durations_seconds["benchmark.episode.duration_seconds"] >= 0.0
 
 
 def test_benchmark_runner_allows_zero_episodes() -> None:
