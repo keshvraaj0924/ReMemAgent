@@ -57,6 +57,11 @@ def test_external_benchmark_spec_rejects_invalid_max_steps() -> None:
         _build_spec(max_steps=0)
 
 
+def test_external_benchmark_spec_rejects_invalid_minimum_trust() -> None:
+    with pytest.raises(ValueError, match="minimum_trust"):
+        _build_spec(minimum_trust=1.1)
+
+
 def test_external_benchmark_spec_rejects_invalid_callable_field() -> None:
     with pytest.raises(ValueError, match="policy_factory"):
         _build_spec(policy_factory="not-a-callable-spec")
@@ -91,7 +96,7 @@ def test_run_external_benchmark_passes_seed_to_factories() -> None:
 
 
 def test_run_external_benchmark_records_callable_provenance() -> None:
-    report = run_external_benchmark(_build_spec(seed=7))
+    report = run_external_benchmark(_build_spec(seed=7, minimum_trust=0.65))
 
     assert report.configuration is not None
     assert report.configuration.benchmark_name == "webshop-smoke"
@@ -104,6 +109,7 @@ def test_run_external_benchmark_records_callable_provenance() -> None:
     assert report.configuration.policy_factory == "tests.test_external_benchmark:make_policy"
     assert report.configuration.success_evaluator == "tests.test_external_benchmark:evaluate_success"
     assert report.configuration.transfer_success_evaluator is None
+    assert report.configuration.minimum_trust == 0.65
 
 
 def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
@@ -114,6 +120,7 @@ def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
 
     assert '"benchmark_name": "webshop-smoke"' in payload
     assert '"seed": 7' in payload
+    assert '"minimum_trust": 0.0' in payload
     assert '"environment_factory": "tests.test_external_benchmark:make_environment"' in payload
     assert '"success_rate": 1.0' in payload
 
