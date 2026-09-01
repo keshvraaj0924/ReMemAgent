@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 import pytest
 
@@ -12,6 +13,7 @@ from experiments.benchmark_report import (
 from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
+from remem.memory.store import MemoryStore
 
 
 def _build_report(
@@ -65,17 +67,23 @@ def _build_report(
     )
 
 
-def make_environment(seed: int):
+def make_environment(seed: int) -> object:
+    """Provide an importable placeholder factory for provenance metadata tests."""
+
     del seed
-    return None
+    return object()
 
 
-def make_policy(seed: int, store):
+def make_policy(seed: int, store: MemoryStore) -> Callable[[str], str]:
+    """Provide an importable policy factory for provenance metadata tests."""
+
     del seed, store
     return lambda state: "look"
 
 
 def evaluate_success(episode: EpisodeResult) -> bool:
+    """Provide an importable evaluator for provenance metadata tests."""
+
     return episode.total_reward > 0
 
 
