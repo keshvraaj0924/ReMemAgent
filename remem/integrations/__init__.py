@@ -6,6 +6,7 @@ from .benchmarks import (
     load_benchmark_environment_factory,
     resolve_environment_factory,
 )
+from .datasets import write_grpo_jsonl, write_verl_jsonl
 from .grpo import (
     GrpoBatch,
     GrpoSample,
@@ -69,4 +70,6 @@ __all__ = [
     "run_agent_loop",
     "run_agent_loop_batch",
     "validate_agent_loop_output",
+    "write_grpo_jsonl",
+    "write_verl_jsonl",
 ]
