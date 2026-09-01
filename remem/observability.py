@@ -26,6 +26,18 @@ class ObservationSnapshot:
     counters: Mapping[str, float]
     durations_seconds: Mapping[str, float]
 
+    def to_dict(self) -> dict[str, dict[str, float]]:
+        """Return a deterministic JSON-compatible representation.
+
+        Keys are sorted at the serialization boundary so experiment artifacts
+        do not depend on the order in which concurrent observations arrived.
+        """
+
+        return {
+            "counters": dict(sorted(self.counters.items())),
+            "durations_seconds": dict(sorted(self.durations_seconds.items())),
+        }
+
 
 class ObservationCollector:
     """Thread-safe in-process collector with deterministic snapshots.
