@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -15,6 +15,7 @@ class MemoryKind(str, Enum):
     SEMANTIC = "semantic"
     PROCEDURAL = "procedural"
     FAILURE = "failure"
+    SUCCESS = "success"
 
 
 class MemoryStatus(str, Enum):
@@ -29,12 +30,40 @@ class MemoryStatus(str, Enum):
 class RetrievedMemory:
     """A memory candidate paired with its retrieval relevance score."""
 
-    memory: "MemoryRecord"
+    memory: MemoryRecord
     similarity: float
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.similarity <= 1.0:
             raise ValueError("similarity must be between 0 and 1")
+
+
+@dataclass(frozen=True, slots=True)
+class CounterfactualScore:
+    """Utility estimates for memory-guided and self-reasoning paths."""
+
+    with_memory: float
+    without_memory: float
+
+    @property
+    def delta(self) -> float:
+        """Return the estimated utility benefit of using memory."""
+
+        return self.with_memory - self.without_memory
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryDecision:
+    """Routing decision produced by the counterfactual policy."""
+
+    route: str
+    confidence: float
+    expected_delta: float
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be between 0 and 1")
 
 
 @dataclass(slots=True)
@@ -43,8 +72,8 @@ class MemoryRecord:
 
     memory_id: str
     state: str
-    action: str
-    outcome: str
+    action: str = ""
+    outcome: str = ""
     kind: MemoryKind = MemoryKind.EPISODIC
     reward: float = 0.0
     uses: int = 0
@@ -53,7 +82,7 @@ class MemoryRecord:
     transfer_attempts: int = 0
     transfer_successes: int = 0
     confidence: float = 0.5
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_used_at: datetime | None = None
     status: MemoryStatus = MemoryStatus.ACTIVE
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -66,6 +95,12 @@ class MemoryRecord:
         return self.successes / attempts if attempts else 0.5
 
     @property
+    def empirical_success(self) -> float:
+        """Return the empirical success score used by legacy routing clients."""
+
+        return self.empirical_success_rate
+
+    @property
     def transferability(self) -> float:
         """Return observed success when this memory is transferred to new contexts."""
 
@@ -75,7 +110,7 @@ class MemoryRecord:
         """Record one memory use and optionally attribute it to transfer."""
 
         self.uses += 1
-        self.last_used_at = datetime.now(timezone.utc)
+        self.last_used_at = datetime.now(UTC)
         if success:
             self.successes += 1
         else:

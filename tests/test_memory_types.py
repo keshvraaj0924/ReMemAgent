@@ -14,6 +14,13 @@ def create_memory() -> MemoryRecord:
     )
 
 
+def test_memory_record_supports_legacy_minimal_construction() -> None:
+    memory = MemoryRecord("memory-1", "state")
+
+    assert memory.action == ""
+    assert memory.outcome == ""
+
+
 def test_retrieved_memory_accepts_bounded_similarity() -> None:
     retrieved_memory = RetrievedMemory(memory=create_memory(), similarity=0.8)
 
@@ -34,6 +41,14 @@ def test_empirical_success_rate_uses_observed_outcomes() -> None:
     memory.record_use(success=True)
 
     assert memory.empirical_success_rate == pytest.approx(2 / 3)
+
+
+def test_empirical_success_compatibility_alias_matches_rate() -> None:
+    memory = create_memory()
+    memory.record_use(success=True)
+    memory.record_use(success=False)
+
+    assert memory.empirical_success == memory.empirical_success_rate
 
 
 def test_transferability_uses_transfer_outcomes_only() -> None:

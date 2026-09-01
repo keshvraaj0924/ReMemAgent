@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from remem.routing.counterfactual import CounterfactualRouter
@@ -14,10 +15,27 @@ class BenchmarkCase:
     case_id: str
     utility_with_memory: float
     utility_without_memory: float
+    memory_id: str | None = None
+    transfer_success: bool | None = None
 
     def __post_init__(self) -> None:
         if not self.case_id.strip():
             raise ValueError("case_id must not be empty")
+        if self.memory_id is not None and not self.memory_id.strip():
+            raise ValueError("memory_id must not be empty when provided")
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkCaseResult:
+    """Auditable routing outcome for one benchmark case."""
+
+    case_id: str
+    selected_route: str
+    utility_delta: float
+    negative_transfer: bool
+    regret: float
+    memory_id: str | None = None
+    transfer_success: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +49,7 @@ class BenchmarkResult:
     selected_negative_transfer_cases: int
     avoided_negative_transfer_cases: int
     routing_regret: float
+    case_results: tuple[BenchmarkCaseResult, ...] = ()
 
     @property
     def negative_transfer_rate(self) -> float:
@@ -59,6 +78,15 @@ class BenchmarkResult:
         )
 
 
+def _constant_evaluator(utility: float) -> Callable[[], float]:
+    """Return a zero-argument evaluator bound to one benchmark utility."""
+
+    def evaluate() -> float:
+        return utility
+
+    return evaluate
+
+
 def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> BenchmarkResult:
     """Route matched cases and measure both exposure and avoided negative transfer."""
     _validate_unique_case_ids(cases)
@@ -68,24 +96,45 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
     selected_negative_transfer_cases = 0
     avoided_negative_transfer_cases = 0
     routing_regret = 0.0
+    case_results: list[BenchmarkCaseResult] = []
 
     for case in cases:
+        memory_utility = case.utility_with_memory
+        self_reasoning_utility = case.utility_without_memory
+        evaluate_with_memory = _constant_evaluator(memory_utility)
+        evaluate_without_memory = _constant_evaluator(self_reasoning_utility)
+
         _, decision = router.route(
-            evaluate_with_memory=lambda value=case.utility_with_memory: value,
-            evaluate_without_memory=lambda value=case.utility_without_memory: value,
+            evaluate_with_memory=evaluate_with_memory,
+            evaluate_without_memory=evaluate_without_memory,
         )
-        memory_is_worse = case.utility_with_memory < case.utility_without_memory
+        utility_delta = memory_utility - self_reasoning_utility
+        memory_is_worse = utility_delta < 0.0
         if memory_is_worse:
             negative_transfer_cases += 1
         if decision.route == "memory":
             memory_selected += 1
+            regret = max(0.0, -utility_delta)
             if memory_is_worse:
                 selected_negative_transfer_cases += 1
-                routing_regret += case.utility_without_memory - case.utility_with_memory
+                routing_regret += regret
         else:
             self_reasoning_selected += 1
+            regret = max(0.0, utility_delta)
             if memory_is_worse:
                 avoided_negative_transfer_cases += 1
+
+        case_results.append(
+            BenchmarkCaseResult(
+                case_id=case.case_id,
+                selected_route=decision.route,
+                utility_delta=utility_delta,
+                negative_transfer=memory_is_worse,
+                regret=regret,
+                memory_id=case.memory_id,
+                transfer_success=case.transfer_success,
+            )
+        )
 
     return BenchmarkResult(
         total_cases=len(cases),
@@ -95,6 +144,7 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
         selected_negative_transfer_cases=selected_negative_transfer_cases,
         avoided_negative_transfer_cases=avoided_negative_transfer_cases,
         routing_regret=routing_regret,
+        case_results=tuple(case_results),
     )
 
 
@@ -108,10 +158,10 @@ def _validate_unique_case_ids(cases: list[BenchmarkCase]) -> None:
 
 if __name__ == "__main__":
     benchmark_cases = [
-        BenchmarkCase("positive_1", 0.90, 0.70),
-        BenchmarkCase("positive_2", 0.85, 0.60),
-        BenchmarkCase("negative_1", 0.35, 0.80),
-        BenchmarkCase("negative_2", 0.40, 0.75),
+        BenchmarkCase("positive_1", 0.90, 0.70, memory_id="memory_a"),
+        BenchmarkCase("positive_2", 0.85, 0.60, memory_id="memory_b"),
+        BenchmarkCase("negative_1", 0.35, 0.80, memory_id="memory_a"),
+        BenchmarkCase("negative_2", 0.40, 0.75, memory_id="memory_b"),
     ]
     result = run_benchmark(benchmark_cases, CounterfactualRouter(minimum_delta=0.05))
     print(f"negative_transfer_rate={result.negative_transfer_rate:.3f}")

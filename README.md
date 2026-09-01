@@ -102,6 +102,7 @@ ReMemAgent/
 │   └── routing/         # Trust and counterfactual routing policies
 ├── experiments/         # Controlled research experiments and evaluation
 ├── tests/               # Unit and integration tests
+├── docs/                # Architecture, adapters, observability, research status
 ├── README.md
 └── pyproject.toml
 ```
@@ -110,9 +111,11 @@ ReMemAgent/
 
 **Active research prototype.**
 
-The project is deliberately building a deterministic, testable research baseline before introducing model-dependent training and external agent benchmarks.
+The deterministic research core and its integration contracts are implemented and covered by the repository quality suite. The latest verified GitHub `Quality` run is green at commit `e9f02fc` (run 305).
 
-The repository does **not** claim benchmark improvements or production readiness until the corresponding implementations, tests, and experiments have actually been executed and reproduced.
+This is an engineering verification statement, not a scientific result. The repository does **not** claim benchmark improvements or production readiness until the corresponding real-world experiments have been executed, repeated, and reproduced.
+
+See [`docs/research-status.md`](docs/research-status.md) for the current evidence boundary, reproducibility contract, limitations, and next milestone.
 
 ## Engineering principles
 

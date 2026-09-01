@@ -22,8 +22,22 @@ class DeduplicationPolicy:
 class MemoryDeduplicator:
     """Remove redundant memories while preserving the strongest evidence."""
 
-    def __init__(self, policy: DeduplicationPolicy | None = None) -> None:
-        self.policy = policy or DeduplicationPolicy()
+    def __init__(self, policy: DeduplicationPolicy | float | None = None) -> None:
+        """Create a deduplicator from a policy or legacy threshold value."""
+
+        if isinstance(policy, (int, float)):
+            self.policy = DeduplicationPolicy(similarity_threshold=float(policy))
+        else:
+            self.policy = policy or DeduplicationPolicy()
+
+    def is_duplicate(
+        self,
+        candidate: MemoryRecord,
+        existing: list[MemoryRecord],
+    ) -> bool:
+        """Return whether a candidate overlaps an existing memory above threshold."""
+
+        return self._find_duplicate_index(candidate, existing) is not None
 
     def deduplicate(self, memories: list[MemoryRecord]) -> list[MemoryRecord]:
         """Return memories with near-duplicate records removed.
@@ -58,7 +72,7 @@ class MemoryDeduplicator:
 
     @staticmethod
     def _memory_text(memory: MemoryRecord) -> str:
-        return " ".join((memory.state, memory.action, memory.outcome))
+        return f"{memory.state} {memory.action} {memory.outcome}"
 
     @staticmethod
     def _evidence_score(memory: MemoryRecord) -> float:

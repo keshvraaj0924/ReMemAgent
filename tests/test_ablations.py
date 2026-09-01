@@ -1,3 +1,5 @@
+import pytest
+
 from experiments.ablations import AblationStrategy, run_ablations
 from experiments.synthetic_negative_transfer import BenchmarkCase
 from remem.routing.counterfactual import CounterfactualRouter
@@ -15,7 +17,7 @@ def test_ablations_compare_fixed_and_counterfactual_strategies() -> None:
     assert by_strategy[AblationStrategy.MEMORY_ALWAYS].selected_memory == 2
     assert by_strategy[AblationStrategy.SELF_REASONING_ALWAYS].selected_memory == 0
     assert by_strategy[AblationStrategy.COUNTERFACTUAL].selected_memory == 1
-    assert by_strategy[AblationStrategy.COUNTERFACTUAL].mean_utility == 0.85
+    assert by_strategy[AblationStrategy.COUNTERFACTUAL].mean_utility == pytest.approx(0.85)
     assert by_strategy[AblationStrategy.COUNTERFACTUAL].routing_regret == 0.0
 
 

@@ -30,6 +30,19 @@ class MemoryStore:
         """Return a memory by identifier, or ``None`` when absent."""
         return self._memories.get(memory_id)
 
+    def record_transfer_outcome(self, memory_id: str, success: bool) -> None:
+        """Record an observed transfer outcome for a stored memory.
+
+        Transfer outcomes update both the general usage counters and the
+        transfer-specific counters on the memory record. Unknown memory IDs
+        are rejected so benchmark attribution cannot silently disappear.
+        """
+
+        memory = self.get(memory_id)
+        if memory is None:
+            raise KeyError(f"Memory '{memory_id}' does not exist")
+        memory.record_use(success=success, transferred=True)
+
     def remove(self, memory_id: str) -> MemoryRecord | None:
         """Remove and return a memory when it exists."""
         return self._memories.pop(memory_id, None)

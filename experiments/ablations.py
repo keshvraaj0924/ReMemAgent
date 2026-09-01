@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from math import fsum
 
 from experiments.synthetic_negative_transfer import BenchmarkCase
 from remem.routing.counterfactual import CounterfactualRouter
@@ -33,11 +34,7 @@ class AblationResult:
     def negative_transfer_rate(self) -> float:
         """Return the share of cases where the selected path was harmful."""
 
-        return (
-            self.selected_negative_transfer_cases / self.total_cases
-            if self.total_cases
-            else 0.0
-        )
+        return self.selected_negative_transfer_cases / self.total_cases if self.total_cases else 0.0
 
 
 def run_ablations(
@@ -82,7 +79,7 @@ def _evaluate_strategy(
         strategy=strategy,
         total_cases=len(cases),
         selected_memory=selected_memory,
-        mean_utility=sum(utilities) / len(utilities) if utilities else 0.0,
+        mean_utility=fsum(utilities) / len(utilities) if utilities else 0.0,
         negative_transfer_cases=sum(
             case.utility_with_memory < case.utility_without_memory for case in cases
         ),

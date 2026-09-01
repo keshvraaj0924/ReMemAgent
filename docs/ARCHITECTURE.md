@@ -14,15 +14,52 @@ Episode -> Episodic Memory -> Reuse Evidence -> Consolidation -> Semantic/Proced
 
 Every record carries empirical success, transferability, confidence, and lifecycle state. This makes memory quality observable and allows stale or low-transfer memories to be retired.
 
+## Execution and guidance boundary
+
+Benchmark environments implement `EnvironmentAdapter`, which normalizes reset and step behavior into deterministic `StepResult` values. `EpisodeRunner` executes a policy without importing benchmark-specific packages. `EpisodeMemoryRecorder` converts the resulting trajectory into typed episodic memories, and `EpisodeMemoryIngestor` deduplicates those memories before storing them.
+
+`MemoryGuidedPolicy` is the composition boundary between that stored evidence and an action policy. `select_guidance()` returns a `MemoryGuidanceDecision` containing the selected memory identifier, retrieval similarity, trust confidence, and reconstructed guidance. The callable policy path then passes only the guidance text to the injected action policy. The deterministic memory layer never executes reconstructed text as an action.
+
+When an action is evaluated, `MemoryTransferRecorder` can attribute the observed result to the selected memory. A self-reasoning decision with no selected memory is deliberately ignored. Episode-level attribution also distinguishes measured outcomes from intermediate steps: the default evaluator records only a terminal memory-guided action, while a benchmark-specific evaluator can return `None` for steps where transfer success cannot yet be established. This prevents unmeasured intermediate decisions from being counted as transfer failures.
+
+`measure_transferability()` exposes descriptive transfer statistics independently from routing. It reports the empirical transfer success rate and a Wilson lower confidence bound, so downstream experiments can distinguish observed performance from uncertainty caused by sparse evidence. These metrics do not alter routing behavior and can later be compared with a learned transferability estimator.
+
+```text
+EnvironmentAdapter
+        |
+  EpisodeRunner
+        |
+   EpisodeResult
+        |
+ EpisodeMemoryRecorder
+        |
+ EpisodeMemoryIngestor
+        |
+    MemoryStore
+        |
+ MemoryGuidedPolicy -- select_guidance() --> traceable memory decision
+        |                                      |
+ injected action policy                        |
+        |                               MemoryTransferRecorder
+      action                                     |
+        |                               measured outcome
+        +----------------------------------------+
+
+Measured transfer evidence
+        |
+        +--> transferability statistics
+        +--> lifecycle / consolidation evidence
+```
+
+A service-level integration test exercises the stored-memory loop: one episode creates a memory, a later episode uses `MemoryGuidedPolicy`, retrieval reconstructs the prior experience, and the injected policy receives that guidance. Transfer attribution is intentionally a separate operation so experiments can define success without coupling the core memory layer to benchmark-specific reward semantics.
+
+This separation allows learned policy components to be introduced later without coupling the memory engine to ALFWorld, WebShop, an LLM provider, or a training framework.
+
 ## Routing
 
-The router compares an estimated memory-guided score with a memory-free baseline. It can select:
+The repository currently contains two routing contracts for different research stages. `adaptive_router.py` exposes the richer `memory` / `hybrid` / `self` decision with explicit memory and reconstruction quality features. `counterfactual.py` exposes an injected evaluator contract for matched memory-on / memory-off utility estimates. They should remain separate until the learned routing experiment establishes a stable replacement contract.
 
-- `memory`: memory is expected to provide meaningful benefit.
-- `hybrid`: benefit is small; retain memory as evidence while relying on self-reasoning.
-- `self`: expected memory benefit is below the configured threshold.
-
-The production implementation will replace heuristic score components with learned value estimates during GRPO training.
+The production research path will replace heuristic score components with learned value estimates during GRPO training while retaining the same explicit counterfactual interface.
 
 ## Research hypothesis
 
