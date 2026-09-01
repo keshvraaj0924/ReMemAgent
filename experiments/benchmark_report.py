@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from remem.benchmark import BenchmarkRunReport
 
@@ -20,26 +20,26 @@ def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
     return payload
 
 
-def save_benchmark_report(report: BenchmarkRunReport, output_path: Path) -> Path:
-    """Persist a measured benchmark report as deterministic, indented JSON."""
+def save_benchmark_report(
+    report: BenchmarkRunReport,
+    output_path: Path,
+    *,
+    runtime_provenance: Mapping[str, str] | None = None,
+) -> Path:
+    """Persist a measured benchmark report with optional runtime provenance."""
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(
-            benchmark_report_to_dict(report),
-            indent=2,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    payload = benchmark_report_to_dict(report)
+    if runtime_provenance is not None:
+        payload["runtime_provenance"] = dict(runtime_provenance)
+    _write_json(payload, output_path)
     return output_path
 
 
 def save_repeated_benchmark_reports(
     reports: tuple[BenchmarkRunReport, ...] | list[BenchmarkRunReport],
     output_path: Path,
+    *,
+    runtime_provenance: Mapping[str, str] | None = None,
 ) -> Path:
     """Persist independent seed reports while retaining per-run provenance."""
 
@@ -55,14 +55,22 @@ def save_repeated_benchmark_reports(
     if len(benchmark_names) != 1:
         raise ValueError("repeated benchmark reports must use one benchmark name")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, Any] = {
         "benchmark_name": selected_reports[0].benchmark_name,
         "seeds": list(seeds),
         "reports": [benchmark_report_to_dict(report) for report in selected_reports],
     }
+    if runtime_provenance is not None:
+        payload["runtime_provenance"] = dict(runtime_provenance)
+    _write_json(payload, output_path)
+    return output_path
+
+
+def _write_json(payload: Mapping[str, Any], output_path: Path) -> None:
+    """Write a JSON payload using deterministic serialization settings."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
         encoding="utf-8",
     )
-    return output_path
