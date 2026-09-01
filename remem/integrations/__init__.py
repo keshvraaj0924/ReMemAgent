@@ -1,5 +1,12 @@
 """Optional integrations for external agent-training frameworks."""
 
+from .artifacts import (
+    TRAINING_ARTIFACT_SCHEMA_VERSION,
+    TrainingArtifactManifest,
+    build_training_artifact_manifest,
+    verify_training_artifact,
+    write_training_artifact_manifest,
+)
 from .benchmarks import (
     BenchmarkEnvironmentFactory,
     RawEnvironmentFactory,
@@ -50,6 +57,8 @@ __all__ = [
     "GrpoSample",
     "MemoryGuidedPolicyFactory",
     "RawEnvironmentFactory",
+    "TRAINING_ARTIFACT_SCHEMA_VERSION",
+    "TrainingArtifactManifest",
     "ValidatedAgentLoopOutput",
     "VerlTrainingBatch",
     "VerlTrainingConsumer",
@@ -59,6 +68,7 @@ __all__ = [
     "build_grpo_batch",
     "build_grpo_samples",
     "build_memory_guided_policy_factory",
+    "build_training_artifact_manifest",
     "build_verl_training_batch",
     "build_webshop_text_environment_factory",
     "compute_group_relative_advantages",
@@ -70,6 +80,8 @@ __all__ = [
     "run_agent_loop",
     "run_agent_loop_batch",
     "validate_agent_loop_output",
+    "verify_training_artifact",
     "write_grpo_jsonl",
+    "write_training_artifact_manifest",
     "write_verl_jsonl",
 ]
