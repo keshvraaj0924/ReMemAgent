@@ -59,3 +59,17 @@ def test_save_benchmark_report_writes_json(tmp_path) -> None:
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
     assert persisted["final_memory_count"] == 1
     assert persisted["episodes"][0]["transfer_outcomes"] == []
+
+
+def test_save_benchmark_report_includes_runtime_provenance(tmp_path) -> None:
+    output_path = save_benchmark_report(
+        _build_report(),
+        tmp_path / "report.json",
+        runtime_provenance={"code_revision": "abc123", "python_version": "3.11.0"},
+    )
+
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["runtime_provenance"] == {
+        "code_revision": "abc123",
+        "python_version": "3.11.0",
+    }
