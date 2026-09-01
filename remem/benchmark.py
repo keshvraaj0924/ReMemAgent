@@ -29,6 +29,20 @@ PolicyFactory = Callable[[int, MemoryStore], Policy]
 
 
 @dataclass(frozen=True, slots=True)
+class BenchmarkRunConfiguration:
+    """Reproducibility metadata describing one benchmark suite invocation."""
+
+    benchmark_name: str
+    episode_count: int
+    max_steps: int
+    seed: int | None
+    environment_factory: str | None = None
+    policy_factory: str | None = None
+    success_evaluator: str | None = None
+    transfer_success_evaluator: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class BenchmarkEpisodeReport:
     """Immutable report for one benchmark episode."""
 
@@ -59,6 +73,7 @@ class BenchmarkRunReport:
     episodes: tuple[BenchmarkEpisodeReport, ...]
     final_memory_count: int
     seed: int | None = None
+    configuration: BenchmarkRunConfiguration | None = None
 
     @property
     def success_count(self) -> int:
@@ -127,6 +142,7 @@ class BenchmarkSuiteRunner:
         reset_kwargs: dict[str, Any] | None = None,
         transfer_success_evaluator: TransferSuccessEvaluator | None = None,
         seed: int | None = None,
+        configuration: BenchmarkRunConfiguration | None = None,
     ) -> BenchmarkRunReport:
         """Execute a benchmark suite, persist memories, and trace guided transfers.
 
@@ -212,6 +228,13 @@ class BenchmarkSuiteRunner:
             episodes=tuple(reports),
             final_memory_count=len(memory_store.all()),
             seed=seed,
+            configuration=configuration
+            or BenchmarkRunConfiguration(
+                benchmark_name=normalized_name,
+                episode_count=episode_count,
+                max_steps=max_steps,
+                seed=seed,
+            ),
         )
 
     def _execute_episode(
