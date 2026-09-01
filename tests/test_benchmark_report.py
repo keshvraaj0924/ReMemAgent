@@ -6,6 +6,7 @@ from collections.abc import Callable
 import pytest
 
 from experiments.benchmark_report import (
+    benchmark_configuration_fingerprint,
     benchmark_report_to_dict,
     save_benchmark_report,
     save_repeated_benchmark_reports,
@@ -96,6 +97,32 @@ def test_benchmark_report_to_dict_preserves_measured_core_fields() -> None:
     assert "info" not in payload["episodes"][0]["episode"]["steps"][0]["result"]
 
 
+def test_benchmark_report_to_dict_adds_configuration_fingerprint() -> None:
+    payload = benchmark_report_to_dict(_build_report(seed=17))
+
+    assert payload["configuration_fingerprint"] == benchmark_configuration_fingerprint(
+        _build_report(seed=17).configuration
+    )
+
+
+def test_configuration_fingerprint_is_independent_of_seed() -> None:
+    first = _build_report(seed=1).configuration
+    second = _build_report(seed=2).configuration
+
+    assert first is not None
+    assert second is not None
+    assert benchmark_configuration_fingerprint(first) == benchmark_configuration_fingerprint(second)
+
+
+def test_configuration_fingerprint_changes_when_configuration_changes() -> None:
+    first = _build_report(seed=1, max_steps=1).configuration
+    second = _build_report(seed=1, max_steps=2).configuration
+
+    assert first is not None
+    assert second is not None
+    assert benchmark_configuration_fingerprint(first) != benchmark_configuration_fingerprint(second)
+
+
 def test_save_benchmark_report_writes_json(tmp_path) -> None:
     output_path = save_benchmark_report(_build_report(), tmp_path / "nested" / "report.json")
 
@@ -135,3 +162,6 @@ def test_save_repeated_reports_allows_seed_only_configuration_difference(tmp_pat
 
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
     assert persisted["seeds"] == [1, 2]
+    assert persisted["configuration_fingerprint"] == benchmark_configuration_fingerprint(
+        first.configuration
+    )

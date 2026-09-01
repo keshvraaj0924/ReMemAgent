@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -17,7 +18,29 @@ def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
     for episode in payload["episodes"]:
         for step in episode["episode"]["steps"]:
             step["result"].pop("info", None)
+    configuration = report.configuration
+    if configuration is not None:
+        payload["configuration_fingerprint"] = benchmark_configuration_fingerprint(configuration)
     return payload
+
+
+def benchmark_configuration_fingerprint(configuration: BenchmarkRunConfiguration) -> str:
+    """Return a deterministic fingerprint for configuration independent of seed.
+
+    The seed identifies an independent stochastic run and therefore is excluded
+    from this fingerprint. All other declared configuration fields participate
+    in the digest, making the value useful for grouping comparable runs.
+    """
+
+    canonical_configuration = asdict(replace(configuration, seed=None))
+    canonical_payload = json.dumps(
+        canonical_configuration,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical_payload).hexdigest()
 
 
 def save_benchmark_report(
@@ -69,6 +92,11 @@ def save_repeated_benchmark_reports(
         "seeds": list(seeds),
         "reports": [benchmark_report_to_dict(report) for report in selected_reports],
     }
+    reference_configuration = selected_reports[0].configuration
+    if reference_configuration is not None:
+        payload["configuration_fingerprint"] = benchmark_configuration_fingerprint(
+            reference_configuration
+        )
     if runtime_provenance is not None:
         payload["runtime_provenance"] = dict(runtime_provenance)
     if statistics is not None:
