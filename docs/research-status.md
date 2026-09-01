@@ -49,6 +49,8 @@ Observability snapshots now expose a deterministic JSON-compatible representatio
 
 The training integration layer can persist validated GRPO or verl batches as deterministic JSON Lines. Writers create parent directories, preserve row ordering, sort JSON keys, and avoid introducing tokenizer or trainer dependencies. Each persisted training artifact can now be accompanied by an integrity manifest containing its row count and SHA-256 digest; verification re-parses the JSONL and checks the exact bytes, so downstream training can fail closed on mutation or malformed data. GRPO batch construction now also rejects singleton groups before dataset persistence, preventing a superficially valid batch from producing only zero comparative advantages.
 
+The CI quality workflow now also checks dependency consistency, compiles all repository Python sources, and builds the distributable package in addition to tests, formatting, linting, and type checking. Package-build validation uses the same development dependency set as the quality job, so packaging regressions are caught before a research artifact is published.
+
 These capabilities are intentionally separated from model SDKs and external benchmark packages where practical.
 
 ## What has not been established
