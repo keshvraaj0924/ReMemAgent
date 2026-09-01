@@ -18,6 +18,7 @@ from remem.benchmark import (
     BenchmarkSuiteRunner,
     PolicyFactory,
 )
+from remem.environments import EnvironmentContractReport, validate_environment_contract
 from remem.integrations.benchmarks import load_benchmark_environment_factory
 from remem.integrations.loading import resolve_callable, split_callable_specification
 from remem.integrations.policies import (
@@ -90,6 +91,33 @@ def validate_external_benchmark(spec: ExternalBenchmarkSpec) -> None:
         resolve_callable(spec.action_policy_factory)
     else:
         raise ValueError("one of policy_factory or action_policy_factory is required")
+
+
+def validate_external_benchmark_runtime(
+    spec: ExternalBenchmarkSpec,
+    *,
+    probe_action: str | None = None,
+) -> EnvironmentContractReport:
+    """Probe the real configured benchmark environment before full execution.
+
+    The probe resolves and constructs the caller-owned environment factory,
+    passes its seed through the same normalized benchmark adapter used by the
+    measured runner, and validates reset plus an optional concrete action. A
+    missing run seed uses zero only for this preflight probe; measured runs
+    retain their explicit seed contract. The environment is closed by the
+    contract validator in both success and failure paths.
+    """
+
+    validate_external_benchmark(spec)
+    environment_factory = load_benchmark_environment_factory(
+        spec.benchmark_name,
+        spec.environment_factory,
+    )
+    probe_seed = 0 if spec.seed is None else spec.seed
+    return validate_environment_contract(
+        environment_factory(probe_seed),
+        probe_action=probe_action,
+    )
 
 
 def run_external_benchmark(
@@ -199,4 +227,5 @@ __all__ = [
     "run_external_benchmark",
     "run_repeated_external_benchmarks",
     "validate_external_benchmark",
+    "validate_external_benchmark_runtime",
 ]
