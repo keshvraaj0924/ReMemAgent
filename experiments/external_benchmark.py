@@ -9,7 +9,7 @@ entrypoint reproducible and testable.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import cast
 
 from remem.benchmark import (
@@ -122,6 +122,30 @@ def run_external_benchmark(
     )
 
 
+def run_repeated_external_benchmarks(
+    spec: ExternalBenchmarkSpec,
+    seeds: tuple[int, ...] | list[int],
+) -> tuple[BenchmarkRunReport, ...]:
+    """Execute the same external benchmark independently for each requested seed.
+
+    A fresh runner and specification are used for every seed so memory state,
+    policy state, and episode-local resources cannot leak across independent
+    experimental repetitions. The returned reports retain each seed in their
+    configuration metadata for downstream paired analysis.
+    """
+
+    selected_seeds = tuple(seeds)
+    if not selected_seeds:
+        raise ValueError("seeds must contain at least one seed")
+    if len(selected_seeds) != len(set(selected_seeds)):
+        raise ValueError("seeds must be unique")
+
+    return tuple(
+        run_external_benchmark(replace(spec, seed=seed))
+        for seed in selected_seeds
+    )
+
+
 def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     """Resolve either a complete policy or compose one from an action policy."""
 
@@ -148,4 +172,9 @@ def _validate_callable_specification(field_name: str, specification: str) -> Non
         raise ValueError(f"{field_name} must use module:attribute notation") from exc
 
 
-__all__ = ["ExternalBenchmarkSpec", "resolve_callable", "run_external_benchmark"]
+__all__ = [
+    "ExternalBenchmarkSpec",
+    "resolve_callable",
+    "run_external_benchmark",
+    "run_repeated_external_benchmarks",
+]
