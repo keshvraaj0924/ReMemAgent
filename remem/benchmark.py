@@ -168,6 +168,13 @@ class BenchmarkSuiteRunner:
             raise ValueError("episode_count must be non-negative")
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
+        _validate_run_configuration(
+            configuration,
+            benchmark_name=normalized_name,
+            episode_count=episode_count,
+            max_steps=max_steps,
+            seed=seed,
+        )
 
         memory_store = store if store is not None else MemoryStore()
         reports: list[BenchmarkEpisodeReport] = []
@@ -270,6 +277,33 @@ class BenchmarkSuiteRunner:
             success_evaluator=transfer_success_evaluator,
         )
         return execution_result, transfer_outcomes
+
+
+def _validate_run_configuration(
+    configuration: BenchmarkRunConfiguration | None,
+    *,
+    benchmark_name: str,
+    episode_count: int,
+    max_steps: int,
+    seed: int | None,
+) -> None:
+    """Reject provenance metadata that does not describe the requested run."""
+
+    if configuration is None:
+        return
+    expected_values = {
+        "benchmark_name": benchmark_name,
+        "episode_count": episode_count,
+        "max_steps": max_steps,
+        "seed": seed,
+    }
+    for field_name, expected_value in expected_values.items():
+        actual_value = getattr(configuration, field_name)
+        if actual_value != expected_value:
+            raise ValueError(
+                f"configuration.{field_name}={actual_value!r} does not match "
+                f"run value {expected_value!r}"
+            )
 
 
 def _record_transfer_outcomes(
