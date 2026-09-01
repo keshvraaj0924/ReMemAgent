@@ -40,6 +40,7 @@ class BenchmarkRunConfiguration:
     policy_factory: str | None = None
     success_evaluator: str | None = None
     transfer_success_evaluator: str | None = None
+    minimum_trust: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +175,7 @@ class BenchmarkSuiteRunner:
             episode_count=episode_count,
             max_steps=max_steps,
             seed=seed,
+            minimum_trust=configuration.minimum_trust if configuration is not None else 0.0,
         )
 
         memory_store = store if store is not None else MemoryStore()
@@ -286,6 +288,7 @@ def _validate_run_configuration(
     episode_count: int,
     max_steps: int,
     seed: int | None,
+    minimum_trust: float,
 ) -> None:
     """Reject provenance metadata that does not describe the requested run."""
 
@@ -304,6 +307,8 @@ def _validate_run_configuration(
                 f"configuration.{field_name}={actual_value!r} does not match "
                 f"run value {expected_value!r}"
             )
+    if not 0.0 <= minimum_trust <= 1.0:
+        raise ValueError("minimum_trust must be between 0 and 1")
 
 
 def _record_transfer_outcomes(
