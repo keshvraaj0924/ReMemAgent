@@ -5,8 +5,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from experiments.benchmark_report import save_benchmark_report
-from experiments.external_benchmark import ExternalBenchmarkSpec, run_external_benchmark
+from experiments.benchmark_report import save_benchmark_report, save_repeated_benchmark_reports
+from experiments.benchmark_statistics import summarize_benchmark_reports
+from experiments.external_benchmark import (
+    ExternalBenchmarkSpec,
+    run_external_benchmark,
+    run_repeated_external_benchmarks,
+)
 from experiments.runtime_provenance import collect_runtime_provenance
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
@@ -19,7 +24,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", required=True)
     parser.add_argument("--episodes", type=int, required=True)
     parser.add_argument("--max-steps", type=int, required=True)
-    parser.add_argument("--seed", type=int)
+    seed_group = parser.add_mutually_exclusive_group()
+    seed_group.add_argument("--seed", type=int)
+    seed_group.add_argument("--seeds", help="Comma-separated independent integer seeds")
     parser.add_argument("--environment-factory", required=True)
     policy_group = parser.add_mutually_exclusive_group(required=True)
     policy_group.add_argument("--policy-factory")
@@ -32,7 +39,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    """Execute the measured suite and save its JSON report."""
+    """Execute one or more measured benchmark runs and save JSON output."""
 
     arguments = parse_args()
     spec = ExternalBenchmarkSpec(
@@ -47,15 +54,44 @@ def main() -> int:
         transfer_success_evaluator=arguments.transfer_success_evaluator,
         seed=arguments.seed,
     )
-    report = run_external_benchmark(spec)
     runtime_provenance = collect_runtime_provenance().to_dict()
-    output_path = save_benchmark_report(
-        report,
-        arguments.output,
-        runtime_provenance=runtime_provenance,
-    )
+
+    seeds = _parse_seeds(getattr(arguments, "seeds", None))
+    if seeds is None:
+        report = run_external_benchmark(spec)
+        output_path = save_benchmark_report(
+            report,
+            arguments.output,
+            runtime_provenance=runtime_provenance,
+        )
+    else:
+        reports = run_repeated_external_benchmarks(spec, seeds)
+        statistics = summarize_benchmark_reports(reports).to_dict()
+        output_path = save_repeated_benchmark_reports(
+            reports,
+            arguments.output,
+            runtime_provenance=runtime_provenance,
+            statistics=statistics,
+        )
     print(f"saved benchmark report: {output_path}")
     return 0
+
+
+def _parse_seeds(value: str | None) -> tuple[int, ...] | None:
+    """Parse a comma-separated seed list, rejecting malformed or duplicate values."""
+
+    if value is None:
+        return None
+    parts = tuple(part.strip() for part in value.split(","))
+    if not parts or any(not part for part in parts):
+        raise ValueError("--seeds must contain comma-separated integers")
+    try:
+        seeds = tuple(int(part) for part in parts)
+    except ValueError as exc:
+        raise ValueError("--seeds must contain comma-separated integers") from exc
+    if len(seeds) != len(set(seeds)):
+        raise ValueError("--seeds must contain unique integers")
+    return seeds
 
 
 if __name__ == "__main__":

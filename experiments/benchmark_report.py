@@ -40,8 +40,9 @@ def save_repeated_benchmark_reports(
     output_path: Path,
     *,
     runtime_provenance: Mapping[str, str] | None = None,
+    statistics: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Persist independent seed reports while retaining per-run provenance."""
+    """Persist independent seed reports and optional descriptive statistics."""
 
     selected_reports = tuple(reports)
     if not selected_reports:
@@ -62,6 +63,8 @@ def save_repeated_benchmark_reports(
     }
     if runtime_provenance is not None:
         payload["runtime_provenance"] = dict(runtime_provenance)
+    if statistics is not None:
+        payload["statistics"] = dict(statistics)
     _write_json(payload, output_path)
     return output_path
 
