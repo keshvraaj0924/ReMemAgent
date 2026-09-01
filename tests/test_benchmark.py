@@ -1,4 +1,4 @@
-from remem.benchmark import BenchmarkSuiteRunner
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkSuiteRunner
 from remem.environments.base import StepResult
 from remem.execution import Policy
 from remem.memory.store import MemoryStore
@@ -118,3 +118,51 @@ def test_benchmark_runner_rejects_invalid_configuration() -> None:
             pass
         else:
             raise AssertionError("invalid benchmark configuration should fail")
+
+
+def test_benchmark_runner_rejects_stale_provenance_configuration() -> None:
+    configuration = BenchmarkRunConfiguration(
+        benchmark_name="webshop-smoke",
+        episode_count=1,
+        max_steps=1,
+        seed=7,
+    )
+
+    try:
+        BenchmarkSuiteRunner().run(
+            benchmark_name="webshop-smoke",
+            episode_count=2,
+            max_steps=1,
+            environment_factory=lambda index: FakeEnvironment(index),
+            policy_factory=lambda index, store: lambda state: "act",
+            success_evaluator=lambda episode: True,
+            seed=7,
+            configuration=configuration,
+        )
+    except ValueError as exc:
+        assert "configuration.episode_count" in str(exc)
+    else:
+        raise AssertionError("stale provenance should fail rather than mislabel a run")
+
+
+def test_benchmark_runner_accepts_matching_provenance_configuration() -> None:
+    configuration = BenchmarkRunConfiguration(
+        benchmark_name="webshop-smoke",
+        episode_count=1,
+        max_steps=1,
+        seed=7,
+        environment_factory="module:environment_factory",
+    )
+
+    report = BenchmarkSuiteRunner().run(
+        benchmark_name="webshop-smoke",
+        episode_count=1,
+        max_steps=1,
+        environment_factory=lambda index: FakeEnvironment(index),
+        policy_factory=lambda index, store: lambda state: "act",
+        success_evaluator=lambda episode: True,
+        seed=7,
+        configuration=configuration,
+    )
+
+    assert report.configuration == configuration
