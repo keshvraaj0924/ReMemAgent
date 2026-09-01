@@ -10,11 +10,14 @@ from typing import Any, Mapping
 
 from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 
+BENCHMARK_REPORT_SCHEMA_VERSION = 1
+
 
 def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
-    """Convert a benchmark report into a JSON-safe core trajectory representation."""
+    """Convert a benchmark report into a versioned JSON-safe representation."""
 
     payload = asdict(report)
+    payload["schema_version"] = BENCHMARK_REPORT_SCHEMA_VERSION
     for episode in payload["episodes"]:
         for step in episode["episode"]["steps"]:
             step["result"].pop("info", None)
@@ -88,6 +91,7 @@ def save_repeated_benchmark_reports(
     _validate_repeated_configuration(selected_reports)
 
     payload: dict[str, Any] = {
+        "schema_version": BENCHMARK_REPORT_SCHEMA_VERSION,
         "benchmark_name": selected_reports[0].benchmark_name,
         "seeds": list(seeds),
         "reports": [benchmark_report_to_dict(report) for report in selected_reports],
