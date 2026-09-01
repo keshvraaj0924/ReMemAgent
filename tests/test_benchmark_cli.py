@@ -5,6 +5,7 @@ from pathlib import Path
 
 import experiments.benchmark_cli as benchmark_cli
 from experiments.external_benchmark import ExternalBenchmarkSpec
+from remem.environments import EnvironmentContractReport
 
 
 def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Path) -> None:
@@ -90,3 +91,62 @@ def test_main_builds_memory_guided_spec(monkeypatch, tmp_path: Path) -> None:
     assert spec.policy_factory is None
     assert spec.action_policy_factory == "model_policy:make_action_policy"
     assert spec.minimum_trust == 0.8
+
+
+def test_main_runtime_preflight_uses_configured_seed_and_probe_action(monkeypatch) -> None:
+    arguments = Namespace(
+        benchmark="webshop-eval",
+        episodes=1,
+        max_steps=3,
+        seed=17,
+        environment_factory="example:make_environment",
+        policy_factory="example:make_policy",
+        action_policy_factory=None,
+        minimum_trust=0.2,
+        success_evaluator="example:is_success",
+        transfer_success_evaluator=None,
+        output=Path("unused.json"),
+        preflight=False,
+        runtime_preflight=True,
+        probe_action="look",
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    def runtime_preflight(spec: ExternalBenchmarkSpec, *, probe_action: str | None):
+        captured["spec"] = spec
+        captured["probe_action"] = probe_action
+        return EnvironmentContractReport(initial_observation="ready")
+
+    monkeypatch.setattr(benchmark_cli, "validate_external_benchmark_runtime", runtime_preflight)
+
+    assert benchmark_cli.main() == 0
+    assert captured["probe_action"] == "look"
+    assert isinstance(captured["spec"], ExternalBenchmarkSpec)
+    assert captured["spec"].seed == 17
+
+
+def test_main_rejects_probe_action_without_runtime_preflight(monkeypatch) -> None:
+    arguments = Namespace(
+        benchmark="webshop-eval",
+        episodes=1,
+        max_steps=3,
+        seed=17,
+        environment_factory="example:make_environment",
+        policy_factory="example:make_policy",
+        action_policy_factory=None,
+        minimum_trust=0.2,
+        success_evaluator="example:is_success",
+        transfer_success_evaluator=None,
+        output=Path("unused.json"),
+        preflight=False,
+        runtime_preflight=False,
+        probe_action="look",
+    )
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    import pytest
+
+    with pytest.raises(ValueError, match="--probe-action requires --runtime-preflight"):
+        benchmark_cli.main()
