@@ -71,21 +71,21 @@ def main() -> int:
         transfer_success_evaluator=arguments.transfer_success_evaluator,
         seed=arguments.seed,
     )
-    if arguments.preflight:
-        if arguments.probe_action is not None:
+    if getattr(arguments, "preflight", False):
+        if getattr(arguments, "probe_action", None) is not None:
             raise ValueError("--probe-action requires --runtime-preflight")
         validate_external_benchmark(spec)
         print("benchmark callable preflight succeeded")
         return 0
-    if arguments.runtime_preflight:
+    if getattr(arguments, "runtime_preflight", False):
         report = validate_external_benchmark_runtime(
             spec,
-            probe_action=arguments.probe_action,
+            probe_action=getattr(arguments, "probe_action", None),
         )
         mode = "step" if report.step_result is not None else "reset"
         print(f"benchmark runtime preflight succeeded ({mode} probe)")
         return 0
-    if arguments.probe_action is not None:
+    if getattr(arguments, "probe_action", None) is not None:
         raise ValueError("--probe-action requires --runtime-preflight")
 
     runtime_provenance = collect_runtime_provenance().to_dict()
