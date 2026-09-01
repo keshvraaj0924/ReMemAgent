@@ -90,6 +90,22 @@ def test_run_external_benchmark_passes_seed_to_factories() -> None:
     ]
 
 
+def test_run_external_benchmark_records_callable_provenance() -> None:
+    report = run_external_benchmark(_build_spec(seed=7))
+
+    assert report.configuration is not None
+    assert report.configuration.benchmark_name == "webshop-smoke"
+    assert report.configuration.episode_count == 1
+    assert report.configuration.max_steps == 1
+    assert report.configuration.seed == 7
+    assert report.configuration.environment_factory == (
+        "tests.test_external_benchmark:make_environment"
+    )
+    assert report.configuration.policy_factory == "tests.test_external_benchmark:make_policy"
+    assert report.configuration.success_evaluator == "tests.test_external_benchmark:evaluate_success"
+    assert report.configuration.transfer_success_evaluator is None
+
+
 def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
     report = run_external_benchmark(_build_spec(seed=7), runner=BenchmarkSuiteRunner())
 
@@ -98,6 +114,7 @@ def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
 
     assert '"benchmark_name": "webshop-smoke"' in payload
     assert '"seed": 7' in payload
+    assert '"environment_factory": "tests.test_external_benchmark:make_environment"' in payload
     assert '"success_rate": 1.0' in payload
 
 
