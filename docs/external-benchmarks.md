@@ -23,6 +23,24 @@ The runner passes `seed + episode_index` to both factories. This is deterministi
 
 Reports contain measured episode-level outcomes and aggregate reward/success/transfer statistics. Arbitrary environment `info` payloads are intentionally excluded from the JSON artifact because external objects do not have a framework-wide serialization contract.
 
+## Preflight validation
+
+Before launching an expensive benchmark, the CLI can resolve every configured callable without constructing an environment or loading a model:
+
+```bash
+remem-benchmark \
+  --benchmark alfworld-test \
+  --episodes 100 \
+  --max-steps 50 \
+  --environment-factory my_alfworld:build_environment \
+  --policy-factory my_policy:build_policy \
+  --success-evaluator my_alfworld:evaluate_success \
+  --seed 123 \
+  --preflight
+```
+
+A successful preflight verifies import paths and callable types only. It does not verify that the external environment can execute a reset/step cycle, that a checkpoint is loadable, or that the model produces valid actions. Those checks require the real dependencies and are intentionally left to the measured run.
+
 ## Command-line execution
 
 The `remem-benchmark` entry point accepts the same explicit callable specifications:
