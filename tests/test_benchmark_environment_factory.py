@@ -60,6 +60,21 @@ def test_factory_passes_episode_seed_to_raw_factory() -> None:
     assert observed_seeds == [23]
 
 
+def test_factory_adds_benchmark_context_when_environment_creation_fails() -> None:
+    def raw_factory(seed: int) -> FakeEnvironment:
+        raise OSError(f"seed {seed} unavailable")
+
+    factory = BenchmarkEnvironmentFactory("webshop", raw_factory)
+
+    with pytest.raises(
+        RuntimeError,
+        match="failed to create webshop environment for seed 31",
+    ) as error:
+        factory(31)
+
+    assert isinstance(error.value.__cause__, OSError)
+
+
 def test_factory_rejects_unsupported_benchmark() -> None:
     with pytest.raises(ValueError, match="unsupported benchmark"):
         BenchmarkEnvironmentFactory("unknown", lambda _seed: FakeEnvironment())
