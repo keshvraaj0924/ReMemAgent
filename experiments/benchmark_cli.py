@@ -11,6 +11,7 @@ from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
     run_external_benchmark,
     run_repeated_external_benchmarks,
+    validate_external_benchmark,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 
@@ -35,6 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--success-evaluator", required=True)
     parser.add_argument("--transfer-success-evaluator")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Resolve configured callables and exit without running an environment",
+    )
     return parser.parse_args()
 
 
@@ -54,6 +60,11 @@ def main() -> int:
         transfer_success_evaluator=arguments.transfer_success_evaluator,
         seed=arguments.seed,
     )
+    if arguments.preflight:
+        validate_external_benchmark(spec)
+        print("benchmark preflight succeeded")
+        return 0
+
     runtime_provenance = collect_runtime_provenance().to_dict()
 
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
