@@ -72,6 +72,26 @@ class ExternalBenchmarkSpec:
             raise ValueError("minimum_trust must be between 0 and 1")
 
 
+def validate_external_benchmark(spec: ExternalBenchmarkSpec) -> None:
+    """Resolve every configured callable without constructing an environment.
+
+    This is a dependency-aware preflight check for CI and experiment launchers.
+    It verifies import paths and callable types while deliberately avoiding
+    environment creation, model loading, checkpoint loading, or inference.
+    """
+
+    load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
+    resolve_callable(spec.success_evaluator)
+    if spec.transfer_success_evaluator is not None:
+        resolve_callable(spec.transfer_success_evaluator)
+    if spec.policy_factory is not None:
+        resolve_callable(spec.policy_factory)
+    elif spec.action_policy_factory is not None:
+        resolve_callable(spec.action_policy_factory)
+    else:
+        raise ValueError("one of policy_factory or action_policy_factory is required")
+
+
 def run_external_benchmark(
     spec: ExternalBenchmarkSpec,
     *,
@@ -178,4 +198,5 @@ __all__ = [
     "resolve_callable",
     "run_external_benchmark",
     "run_repeated_external_benchmarks",
+    "validate_external_benchmark",
 ]
