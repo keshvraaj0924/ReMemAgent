@@ -164,16 +164,37 @@ def compute_group_relative_advantages(
 
 
 def build_grpo_batch(samples: Sequence[GrpoSample]) -> GrpoBatch:
-    """Build one validated training batch from ordered GRPO samples."""
+    """Build one validated training batch from ordered GRPO samples.
+
+    GRPO needs comparative candidates within each group. Rejecting singleton
+    groups here prevents a seemingly valid batch from silently producing only
+    zero advantages, which would provide no policy-learning signal.
+    """
 
     normalized_samples = tuple(samples)
     if not normalized_samples:
         raise ValueError("cannot build a GRPO batch from zero samples")
+    _validate_group_sizes(normalized_samples)
 
     return GrpoBatch(
         samples=normalized_samples,
         advantages=compute_group_relative_advantages(normalized_samples),
     )
+
+
+def _validate_group_sizes(samples: Sequence[GrpoSample]) -> None:
+    """Reject groups that cannot produce a comparative GRPO advantage."""
+
+    sample_count_by_group: dict[str, int] = defaultdict(int)
+    for sample in samples:
+        sample_count_by_group[sample.group_id] += 1
+
+    singleton_groups = tuple(
+        group_id for group_id, sample_count in sample_count_by_group.items() if sample_count < 2
+    )
+    if singleton_groups:
+        groups = ", ".join(sorted(singleton_groups))
+        raise ValueError(f"each GRPO group needs at least two samples; singleton groups: {groups}")
 
 
 def _default_prompt_builder(episode: EpisodeResult) -> str:
