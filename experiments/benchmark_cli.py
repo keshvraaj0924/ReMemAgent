@@ -12,6 +12,7 @@ from experiments.external_benchmark import (
     run_external_benchmark,
     run_repeated_external_benchmarks,
     validate_external_benchmark,
+    validate_external_benchmark_runtime,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 
@@ -36,10 +37,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--success-evaluator", required=True)
     parser.add_argument("--transfer-success-evaluator")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
-    parser.add_argument(
+    preflight_group = parser.add_mutually_exclusive_group()
+    preflight_group.add_argument(
         "--preflight",
         action="store_true",
-        help="Resolve configured callables and exit without running an environment",
+        help="Resolve configured callables and exit without constructing an environment",
+    )
+    preflight_group.add_argument(
+        "--runtime-preflight",
+        action="store_true",
+        help="Construct the configured environment and validate its normalized runtime contract",
+    )
+    parser.add_argument(
+        "--probe-action",
+        help="Optional concrete action used by --runtime-preflight for one step probe",
     )
     return parser.parse_args()
 
@@ -61,9 +72,21 @@ def main() -> int:
         seed=arguments.seed,
     )
     if arguments.preflight:
+        if arguments.probe_action is not None:
+            raise ValueError("--probe-action requires --runtime-preflight")
         validate_external_benchmark(spec)
-        print("benchmark preflight succeeded")
+        print("benchmark callable preflight succeeded")
         return 0
+    if arguments.runtime_preflight:
+        report = validate_external_benchmark_runtime(
+            spec,
+            probe_action=arguments.probe_action,
+        )
+        mode = "step" if report.step_result is not None else "reset"
+        print(f"benchmark runtime preflight succeeded ({mode} probe)")
+        return 0
+    if arguments.probe_action is not None:
+        raise ValueError("--probe-action requires --runtime-preflight")
 
     runtime_provenance = collect_runtime_provenance().to_dict()
 
