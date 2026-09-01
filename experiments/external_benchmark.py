@@ -108,6 +108,7 @@ def run_external_benchmark(
         policy_factory=spec.policy_factory or spec.action_policy_factory,
         success_evaluator=spec.success_evaluator,
         transfer_success_evaluator=spec.transfer_success_evaluator,
+        minimum_trust=spec.minimum_trust,
     )
     return selected_runner.run(
         benchmark_name=spec.benchmark_name,
