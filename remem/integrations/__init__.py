@@ -13,6 +13,11 @@ from .grpo import (
     build_grpo_samples,
     compute_group_relative_advantages,
 )
+from .policies import (
+    ActionPolicyFactory,
+    MemoryGuidedPolicyFactory,
+    build_memory_guided_policy_factory,
+)
 from .verl import (
     VerlTrainingBatch,
     VerlTrajectory,
@@ -32,11 +37,13 @@ from .verl_adapter import (
 from .verl_contract import ValidatedAgentLoopOutput, validate_agent_loop_output
 
 __all__ = [
+    "ActionPolicyFactory",
     "AgentLoopRequest",
     "AsyncVerlAgentLoop",
     "BenchmarkEnvironmentFactory",
     "GrpoBatch",
     "GrpoSample",
+    "MemoryGuidedPolicyFactory",
     "RawEnvironmentFactory",
     "ValidatedAgentLoopOutput",
     "VerlTrainingBatch",
@@ -45,6 +52,7 @@ __all__ = [
     "adapt_agent_loop_output",
     "build_grpo_batch",
     "build_grpo_samples",
+    "build_memory_guided_policy_factory",
     "build_verl_training_batch",
     "compute_group_relative_advantages",
     "dispatch_verl_training_batch",
