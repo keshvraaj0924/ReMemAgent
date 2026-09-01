@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Mapping
 
-from remem.benchmark import BenchmarkRunReport
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 
 
 def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
@@ -42,7 +42,13 @@ def save_repeated_benchmark_reports(
     runtime_provenance: Mapping[str, str] | None = None,
     statistics: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Persist independent seed reports and optional descriptive statistics."""
+    """Persist independent seed reports and optional descriptive statistics.
+
+    Repeated reports must describe the same experimental configuration apart
+    from their independent seed. This prevents accidentally aggregating runs
+    with different episode counts, step limits, callable implementations, or
+    trust thresholds.
+    """
 
     selected_reports = tuple(reports)
     if not selected_reports:
@@ -56,6 +62,8 @@ def save_repeated_benchmark_reports(
     if len(benchmark_names) != 1:
         raise ValueError("repeated benchmark reports must use one benchmark name")
 
+    _validate_repeated_configuration(selected_reports)
+
     payload: dict[str, Any] = {
         "benchmark_name": selected_reports[0].benchmark_name,
         "seeds": list(seeds),
@@ -67,6 +75,30 @@ def save_repeated_benchmark_reports(
         payload["statistics"] = dict(statistics)
     _write_json(payload, output_path)
     return output_path
+
+
+def _validate_repeated_configuration(reports: tuple[BenchmarkRunReport, ...]) -> None:
+    """Ensure repeated reports share all configuration except their seed."""
+
+    configurations = tuple(report.configuration for report in reports)
+    if all(configuration is None for configuration in configurations):
+        return
+    if any(configuration is None for configuration in configurations):
+        raise ValueError("repeated benchmark reports must use consistent configuration metadata")
+
+    reference = _without_seed(configurations[0])
+    if any(_without_seed(configuration) != reference for configuration in configurations[1:]):
+        raise ValueError(
+            "repeated benchmark reports must share configuration apart from the seed"
+        )
+
+
+def _without_seed(
+    configuration: BenchmarkRunConfiguration,
+) -> BenchmarkRunConfiguration:
+    """Return configuration with the independent-run seed removed."""
+
+    return replace(configuration, seed=None)
 
 
 def _write_json(payload: Mapping[str, Any], output_path: Path) -> None:
