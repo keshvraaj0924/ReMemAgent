@@ -9,6 +9,7 @@ from experiments.external_benchmark import (
     resolve_callable,
     run_external_benchmark,
     validate_external_benchmark,
+    validate_external_benchmark_runtime,
 )
 from remem.benchmark import BenchmarkSuiteRunner
 from remem.environments.base import StepResult
@@ -91,6 +92,23 @@ def test_validate_external_benchmark_rejects_unresolvable_callable() -> None:
 
     with pytest.raises(AttributeError, match="missing_evaluator"):
         validate_external_benchmark(spec)
+
+
+def test_validate_external_benchmark_runtime_probes_reset() -> None:
+    report = validate_external_benchmark_runtime(_build_spec(seed=19))
+
+    assert report.initial_observation == "seed-19"
+    assert report.step_result is None
+
+
+def test_validate_external_benchmark_runtime_probes_one_step() -> None:
+    report = validate_external_benchmark_runtime(_build_spec(seed=23), probe_action="look")
+
+    assert report.initial_observation == "seed-23"
+    assert report.step_result is not None
+    assert report.step_result.observation == "done"
+    assert report.step_result.reward == 1.0
+    assert report.step_result.done
 
 
 def test_run_external_benchmark_passes_seed_to_factories() -> None:
