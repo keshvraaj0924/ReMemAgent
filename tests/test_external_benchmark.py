@@ -8,6 +8,7 @@ from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
     resolve_callable,
     run_external_benchmark,
+    validate_external_benchmark,
 )
 from remem.benchmark import BenchmarkSuiteRunner
 from remem.environments.base import StepResult
@@ -79,6 +80,17 @@ def test_resolve_callable_rejects_malformed_specification() -> None:
 def test_resolve_callable_rejects_non_callable_attribute() -> None:
     with pytest.raises(TypeError, match="not callable"):
         resolve_callable("tests.test_external_benchmark:FakeEnvironment")
+
+
+def test_validate_external_benchmark_resolves_all_callables_without_running() -> None:
+    validate_external_benchmark(_build_spec(seed=19))
+
+
+def test_validate_external_benchmark_rejects_unresolvable_callable() -> None:
+    spec = _build_spec(success_evaluator="tests.test_external_benchmark:missing_evaluator")
+
+    with pytest.raises(AttributeError, match="missing_evaluator"):
+        validate_external_benchmark(spec)
 
 
 def test_run_external_benchmark_passes_seed_to_factories() -> None:
