@@ -7,6 +7,7 @@ from pathlib import Path
 
 from experiments.benchmark_report import save_benchmark_report
 from experiments.external_benchmark import ExternalBenchmarkSpec, run_external_benchmark
+from experiments.runtime_provenance import collect_runtime_provenance
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
@@ -47,7 +48,12 @@ def main() -> int:
         seed=arguments.seed,
     )
     report = run_external_benchmark(spec)
-    output_path = save_benchmark_report(report, arguments.output)
+    runtime_provenance = collect_runtime_provenance().to_dict()
+    output_path = save_benchmark_report(
+        report,
+        arguments.output,
+        runtime_provenance=runtime_provenance,
+    )
     print(f"saved benchmark report: {output_path}")
     return 0
 
