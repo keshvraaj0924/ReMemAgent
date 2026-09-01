@@ -24,6 +24,7 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
         output=output_path,
     )
     captured: dict[str, ExternalBenchmarkSpec] = {}
+    captured_provenance: dict[str, str] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
@@ -31,8 +32,18 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
         captured["spec"] = spec
         return report
 
+    def save_report(value: object, path: Path, *, runtime_provenance: dict[str, str]) -> Path:
+        assert value is report
+        captured_provenance.update(runtime_provenance)
+        return path
+
     monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
-    monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path: path)
+    monkeypatch.setattr(benchmark_cli, "save_benchmark_report", save_report)
+    monkeypatch.setattr(
+        benchmark_cli,
+        "collect_runtime_provenance",
+        lambda: benchmark_cli.collect_runtime_provenance(environment={"REMEM_GIT_COMMIT": "abc123"}),
+    )
 
     assert benchmark_cli.main() == 0
     spec = captured["spec"]
@@ -46,6 +57,7 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
     assert spec.minimum_trust == 0.25
     assert spec.success_evaluator == "example:is_success"
     assert spec.transfer_success_evaluator == "example:is_transfer_success"
+    assert captured_provenance["code_revision"] == "abc123"
 
 
 def test_main_builds_memory_guided_spec(monkeypatch, tmp_path: Path) -> None:
@@ -71,7 +83,7 @@ def test_main_builds_memory_guided_spec(monkeypatch, tmp_path: Path) -> None:
         "run_external_benchmark",
         lambda spec: captured.setdefault("spec", spec) or report,
     )
-    monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path: path)
+    monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
     assert benchmark_cli.main() == 0
     spec = captured["spec"]
