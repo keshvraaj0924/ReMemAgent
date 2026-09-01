@@ -39,3 +39,12 @@ jobs:
 
       - name: Check type annotations
         run: python -m mypy remem experiments
+
+      - name: Check runtime dependencies
+        run: python -m pip check
+
+      - name: Compile Python sources
+        run: python -m compileall -q remem experiments
+
+      - name: Build distribution artifacts
+        run: python -m build
