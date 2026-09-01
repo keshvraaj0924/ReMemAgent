@@ -13,7 +13,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
-from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner, PolicyFactory
+from remem.benchmark import (
+    BenchmarkRunConfiguration,
+    BenchmarkRunReport,
+    BenchmarkSuiteRunner,
+    PolicyFactory,
+)
 from remem.integrations.benchmarks import load_benchmark_environment_factory
 from remem.integrations.loading import resolve_callable, split_callable_specification
 from remem.memory.attribution import TransferSuccessEvaluator
@@ -64,7 +69,9 @@ def run_external_benchmark(
     The supplied environment factory constructs the real third-party benchmark
     environment and is wrapped here with the benchmark-specific adapter. The
     policy and evaluator factories remain caller-owned so model and reward
-    semantics are never fabricated by the framework.
+    semantics are never fabricated by the framework. The resulting report
+    retains the exact callable specifications used for the run so a measured
+    artifact can be traced back to its experiment configuration.
     """
 
     selected_runner = runner or BenchmarkSuiteRunner()
@@ -79,6 +86,16 @@ def run_external_benchmark(
         if spec.transfer_success_evaluator is not None
         else None
     )
+    configuration = BenchmarkRunConfiguration(
+        benchmark_name=spec.benchmark_name.strip(),
+        episode_count=spec.episode_count,
+        max_steps=spec.max_steps,
+        seed=spec.seed,
+        environment_factory=spec.environment_factory,
+        policy_factory=spec.policy_factory,
+        success_evaluator=spec.success_evaluator,
+        transfer_success_evaluator=spec.transfer_success_evaluator,
+    )
     return selected_runner.run(
         benchmark_name=spec.benchmark_name,
         episode_count=spec.episode_count,
@@ -88,6 +105,7 @@ def run_external_benchmark(
         success_evaluator=success_evaluator,
         transfer_success_evaluator=transfer_success_evaluator,
         seed=spec.seed,
+        configuration=configuration,
     )
 
 
