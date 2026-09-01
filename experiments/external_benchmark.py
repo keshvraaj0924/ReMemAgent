@@ -105,10 +105,9 @@ def run_external_benchmark(
         max_steps=spec.max_steps,
         seed=spec.seed,
         environment_factory=spec.environment_factory,
-        policy_factory=spec.policy_factory,
+        policy_factory=spec.policy_factory or spec.action_policy_factory,
         success_evaluator=spec.success_evaluator,
         transfer_success_evaluator=spec.transfer_success_evaluator,
-        action_policy_factory=spec.action_policy_factory,
     )
     return selected_runner.run(
         benchmark_name=spec.benchmark_name,
@@ -127,7 +126,10 @@ def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     """Resolve either a complete policy or compose one from an action policy."""
 
     if spec.action_policy_factory is not None:
-        action_policy_factory = cast(ActionPolicyFactory, resolve_callable(spec.action_policy_factory))
+        action_policy_factory = cast(
+            ActionPolicyFactory,
+            resolve_callable(spec.action_policy_factory),
+        )
         return build_memory_guided_policy_factory(
             action_policy_factory,
             minimum_trust=spec.minimum_trust,
