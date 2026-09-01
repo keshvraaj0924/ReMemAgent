@@ -13,6 +13,10 @@ from .grpo import (
     build_grpo_samples,
     compute_group_relative_advantages,
 )
+from .official_benchmarks import (
+    build_alfworld_text_environment_factory,
+    build_webshop_text_environment_factory,
+)
 from .policies import (
     ActionPolicyFactory,
     MemoryGuidedPolicyFactory,
@@ -50,10 +54,12 @@ __all__ = [
     "VerlTrainingConsumer",
     "VerlTrajectory",
     "adapt_agent_loop_output",
+    "build_alfworld_text_environment_factory",
     "build_grpo_batch",
     "build_grpo_samples",
     "build_memory_guided_policy_factory",
     "build_verl_training_batch",
+    "build_webshop_text_environment_factory",
     "compute_group_relative_advantages",
     "dispatch_verl_training_batch",
     "encode_episode_for_verl",
