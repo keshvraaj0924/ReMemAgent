@@ -6,6 +6,7 @@ from collections.abc import Callable
 import pytest
 
 from experiments.benchmark_report import (
+    BENCHMARK_REPORT_SCHEMA_VERSION,
     benchmark_configuration_fingerprint,
     benchmark_report_to_dict,
     save_benchmark_report,
@@ -91,6 +92,7 @@ def evaluate_success(episode: EpisodeResult) -> bool:
 def test_benchmark_report_to_dict_preserves_measured_core_fields() -> None:
     payload = benchmark_report_to_dict(_build_report())
 
+    assert payload["schema_version"] == BENCHMARK_REPORT_SCHEMA_VERSION
     assert payload["benchmark_name"] == "alfworld-test"
     assert payload["episodes"][0]["episode"]["total_reward"] == 1.0
     assert payload["episodes"][0]["episode"]["steps"][0]["action"] == "look"
@@ -128,6 +130,7 @@ def test_save_benchmark_report_writes_json(tmp_path) -> None:
 
     assert output_path.exists()
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["schema_version"] == BENCHMARK_REPORT_SCHEMA_VERSION
     assert persisted["final_memory_count"] == 1
     assert persisted["episodes"][0]["transfer_outcomes"] == []
 
@@ -161,6 +164,7 @@ def test_save_repeated_reports_allows_seed_only_configuration_difference(tmp_pat
     output_path = save_repeated_benchmark_reports((first, second), tmp_path / "reports.json")
 
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["schema_version"] == BENCHMARK_REPORT_SCHEMA_VERSION
     assert persisted["seeds"] == [1, 2]
     assert persisted["configuration_fingerprint"] == benchmark_configuration_fingerprint(
         first.configuration
