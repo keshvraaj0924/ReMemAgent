@@ -20,7 +20,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, required=True)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--environment-factory", required=True)
-    parser.add_argument("--policy-factory", required=True)
+    policy_group = parser.add_mutually_exclusive_group(required=True)
+    policy_group.add_argument("--policy-factory")
+    policy_group.add_argument("--action-policy-factory")
+    parser.add_argument("--minimum-trust", type=float, default=0.0)
     parser.add_argument("--success-evaluator", required=True)
     parser.add_argument("--transfer-success-evaluator")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
@@ -37,6 +40,8 @@ def main() -> int:
         max_steps=arguments.max_steps,
         environment_factory=arguments.environment_factory,
         policy_factory=arguments.policy_factory,
+        action_policy_factory=arguments.action_policy_factory,
+        minimum_trust=arguments.minimum_trust,
         success_evaluator=arguments.success_evaluator,
         transfer_success_evaluator=arguments.transfer_success_evaluator,
         seed=arguments.seed,
