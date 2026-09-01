@@ -21,7 +21,7 @@ The framework currently provides deterministic implementations for:
 
 Integration callable loading is now centralized in `remem.integrations.loading`, so benchmark environment factories and external policy/evaluator factories share one explicit `module:attribute` resolution contract.
 
-External benchmark reports now retain the declared benchmark configuration alongside measured episode results, including episode count, step limit, seed, and the exact callable specifications used for the environment, policy, success evaluator, and optional transfer evaluator. This keeps serialized results traceable to the executable experiment boundary without importing third-party benchmark packages into the framework.
+External benchmark reports now retain the declared benchmark configuration alongside measured episode results, including episode count, step limit, seed, and the exact callable specifications used for the environment, policy, success evaluator, and optional transfer evaluator. The runner also rejects supplied provenance metadata when its benchmark name, episode count, step limit, or seed differs from the actual invocation. This prevents a measured artifact from silently carrying stale run metadata.
 
 These capabilities are intentionally separated from model SDKs and external benchmark packages where practical.
 
@@ -47,7 +47,7 @@ Research results should be recorded with:
 - serialized per-run metrics;
 - enough input metadata to reconstruct the run.
 
-The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner also accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed and declared callable configuration. Benchmark integrations provide a typed factory that resolves a caller-owned raw environment factory and wraps each created environment with the correct ALFWorld or WebShop adapter. Shared callable loading keeps those integration boundaries consistent without introducing benchmark-package dependencies into the core library. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
+The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner also accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed and declared callable configuration. Benchmark integrations provide a typed factory that resolves a caller-owned raw environment factory and wraps each created environment with the correct ALFWorld or WebShop adapter. Shared callable loading keeps those integration boundaries consistent without introducing benchmark-package dependencies into the core library. Provenance supplied directly to the suite runner is validated against the invocation before execution. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
 
 ## Engineering gates
 
