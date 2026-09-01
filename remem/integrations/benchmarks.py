@@ -39,7 +39,13 @@ class BenchmarkEnvironmentFactory:
     def __call__(self, seed: int) -> EnvironmentAdapter:
         """Create and adapt one environment using the supplied episode seed."""
 
-        environment = self._raw_factory(seed)
+        try:
+            environment = self._raw_factory(seed)
+        except Exception as exc:
+            raise RuntimeError(
+                f"failed to create {self._benchmark_family} environment for seed {seed}"
+            ) from exc
+
         if self._benchmark_family == "alfworld":
             return AlfWorldAdapter(environment)
         return WebShopAdapter(environment)
