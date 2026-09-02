@@ -62,6 +62,21 @@ class ObservationCollector:
 
         self.record(ObservationEvent(name=name, value=value))
 
+    def record_outcome(self, name: str, succeeded: bool) -> None:
+        """Record a mutually exclusive success or failure outcome.
+
+        The method emits ``<name>.succeeded`` or ``<name>.failed`` with a
+        single count. This keeps outcome accounting explicit and avoids
+        deriving failure counts from unrelated totals when an operation can
+        fail before another counter is emitted.
+        """
+
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("outcome name must not be empty")
+        suffix = "succeeded" if succeeded else "failed"
+        self.increment(f"{normalized_name}.{suffix}")
+
     def observe_duration(self, name: str, duration_seconds: float) -> None:
         """Add one measured duration to a named aggregate."""
 
