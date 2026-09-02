@@ -97,9 +97,9 @@ def test_main_runs_repeated_runtime_preflight_for_each_seed(monkeypatch) -> None
         captured["seeds"] = seeds
         captured["probe_action"] = probe_action
         return (
-            EnvironmentContractReport(reset_result=None, step_result=None),
-            EnvironmentContractReport(reset_result=None, step_result=None),
-            EnvironmentContractReport(reset_result=None, step_result=None),
+            EnvironmentContractReport(initial_observation="ready"),
+            EnvironmentContractReport(initial_observation="ready"),
+            EnvironmentContractReport(initial_observation="ready"),
         )
 
     monkeypatch.setattr(benchmark_cli, "validate_repeated_external_benchmark_runtime", fake_preflight)
