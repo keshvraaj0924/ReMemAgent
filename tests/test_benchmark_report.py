@@ -107,6 +107,28 @@ def test_benchmark_report_to_dict_adds_configuration_fingerprint() -> None:
     )
 
 
+def test_benchmark_report_to_dict_rejects_invalid_report() -> None:
+    report = _build_report()
+    invalid_episode = report.episodes[0]
+    invalid_report = BenchmarkRunReport(
+        benchmark_name=report.benchmark_name,
+        episodes=(
+            BenchmarkEpisodeReport(
+                episode_id=invalid_episode.episode_id,
+                episode=invalid_episode.episode,
+                episode_success=invalid_episode.episode_success,
+                retained_memory_count=-1,
+            ),
+        ),
+        final_memory_count=report.final_memory_count,
+        seed=report.seed,
+        configuration=report.configuration,
+    )
+
+    with pytest.raises(ValueError, match="retained_memory_count"):
+        benchmark_report_to_dict(invalid_report)
+
+
 def test_configuration_fingerprint_is_independent_of_seed() -> None:
     first = _build_report(seed=1).configuration
     second = _build_report(seed=2).configuration

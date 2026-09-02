@@ -9,13 +9,15 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
+from remem.benchmark_validation import validate_benchmark_run_report
 
 BENCHMARK_REPORT_SCHEMA_VERSION = 1
 
 
 def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
-    """Convert a benchmark report into a versioned JSON-safe representation."""
+    """Convert a structurally valid benchmark report into JSON-safe data."""
 
+    validate_benchmark_run_report(report)
     payload = asdict(report)
     payload["schema_version"] = BENCHMARK_REPORT_SCHEMA_VERSION
     for episode in payload["episodes"]:
@@ -52,7 +54,7 @@ def save_benchmark_report(
     *,
     runtime_provenance: Mapping[str, str] | None = None,
 ) -> Path:
-    """Persist a measured benchmark report with optional runtime provenance."""
+    """Persist a structurally valid benchmark report with optional provenance."""
 
     payload = benchmark_report_to_dict(report)
     if runtime_provenance is not None:
@@ -79,6 +81,9 @@ def save_repeated_benchmark_reports(
     selected_reports = tuple(reports)
     if not selected_reports:
         raise ValueError("reports must contain at least one benchmark report")
+
+    for report in selected_reports:
+        validate_benchmark_run_report(report)
 
     seeds = tuple(report.seed for report in selected_reports)
     if len(seeds) != len(set(seeds)):
