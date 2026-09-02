@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
@@ -109,6 +109,37 @@ class ObservationTimer:
         self._collector.observe_duration(self._name, monotonic() - self._started_at)
 
 
+def merge_observation_snapshots(
+    snapshots: Sequence[ObservationSnapshot],
+) -> ObservationSnapshot:
+    """Combine independent snapshots without mutating any source mapping.
+
+    This is intended for aggregating per-worker or per-process telemetry after
+    execution. Counters and duration totals are additive; no event-level
+    ordering or timestamp information is reconstructed.
+    """
+
+    counters: dict[str, float] = {}
+    durations_seconds: dict[str, float] = {}
+    for snapshot in snapshots:
+        for name, value in snapshot.counters.items():
+            _validate_snapshot_value(name, value, "counter")
+            counters[name] = counters.get(name, 0.0) + value
+        for name, value in snapshot.durations_seconds.items():
+            _validate_snapshot_value(name, value, "duration")
+            durations_seconds[name] = durations_seconds.get(name, 0.0) + value
+    return ObservationSnapshot(counters=counters, durations_seconds=durations_seconds)
+
+
+def _validate_snapshot_value(name: str, value: float, value_type: str) -> None:
+    """Validate a persisted aggregate value before including it in a merge."""
+
+    if not name:
+        raise ValueError(f"{value_type} name must not be empty")
+    if not isfinite(value) or value < 0.0:
+        raise ValueError(f"{value_type} value must be finite and non-negative")
+
+
 def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) -> None:
     """Atomically persist one deterministic observation snapshot as JSON.
 
@@ -150,5 +181,6 @@ __all__ = [
     "ObservationEvent",
     "ObservationSnapshot",
     "ObservationTimer",
+    "merge_observation_snapshots",
     "write_observation_snapshot",
 ]
