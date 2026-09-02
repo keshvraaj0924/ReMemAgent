@@ -102,18 +102,15 @@ def validate_external_benchmark_runtime(
 ) -> EnvironmentContractReport:
     """Probe the real configured environment and policy before execution.
 
-    The probe resolves and constructs the caller-owned environment factory,
-    passes its seed through the same normalized benchmark adapter used by the
-    measured runner, validates reset plus an optional concrete action, and then
-    constructs the configured policy against the observed reset text. Policy
-    probing uses an isolated memory store and the same episode seed contract as
-    measured execution. A missing run seed uses zero only for this preflight
-    probe; measured runs retain their explicit seed contract.
+    The environment contract validator owns the temporary probe environment and
+    closes it in its own ``finally`` block. This function deliberately does not
+    close that environment a second time. Policy probing happens against the
+    validated reset observation and an isolated memory store, so a policy
+    checkpoint can be loaded and invoked without coupling policy lifecycle to
+    the environment cleanup boundary.
 
-    Runtime preflight can therefore load a real checkpoint when the caller's
-    policy factory does so, but it never records the probe as benchmark data.
-    The constructed environment is always closed after probing. If probing
-    fails, cleanup is attempted without replacing the original exception.
+    A missing run seed uses zero only for this preflight probe; measured runs
+    retain their explicit seed contract. Probe output is never benchmark data.
     """
 
     validate_external_benchmark(spec)
@@ -123,23 +120,17 @@ def validate_external_benchmark_runtime(
     )
     probe_seed = 0 if spec.seed is None else spec.seed
     environment = environment_factory(probe_seed)
-    try:
-        environment_report = validate_environment_contract(
-            environment,
-            probe_action=probe_action,
-        )
-        policy_factory = _resolve_policy_factory(spec)
-        validate_policy_contract(
-            policy_factory,
-            seed=probe_seed,
-            observation=environment_report.initial_observation,
-            store=MemoryStore(),
-        )
-    except Exception:
-        _close_preflight_environment(environment, suppress_errors=True)
-        raise
-    else:
-        _close_preflight_environment(environment, suppress_errors=False)
+    environment_report = validate_environment_contract(
+        environment,
+        probe_action=probe_action,
+    )
+    policy_factory = _resolve_policy_factory(spec)
+    validate_policy_contract(
+        policy_factory,
+        seed=probe_seed,
+        observation=environment_report.initial_observation,
+        store=MemoryStore(),
+    )
     return environment_report
 
 
@@ -233,21 +224,6 @@ def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     if spec.policy_factory is None:
         raise ValueError("policy_factory is required when action_policy_factory is absent")
     return cast(PolicyFactory, resolve_callable(spec.policy_factory))
-
-
-def _close_preflight_environment(environment: object, *, suppress_errors: bool) -> None:
-    """Close a preflight environment, optionally preserving a primary failure."""
-
-    close = getattr(environment, "close", None)
-    if not callable(close):
-        return
-    if not suppress_errors:
-        close()
-        return
-    try:
-        close()
-    except Exception:
-        return
 
 
 def _validate_callable_specification(field_name: str, specification: str) -> None:
