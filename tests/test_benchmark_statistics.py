@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from experiments.benchmark_statistics import summarize_benchmark_reports
+from experiments.benchmark_statistics import (
+    compare_benchmark_reports,
+    summarize_benchmark_reports,
+)
 from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunReport
-from remem.environments.base import StepResult
 from remem.execution import EpisodeResult
 
 
@@ -76,3 +78,45 @@ def test_statistics_reject_mixed_benchmarks() -> None:
         assert "one benchmark name" in str(exc)
     else:
         raise AssertionError("mixed benchmarks must be rejected")
+
+
+def test_compare_benchmark_reports_pairs_metrics_by_seed() -> None:
+    baseline = (_report(1, 0.0, False), _report(2, 0.5, True))
+    treatment = (_report(1, 1.0, True), _report(2, 0.5, True))
+
+    comparison = compare_benchmark_reports(
+        baseline,
+        treatment,
+        baseline_label="no-memory",
+        treatment_label="memory",
+    )
+
+    assert comparison.baseline_label == "no-memory"
+    assert comparison.treatment_label == "memory"
+    assert comparison.seeds == (1, 2)
+    assert comparison.success_rate_delta.mean == 0.5
+    assert comparison.mean_reward_delta.mean == 0.5
+    assert comparison.transfer_success_rate_delta.mean == 0.0
+
+
+def test_compare_benchmark_reports_rejects_mismatched_seed_sets() -> None:
+    baseline = (_report(1, 0.0, False), _report(2, 0.5, True))
+    treatment = (_report(1, 1.0, True), _report(3, 0.5, True))
+
+    try:
+        compare_benchmark_reports(baseline, treatment)
+    except ValueError as exc:
+        assert "same seed set" in str(exc)
+    else:
+        raise AssertionError("mismatched seed sets must be rejected")
+
+
+def test_compare_benchmark_reports_rejects_empty_labels() -> None:
+    reports = (_report(1, 0.0, False),)
+
+    try:
+        compare_benchmark_reports(reports, reports, baseline_label=" ")
+    except ValueError as exc:
+        assert "baseline_label" in str(exc)
+    else:
+        raise AssertionError("empty condition labels must be rejected")
