@@ -1,3 +1,4 @@
+import random
 import sys
 import types
 from typing import Any
@@ -15,10 +16,18 @@ class FakeAlfWorldEnvironment:
         self.config = config
         self.train_eval = train_eval
         self.batch_size: int | None = None
+        self.reset_random_values: list[float] = []
+        self.reset_calls = 0
 
     def init_env(self, *, batch_size: int) -> "FakeAlfWorldEnvironment":
         self.batch_size = batch_size
         return self
+
+    def reset(self) -> str:
+        self.reset_calls += 1
+        value = random.random()
+        self.reset_random_values.append(value)
+        return "observation"
 
 
 class FakeWebShopEnvironment:
@@ -54,10 +63,44 @@ def test_alfworld_factory_uses_upstream_environment_constructor(monkeypatch: pyt
     factory = build_alfworld_text_environment_factory(config, train_eval="eval")
     environment = factory(17)
 
-    assert environment is created[0]
+    assert environment is not created[0]
     assert environment.config == config
     assert environment.train_eval == "eval"
     assert environment.batch_size == 1
+
+
+def test_alfworld_factory_seeds_reset_without_leaking_global_rng(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: list[FakeAlfWorldEnvironment] = []
+
+    def get_environment(_env_type: str):
+        def constructor(config: dict[str, Any], train_eval: str) -> FakeAlfWorldEnvironment:
+            environment = FakeAlfWorldEnvironment(config, train_eval)
+            created.append(environment)
+            return environment
+
+        return constructor
+
+    environment_module = types.ModuleType("alfworld.agents.environment")
+    environment_module.get_environment = get_environment  # type: ignore[attr-defined]
+    agents_module = types.ModuleType("alfworld.agents")
+    alfworld_module = types.ModuleType("alfworld")
+    monkeypatch.setitem(sys.modules, "alfworld", alfworld_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents", agents_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", environment_module)
+
+    random.seed(12345)
+    expected_next_value = random.Random(12345).random()
+    random.seed(12345)
+
+    factory = build_alfworld_text_environment_factory({"env": {"type": "AlfredTWEnv"}})
+    environment = factory(17)
+    assert environment.reset() == "observation"
+    assert environment.reset() == "observation"
+
+    assert created[0].reset_random_values[0] == created[0].reset_random_values[1]
+    assert random.random() == expected_next_value
 
 
 def test_alfworld_factory_rejects_non_singleton_batch() -> None:

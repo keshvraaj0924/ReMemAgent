@@ -8,10 +8,46 @@ first-class, documented path to the real upstream environments.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import random
+import threading
 from typing import Any
 
 
 RawEnvironmentFactory = Callable[[int], Any]
+_ALFWORLD_RANDOM_LOCK = threading.Lock()
+
+
+class _SeededAlfWorldEnvironment:
+    """Preserve an episode seed while adapting ALFWorld's global RNG API.
+
+    The upstream ALFWorld text environment selects tasks through Python's module
+    level ``random`` state and does not expose a seed argument on ``reset``.
+    ReMemAgent therefore scopes the seed to each reset, restores the caller's
+    RNG state afterwards, and serializes that small critical section so parallel
+    benchmark workers cannot interleave global RNG mutations.
+    """
+
+    def __init__(self, environment: Any, seed: int) -> None:
+        self._environment = environment
+        self._seed = seed
+
+    def reset(self, *args: Any, **kwargs: Any) -> Any:
+        """Reset ALFWorld deterministically without leaking global RNG state."""
+
+        if "seed" in kwargs:
+            raise TypeError("ALFWorld adapter owns the reset seed; do not pass seed explicitly")
+        with _ALFWORLD_RANDOM_LOCK:
+            previous_state = random.getstate()
+            random.seed(self._seed)
+            try:
+                return self._environment.reset(*args, **kwargs)
+            finally:
+                random.setstate(previous_state)
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate non-reset operations to the upstream environment."""
+
+        return getattr(self._environment, name)
 
 
 def build_alfworld_text_environment_factory(
@@ -25,11 +61,8 @@ def build_alfworld_text_environment_factory(
 
     ALFWorld exposes a batch-oriented ``get_environment(...).init_env`` API.
     ReMemAgent's :class:`AlfWorldAdapter` removes the singleton batch dimension,
-    while this factory owns only the upstream environment construction.
-
-    The returned factory attempts to seed the environment through ``reset``;
-    callers that need dataset-level deterministic partitioning should encode
-    that policy in their supplied ALFWorld configuration.
+    while this factory owns upstream environment construction and deterministic
+    episode seeding.
     """
 
     if batch_size != 1:
@@ -53,9 +86,9 @@ def build_alfworld_text_environment_factory(
     def create_environment(seed: int) -> Any:
         """Create one isolated upstream ALFWorld environment."""
 
-        del seed
         environment = environment_class(config, train_eval=train_eval)
-        return environment.init_env(batch_size=1)
+        initialized_environment = environment.init_env(batch_size=1)
+        return _SeededAlfWorldEnvironment(initialized_environment, seed)
 
     return create_environment
 
