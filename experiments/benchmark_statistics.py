@@ -43,6 +43,23 @@ class BenchmarkSeedStatistics:
         return asdict(self)
 
 
+@dataclass(frozen=True, slots=True)
+class BenchmarkConditionComparison:
+    """Paired descriptive deltas between two conditions sharing independent seeds."""
+
+    baseline_label: str
+    treatment_label: str
+    seeds: tuple[int | None, ...]
+    success_rate_delta: MetricSummary
+    mean_reward_delta: MetricSummary
+    transfer_success_rate_delta: MetricSummary
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe representation of the paired comparison."""
+
+        return asdict(self)
+
+
 def summarize_benchmark_reports(
     reports: Sequence[BenchmarkRunReport],
 ) -> BenchmarkSeedStatistics:
@@ -54,26 +71,94 @@ def summarize_benchmark_reports(
     """
 
     selected_reports = tuple(reports)
-    if not selected_reports:
-        raise ValueError("reports must contain at least one benchmark report")
-
-    seeds = tuple(report.seed for report in selected_reports)
-    if len(seeds) != len(set(seeds)):
-        raise ValueError("benchmark report seeds must be unique")
-
-    benchmark_names = {report.benchmark_name for report in selected_reports}
-    if len(benchmark_names) != 1:
-        raise ValueError("benchmark reports must use one benchmark name")
+    _validate_report_collection(selected_reports)
 
     return BenchmarkSeedStatistics(
         benchmark_name=selected_reports[0].benchmark_name,
-        seeds=seeds,
+        seeds=tuple(report.seed for report in selected_reports),
         success_rate=_summarize(tuple(report.success_rate for report in selected_reports)),
         mean_reward=_summarize(tuple(report.mean_reward for report in selected_reports)),
         transfer_success_rate=_summarize(
             tuple(report.transfer_success_rate for report in selected_reports)
         ),
     )
+
+
+def compare_benchmark_reports(
+    baseline_reports: Sequence[BenchmarkRunReport],
+    treatment_reports: Sequence[BenchmarkRunReport],
+    *,
+    baseline_label: str = "baseline",
+    treatment_label: str = "treatment",
+) -> BenchmarkConditionComparison:
+    """Compute paired treatment-minus-baseline deltas by independent seed.
+
+    Both conditions must contain the same unique seed set and benchmark name.
+    Each seed contributes exactly one paired observation to the descriptive
+    delta statistics. The function does not pool episodes and does not perform
+    a hypothesis test or claim statistical significance.
+    """
+
+    baseline = tuple(baseline_reports)
+    treatment = tuple(treatment_reports)
+    _validate_report_collection(baseline)
+    _validate_report_collection(treatment)
+
+    if baseline[0].benchmark_name != treatment[0].benchmark_name:
+        raise ValueError("baseline and treatment reports must use one benchmark name")
+
+    baseline_by_seed = {report.seed: report for report in baseline}
+    treatment_by_seed = {report.seed: report for report in treatment}
+    if set(baseline_by_seed) != set(treatment_by_seed):
+        raise ValueError("baseline and treatment reports must use the same seed set")
+
+    seeds = tuple(report.seed for report in baseline)
+    success_deltas = tuple(
+        treatment_by_seed[seed].success_rate - baseline_by_seed[seed].success_rate
+        for seed in seeds
+    )
+    reward_deltas = tuple(
+        treatment_by_seed[seed].mean_reward - baseline_by_seed[seed].mean_reward
+        for seed in seeds
+    )
+    transfer_deltas = tuple(
+        treatment_by_seed[seed].transfer_success_rate
+        - baseline_by_seed[seed].transfer_success_rate
+        for seed in seeds
+    )
+
+    return BenchmarkConditionComparison(
+        baseline_label=_validate_label(baseline_label, "baseline_label"),
+        treatment_label=_validate_label(treatment_label, "treatment_label"),
+        seeds=seeds,
+        success_rate_delta=_summarize(success_deltas),
+        mean_reward_delta=_summarize(reward_deltas),
+        transfer_success_rate_delta=_summarize(transfer_deltas),
+    )
+
+
+def _validate_report_collection(reports: tuple[BenchmarkRunReport, ...]) -> None:
+    """Validate the minimum invariants required for seed-level statistics."""
+
+    if not reports:
+        raise ValueError("reports must contain at least one benchmark report")
+
+    seeds = tuple(report.seed for report in reports)
+    if len(seeds) != len(set(seeds)):
+        raise ValueError("benchmark report seeds must be unique")
+
+    benchmark_names = {report.benchmark_name for report in reports}
+    if len(benchmark_names) != 1:
+        raise ValueError("benchmark reports must use one benchmark name")
+
+
+def _validate_label(label: str, field_name: str) -> str:
+    """Normalize and validate a human-readable condition label."""
+
+    normalized_label = label.strip()
+    if not normalized_label:
+        raise ValueError(f"{field_name} must not be empty")
+    return normalized_label
 
 
 def _summarize(values: tuple[float, ...]) -> MetricSummary:
@@ -96,4 +181,10 @@ def _summarize(values: tuple[float, ...]) -> MetricSummary:
     )
 
 
-__all__ = ["BenchmarkSeedStatistics", "MetricSummary", "summarize_benchmark_reports"]
+__all__ = [
+    "BenchmarkConditionComparison",
+    "BenchmarkSeedStatistics",
+    "MetricSummary",
+    "compare_benchmark_reports",
+    "summarize_benchmark_reports",
+]
