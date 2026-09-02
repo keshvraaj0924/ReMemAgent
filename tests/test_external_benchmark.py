@@ -75,7 +75,9 @@ def test_external_benchmark_spec_rejects_invalid_callable_field() -> None:
 
 
 def test_resolve_callable_supports_nested_attributes() -> None:
-    assert resolve_callable("tests.test_external_benchmark:make_environment") is make_environment
+    resolved = resolve_callable("tests.test_external_benchmark:make_environment")
+    assert resolved.__name__ == "make_environment"
+    assert resolved.__module__ == "tests.test_external_benchmark"
 
 
 def test_resolve_callable_rejects_malformed_specification() -> None:
@@ -95,7 +97,7 @@ def test_validate_external_benchmark_resolves_all_callables_without_running() ->
 def test_validate_external_benchmark_rejects_unresolvable_callable() -> None:
     spec = _build_spec(success_evaluator="tests.test_external_benchmark:missing_evaluator")
 
-    with pytest.raises(AttributeError, match="missing_evaluator"):
+    with pytest.raises(ValueError, match="callable attribute not found"):
         validate_external_benchmark(spec)
 
 
