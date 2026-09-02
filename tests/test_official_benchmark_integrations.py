@@ -31,18 +31,27 @@ class FakeAlfWorldEnvironment:
 
 
 class FakeWebShopEnvironment:
-    def __init__(self, *, reset_accepts_seed: bool = True, reset_error: BaseException | None = None) -> None:
-        self.reset_accepts_seed = reset_accepts_seed
+    def __init__(self, *, reset_error: BaseException | None = None) -> None:
         self.reset_error = reset_error
         self.reset_seeds: list[int | None] = []
         self.close_calls = 0
 
-    def reset(self, **kwargs: Any) -> None:
-        if not self.reset_accepts_seed and "seed" in kwargs:
-            raise AssertionError("seed should not be passed to this legacy reset")
-        self.reset_seeds.append(kwargs.get("seed"))
+    def reset(self, *, seed: int | None = None) -> None:
+        self.reset_seeds.append(seed)
         if self.reset_error is not None:
             raise self.reset_error
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+class LegacyWebShopEnvironment:
+    def __init__(self) -> None:
+        self.reset_calls = 0
+        self.close_calls = 0
+
+    def reset(self) -> None:
+        self.reset_calls += 1
 
     def close(self) -> None:
         self.close_calls += 1
@@ -135,7 +144,7 @@ def test_webshop_factory_creates_and_seeds_gym_environment(monkeypatch: pytest.M
 
 
 def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.MonkeyPatch) -> None:
-    environment = FakeWebShopEnvironment(reset_accepts_seed=False)
+    environment = LegacyWebShopEnvironment()
     gym_module = types.ModuleType("gym")
     gym_module.make = lambda _environment_id, **_kwargs: environment  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "gym", gym_module)
@@ -144,7 +153,7 @@ def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.
     result = factory(23)
 
     assert result is environment
-    assert environment.reset_seeds == [None]
+    assert environment.reset_calls == 1
 
 
 def test_webshop_factory_closes_environment_when_reset_fails(monkeypatch: pytest.MonkeyPatch) -> None:
