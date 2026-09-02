@@ -8,6 +8,7 @@ first-class, documented path to the real upstream environments.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import inspect
 import random
 import threading
 from typing import Any
@@ -130,14 +131,44 @@ def build_webshop_text_environment_factory(
         environment = gym.make(environment_id, **kwargs)
         reset = getattr(environment, "reset", None)
         if not callable(reset):
+            _close_if_supported(environment)
             raise TypeError("WebShop environment must expose reset()")
         try:
-            reset(seed=seed)
-        except TypeError:
-            reset()
+            _reset_with_seed(reset, seed)
+        except BaseException:
+            _close_if_supported(environment)
+            raise
         return environment
 
     return create_environment
+
+
+def _reset_with_seed(reset: Callable[..., Any], seed: int) -> Any:
+    """Reset an environment with a seed when its callable supports that keyword."""
+
+    try:
+        signature = inspect.signature(reset)
+    except (TypeError, ValueError):
+        return reset(seed=seed)
+
+    if "seed" in signature.parameters or any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    ):
+        return reset(seed=seed)
+    return reset()
+
+
+def _close_if_supported(environment: Any) -> None:
+    """Close an environment when cleanup is available, preserving the primary error."""
+
+    close = getattr(environment, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except BaseException:
+        return
 
 
 __all__ = [
