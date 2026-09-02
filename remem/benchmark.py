@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import sys
 from typing import Any
 
 from remem.environments.base import EnvironmentAdapter
@@ -239,7 +240,10 @@ class BenchmarkSuiteRunner:
                 reports.append(_build_episode_report(execution_result[0], execution_result[1]))
             finally:
                 if environment is not None:
-                    _close_environment(environment)
+                    _close_environment(
+                        environment,
+                        observation_collector=self.observation_collector,
+                    )
 
         return BenchmarkRunReport(
             benchmark_name=normalized_name,
@@ -355,9 +359,29 @@ def _build_episode_report(
     )
 
 
-def _close_environment(environment: EnvironmentAdapter) -> None:
-    """Close an adapter when its concrete implementation supports cleanup."""
+def _close_environment(
+    environment: EnvironmentAdapter,
+    *,
+    observation_collector: ObservationCollector | None,
+) -> None:
+    """Close an environment without masking a more important episode failure.
+
+    Cleanup failures are still surfaced when cleanup is the only failure. If an
+    episode already failed, the original exception remains the primary signal;
+    the cleanup failure is counted so infrastructure health is not silently
+    lost. This keeps benchmark diagnostics causal while preserving guaranteed
+    cleanup attempts.
+    """
 
     close = getattr(environment, "close", None)
-    if callable(close):
+    if not callable(close):
+        return
+
+    primary_exception = sys.exc_info()[1]
+    try:
         close()
+    except Exception:
+        if observation_collector is not None:
+            observation_collector.increment("benchmark.environment.close_failures")
+        if primary_exception is None:
+            raise
