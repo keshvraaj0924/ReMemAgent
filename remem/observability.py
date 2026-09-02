@@ -103,6 +103,16 @@ class ObservationCollector:
 
         return ObservationTimer(self, name)
 
+    def observed(self, name: str) -> ObservationOperation:
+        """Create an operation scope that records duration and outcome.
+
+        A normal context exit records ``<name>.succeeded``; an exception exit
+        records ``<name>.failed`` while preserving the exception for the caller.
+        The duration is recorded for both paths using a monotonic clock.
+        """
+
+        return ObservationOperation(self, name)
+
 
 class ObservationTimer:
     """Context manager for recording elapsed monotonic time."""
@@ -122,6 +132,28 @@ class ObservationTimer:
         if self._started_at is None:
             return
         self._collector.observe_duration(self._name, monotonic() - self._started_at)
+
+
+class ObservationOperation:
+    """Context manager for timing and outcome accounting of one operation."""
+
+    def __init__(self, collector: ObservationCollector, name: str) -> None:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("operation name must not be empty")
+        self._collector = collector
+        self._name = normalized_name
+        self._started_at: float | None = None
+
+    def __enter__(self) -> Self:
+        self._started_at = monotonic()
+        return self
+
+    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: object) -> None:
+        if self._started_at is None:
+            return
+        self._collector.observe_duration(self._name, monotonic() - self._started_at)
+        self._collector.record_outcome(self._name, succeeded=exc_type is None)
 
 
 def merge_observation_snapshots(
@@ -194,6 +226,7 @@ def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) 
 __all__ = [
     "ObservationCollector",
     "ObservationEvent",
+    "ObservationOperation",
     "ObservationSnapshot",
     "ObservationTimer",
     "merge_observation_snapshots",
