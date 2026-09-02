@@ -5,6 +5,7 @@ from pathlib import Path
 
 import experiments.benchmark_cli as benchmark_cli
 from experiments.external_benchmark import ExternalBenchmarkSpec
+from remem.environments import EnvironmentContractReport
 
 
 def test_parse_seeds_accepts_ordered_unique_integers() -> None:
@@ -67,6 +68,74 @@ def test_main_persists_statistics_for_repeated_runs(monkeypatch, tmp_path: Path)
     persisted = json.loads((tmp_path / "repeated.json").read_text(encoding="utf-8"))
     assert persisted["seeds"] == [1, 2]
     assert persisted["statistics"]["success_rate"]["mean"] == 0.5
+
+
+def test_main_runs_repeated_runtime_preflight_for_each_seed(monkeypatch) -> None:
+    arguments = type("Arguments", (), {
+        "benchmark": "alfworld",
+        "episodes": 1,
+        "max_steps": 2,
+        "seed": None,
+        "seeds": "3,5,7",
+        "environment_factory": "example:make_environment",
+        "policy_factory": "example:make_policy",
+        "action_policy_factory": None,
+        "minimum_trust": 0.0,
+        "success_evaluator": "example:is_success",
+        "transfer_success_evaluator": None,
+        "output": Path("unused.json"),
+        "repeated_runtime_preflight": True,
+        "probe_action": "look",
+        "manifest": None,
+    })()
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    captured: dict[str, object] = {}
+
+    def fake_preflight(spec: ExternalBenchmarkSpec, seeds: tuple[int, ...], *, probe_action: str | None):
+        captured["spec"] = spec
+        captured["seeds"] = seeds
+        captured["probe_action"] = probe_action
+        return (
+            EnvironmentContractReport(reset_result=None, step_result=None),
+            EnvironmentContractReport(reset_result=None, step_result=None),
+            EnvironmentContractReport(reset_result=None, step_result=None),
+        )
+
+    monkeypatch.setattr(benchmark_cli, "validate_repeated_external_benchmark_runtime", fake_preflight)
+
+    assert benchmark_cli.main() == 0
+    assert captured["seeds"] == (3, 5, 7)
+    assert captured["probe_action"] == "look"
+    assert captured["spec"].seed is None
+
+
+def test_main_repeated_runtime_preflight_requires_seed_list(monkeypatch) -> None:
+    arguments = type("Arguments", (), {
+        "benchmark": "webshop",
+        "episodes": 1,
+        "max_steps": 2,
+        "seed": 13,
+        "seeds": None,
+        "environment_factory": "example:make_environment",
+        "policy_factory": "example:make_policy",
+        "action_policy_factory": None,
+        "minimum_trust": 0.0,
+        "success_evaluator": "example:is_success",
+        "transfer_success_evaluator": None,
+        "output": Path("unused.json"),
+        "repeated_runtime_preflight": True,
+        "probe_action": None,
+        "manifest": None,
+    })()
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    try:
+        benchmark_cli.main()
+    except ValueError as exc:
+        assert "requires --seeds" in str(exc)
+    else:
+        raise AssertionError("repeated runtime preflight must require --seeds")
 
 
 def _report(seed: int, success: bool, reward: float):
