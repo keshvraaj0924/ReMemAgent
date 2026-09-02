@@ -18,6 +18,26 @@ Every probe environment is closed by the existing runtime-preflight lifecycle.
 Probe results are returned as `EnvironmentContractReport` values; they are not
 benchmark reports and must not be included as scientific measurements.
 
+## CLI entry point
+
+The same preflight is available without importing the experiment modules:
+
+```text
+python -m experiments.benchmark_cli \
+  --benchmark alfworld \
+  --episodes 1 \
+  --max-steps 1 \
+  --seeds 11,17,23 \
+  --environment-factory package.module:make_environment \
+  --policy-factory package.module:make_policy \
+  --success-evaluator package.module:is_success \
+  --repeated-runtime-preflight
+```
+
+Add `--probe-action` when the adapter requires a concrete action to exercise
+its normalized `step` contract. The command performs no measured episodes and
+writes no benchmark artifact.
+
 ## Intended launch order
 
 1. Resolve the configured callables with `validate_external_benchmark`.
