@@ -16,6 +16,9 @@ from remem.environments.base import StepResult
 from remem.memory.store import MemoryStore
 
 
+CLOSED_SEEDS: list[int] = []
+
+
 class FakeEnvironment:
     def __init__(self, seed: int) -> None:
         self.seed = seed
@@ -34,6 +37,7 @@ class FakeEnvironment:
 
     def close(self) -> None:
         self.closed = True
+        CLOSED_SEEDS.append(self.seed)
 
 
 def make_environment(seed: int) -> FakeEnvironment:
@@ -102,13 +106,18 @@ def test_validate_external_benchmark_rejects_unresolvable_callable() -> None:
 
 
 def test_validate_external_benchmark_runtime_probes_reset() -> None:
+    CLOSED_SEEDS.clear()
+
     report = validate_external_benchmark_runtime(_build_spec(seed=19))
 
     assert report.initial_observation == "seed-19"
     assert report.step_result is None
+    assert CLOSED_SEEDS == [19]
 
 
 def test_validate_external_benchmark_runtime_probes_one_step() -> None:
+    CLOSED_SEEDS.clear()
+
     report = validate_external_benchmark_runtime(_build_spec(seed=23), probe_action="look")
 
     assert report.initial_observation == "seed-23"
@@ -116,6 +125,17 @@ def test_validate_external_benchmark_runtime_probes_one_step() -> None:
     assert report.step_result.observation == "done"
     assert report.step_result.reward == 1.0
     assert report.step_result.done
+    assert CLOSED_SEEDS == [23]
+
+
+def test_validate_external_benchmark_runtime_closes_environment_when_policy_probe_fails() -> None:
+    CLOSED_SEEDS.clear()
+    spec = _build_spec(policy_factory="tests.test_external_benchmark:make_invalid_policy")
+
+    with pytest.raises(ValueError, match="non-empty string action"):
+        validate_external_benchmark_runtime(spec)
+
+    assert CLOSED_SEEDS == [7]
 
 
 def test_validate_external_benchmark_runtime_rejects_invalid_policy_action() -> None:
