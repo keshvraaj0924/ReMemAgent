@@ -224,6 +224,7 @@ class BenchmarkSuiteRunner:
             except Exception:
                 if self.observation_collector is not None:
                     self.observation_collector.record_outcome("benchmark.episodes", False)
+                    self.observation_collector.increment("benchmark.episodes.succeeded", 0.0)
                 raise
             else:
                 if self.observation_collector is not None:
