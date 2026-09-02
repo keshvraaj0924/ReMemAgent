@@ -16,10 +16,11 @@ from experiments.external_benchmark import (
     validate_external_benchmark,
     validate_external_benchmark_runtime,
 )
-from experiments.external_preflight import validate_repeated_external_benchmark_runtime
+from experiments.external_preflight import (
+    run_repeated_external_benchmarks_with_preflight,
+    validate_repeated_external_benchmark_runtime,
+)
 from experiments.runtime_provenance import collect_runtime_provenance
-from remem.integrations.loading import resolve_callable as load_callable
-from remem.integrations.loading import resolve_callable as load_typed_callable
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
@@ -64,6 +65,11 @@ def parse_args() -> argparse.Namespace:
         help="Run the runtime contract probe independently for every seed in --seeds",
     )
     parser.add_argument(
+        "--preflight-before-run",
+        action="store_true",
+        help="For repeated runs, preflight every seed before starting measured execution",
+    )
+    parser.add_argument(
         "--probe-action",
         help="Optional concrete action used by runtime preflight for one step probe",
     )
@@ -87,29 +93,24 @@ def main() -> int:
         seed=getattr(arguments, "seed", None),
     )
     if getattr(arguments, "preflight", False):
-        if getattr(arguments, "probe_action", None) is not None:
-            raise ValueError("--probe-action requires a runtime preflight")
-        if getattr(arguments, "manifest", None) is not None:
-            raise ValueError("--manifest requires a measured benchmark run")
+        _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
         validate_external_benchmark(spec)
         print("benchmark callable preflight succeeded")
         return 0
     if getattr(arguments, "repeated_runtime_preflight", False):
+        _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
         if getattr(arguments, "seeds", None) is None:
             raise ValueError("--repeated-runtime-preflight requires --seeds")
-        if getattr(arguments, "manifest", None) is not None:
-            raise ValueError("--manifest requires a measured benchmark run")
         seeds = _parse_seeds(arguments.seeds)
-        reports = validate_repeated_external_benchmark_runtime(
+        validate_repeated_external_benchmark_runtime(
             spec,
-            seeds,
+            seeds or (),
             probe_action=getattr(arguments, "probe_action", None),
         )
-        print(f"benchmark repeated runtime preflight succeeded ({len(reports)} seeds)")
+        print(f"benchmark repeated runtime preflight succeeded ({len(seeds or ())} seeds)")
         return 0
     if getattr(arguments, "runtime_preflight", False):
-        if getattr(arguments, "manifest", None) is not None:
-            raise ValueError("--manifest requires a measured benchmark run")
+        _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
         report = validate_external_benchmark_runtime(
             spec,
             probe_action=getattr(arguments, "probe_action", None),
@@ -117,13 +118,16 @@ def main() -> int:
         mode = "step" if report.step_result is not None else "reset"
         print(f"benchmark runtime preflight succeeded ({mode} probe)")
         return 0
-    if getattr(arguments, "probe_action", None) is not None:
-        raise ValueError("--probe-action requires a runtime preflight")
+
+    probe_action = getattr(arguments, "probe_action", None)
+    if probe_action is not None and not getattr(arguments, "preflight_before_run", False):
+        raise ValueError("--probe-action requires a runtime preflight or --preflight-before-run")
 
     runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
-
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
     if seeds is None:
+        if getattr(arguments, "preflight_before_run", False):
+            raise ValueError("--preflight-before-run requires --seeds")
         report = run_external_benchmark(spec)
         output_path = save_benchmark_report(
             report,
@@ -131,7 +135,14 @@ def main() -> int:
             runtime_provenance=runtime_provenance,
         )
     else:
-        reports = run_repeated_external_benchmarks(spec, seeds)
+        if getattr(arguments, "preflight_before_run", False):
+            reports = run_repeated_external_benchmarks_with_preflight(
+                spec,
+                seeds,
+                probe_action=probe_action,
+            )
+        else:
+            reports = run_repeated_external_benchmarks(spec, seeds)
         statistics = summarize_benchmark_reports(reports).to_dict()
         output_path = save_repeated_benchmark_reports(
             reports,
@@ -146,6 +157,20 @@ def main() -> int:
         print(f"saved benchmark artifact manifest: {manifest_output}")
     print(f"saved benchmark report: {output_path}")
     return 0
+
+
+def _reject_preflight_only_conflicts(
+    arguments: argparse.Namespace,
+    *,
+    manifest: bool,
+    before_run: bool,
+) -> None:
+    """Reject options that only make sense for measured execution."""
+
+    if manifest and getattr(arguments, "manifest", None) is not None:
+        raise ValueError("--manifest requires a measured benchmark run")
+    if before_run and getattr(arguments, "preflight_before_run", False):
+        raise ValueError("--preflight-before-run requires a measured repeated benchmark run")
 
 
 def _parse_seeds(value: str | None) -> tuple[int, ...] | None:
