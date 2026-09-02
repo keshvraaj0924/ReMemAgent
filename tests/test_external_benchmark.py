@@ -45,6 +45,11 @@ def make_policy(seed: int, store: MemoryStore):
     return lambda state: f"act-{seed}"
 
 
+def make_invalid_policy(seed: int, store: MemoryStore):
+    del seed, store
+    return lambda state: ""
+
+
 def evaluate_success(episode) -> bool:
     return episode.total_reward > 0
 
@@ -109,6 +114,13 @@ def test_validate_external_benchmark_runtime_probes_one_step() -> None:
     assert report.step_result.observation == "done"
     assert report.step_result.reward == 1.0
     assert report.step_result.done
+
+
+def test_validate_external_benchmark_runtime_rejects_invalid_policy_action() -> None:
+    spec = _build_spec(policy_factory="tests.test_external_benchmark:make_invalid_policy")
+
+    with pytest.raises(ValueError, match="non-empty string action"):
+        validate_external_benchmark_runtime(spec)
 
 
 def test_run_external_benchmark_passes_seed_to_factories() -> None:
