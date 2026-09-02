@@ -136,10 +136,10 @@ def validate_external_benchmark_runtime(
             store=MemoryStore(),
         )
     except Exception:
-        _close_preflight_environment(environment)
+        _close_preflight_environment(environment, suppress_errors=True)
         raise
     else:
-        _close_preflight_environment(environment)
+        _close_preflight_environment(environment, suppress_errors=False)
     return environment_report
 
 
@@ -235,12 +235,19 @@ def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     return cast(PolicyFactory, resolve_callable(spec.policy_factory))
 
 
-def _close_preflight_environment(environment: object) -> None:
-    """Close a preflight environment when it exposes a callable close method."""
+def _close_preflight_environment(environment: object, *, suppress_errors: bool) -> None:
+    """Close a preflight environment, optionally preserving a primary failure."""
 
     close = getattr(environment, "close", None)
-    if callable(close):
+    if not callable(close):
+        return
+    if not suppress_errors:
         close()
+        return
+    try:
+        close()
+    except Exception:
+        return
 
 
 def _validate_callable_specification(field_name: str, specification: str) -> None:
