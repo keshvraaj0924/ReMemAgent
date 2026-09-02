@@ -153,7 +153,9 @@ class BenchmarkSuiteRunner:
         policies remain fully supported and produce no transfer outcomes.
         When an :class:`ObservationCollector` is configured, the runner records
         suite and episode counters plus aggregate episode duration without
-        changing benchmark behavior.
+        changing benchmark behavior. Episode lifecycle failures are counted
+        explicitly before being re-raised so observability cannot hide failed
+        runs behind a missing completion counter.
 
         If ``seed`` is supplied, factories receive ``seed + episode_index`` as
         their episode seed. This gives externally owned benchmark integrations a
@@ -185,10 +187,12 @@ class BenchmarkSuiteRunner:
 
         for episode_index in range(episode_count):
             factory_seed = episode_index if seed is None else seed + episode_index
-            environment = environment_factory(factory_seed)
             if self.observation_collector is not None:
                 self.observation_collector.increment("benchmark.episodes.started")
+
+            environment: EnvironmentAdapter | None = None
             try:
+                environment = environment_factory(factory_seed)
                 if self.observation_collector is None:
                     execution_result = self._execute_episode(
                         environment,
@@ -216,21 +220,26 @@ class BenchmarkSuiteRunner:
                             reset_kwargs,
                             transfer_success_evaluator,
                         )
+            except Exception:
+                if self.observation_collector is not None:
+                    self.observation_collector.record_outcome("benchmark.episodes", False)
+                raise
+            else:
+                if self.observation_collector is not None:
+                    self.observation_collector.record_outcome("benchmark.episodes", True)
+                    self.observation_collector.increment("benchmark.episodes.completed")
+                    self.observation_collector.increment(
+                        "benchmark.transfers.attributed",
+                        float(len(execution_result[1])),
+                    )
+                    self.observation_collector.increment(
+                        "benchmark.episodes.successful",
+                        float(execution_result[0].episode_success),
+                    )
+                reports.append(_build_episode_report(execution_result[0], execution_result[1]))
             finally:
-                _close_environment(environment)
-
-            transfer_outcomes = execution_result[1]
-            if self.observation_collector is not None:
-                self.observation_collector.increment("benchmark.episodes.completed")
-                self.observation_collector.increment(
-                    "benchmark.transfers.attributed",
-                    float(len(transfer_outcomes)),
-                )
-                self.observation_collector.increment(
-                    "benchmark.episodes.successful",
-                    float(execution_result[0].episode_success),
-                )
-            reports.append(_build_episode_report(execution_result[0], transfer_outcomes))
+                if environment is not None:
+                    _close_environment(environment)
 
         return BenchmarkRunReport(
             benchmark_name=normalized_name,
