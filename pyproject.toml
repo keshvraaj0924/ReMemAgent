@@ -23,6 +23,7 @@ dev = [
 [project.scripts]
 remem-ablation = "experiments.cli:main"
 remem-benchmark = "experiments.benchmark_cli:main"
+remem-verify-benchmark = "experiments.verify_benchmark_artifact:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
