@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from remem.execution import Policy
 from remem.memory.pipeline import MemoryGuidancePipeline
@@ -11,6 +12,13 @@ from remem.memory.store import MemoryStore
 
 ActionPolicyFactory = Callable[[int], GuidedActionPolicy]
 MemoryGuidedPolicyFactory = Callable[[int, MemoryStore], Policy]
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyContractReport:
+    """Observed output from a policy contract probe."""
+
+    action: str
 
 
 def build_memory_guided_policy_factory(
@@ -47,8 +55,41 @@ def build_memory_guided_policy_factory(
     return create_policy
 
 
+def validate_policy_contract(
+    policy_factory: MemoryGuidedPolicyFactory,
+    *,
+    seed: int,
+    observation: str,
+    store: MemoryStore | None = None,
+) -> PolicyContractReport:
+    """Construct and probe a policy against one normalized observation.
+
+    The probe intentionally uses a caller-supplied observation and an isolated
+    memory store. This validates the same ``seed -> policy -> action`` contract
+    used by benchmark execution without coupling the integration layer to a
+    particular model SDK or checkpoint format.
+    """
+
+    if not isinstance(observation, str) or not observation.strip():
+        raise ValueError("observation must be a non-empty string")
+    if not callable(policy_factory):
+        raise TypeError("policy_factory must be callable")
+
+    selected_store = store if store is not None else MemoryStore()
+    policy = policy_factory(seed, selected_store)
+    if not callable(policy):
+        raise TypeError("policy_factory must return a callable policy")
+
+    action = policy(observation)
+    if not isinstance(action, str) or not action.strip():
+        raise ValueError("policy must return a non-empty string action")
+    return PolicyContractReport(action=action)
+
+
 __all__ = [
     "ActionPolicyFactory",
     "MemoryGuidedPolicyFactory",
+    "PolicyContractReport",
     "build_memory_guided_policy_factory",
+    "validate_policy_contract",
 ]
