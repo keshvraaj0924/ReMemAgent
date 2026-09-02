@@ -16,6 +16,7 @@ from experiments.external_benchmark import (
     validate_external_benchmark,
     validate_external_benchmark_runtime,
 )
+from experiments.external_preflight import validate_repeated_external_benchmark_runtime
 from experiments.runtime_provenance import collect_runtime_provenance
 from remem.integrations.loading import resolve_callable as load_callable
 from remem.integrations.loading import resolve_callable as load_typed_callable
@@ -57,9 +58,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Construct the configured environment and validate its normalized runtime contract",
     )
+    preflight_group.add_argument(
+        "--repeated-runtime-preflight",
+        action="store_true",
+        help="Run the runtime contract probe independently for every seed in --seeds",
+    )
     parser.add_argument(
         "--probe-action",
-        help="Optional concrete action used by --runtime-preflight for one step probe",
+        help="Optional concrete action used by runtime preflight for one step probe",
     )
     return parser.parse_args()
 
@@ -82,11 +88,24 @@ def main() -> int:
     )
     if getattr(arguments, "preflight", False):
         if getattr(arguments, "probe_action", None) is not None:
-            raise ValueError("--probe-action requires --runtime-preflight")
+            raise ValueError("--probe-action requires a runtime preflight")
         if getattr(arguments, "manifest", None) is not None:
             raise ValueError("--manifest requires a measured benchmark run")
         validate_external_benchmark(spec)
         print("benchmark callable preflight succeeded")
+        return 0
+    if getattr(arguments, "repeated_runtime_preflight", False):
+        if getattr(arguments, "seeds", None) is None:
+            raise ValueError("--repeated-runtime-preflight requires --seeds")
+        if getattr(arguments, "manifest", None) is not None:
+            raise ValueError("--manifest requires a measured benchmark run")
+        seeds = _parse_seeds(arguments.seeds)
+        reports = validate_repeated_external_benchmark_runtime(
+            spec,
+            seeds,
+            probe_action=getattr(arguments, "probe_action", None),
+        )
+        print(f"benchmark repeated runtime preflight succeeded ({len(reports)} seeds)")
         return 0
     if getattr(arguments, "runtime_preflight", False):
         if getattr(arguments, "manifest", None) is not None:
@@ -99,7 +118,7 @@ def main() -> int:
         print(f"benchmark runtime preflight succeeded ({mode} probe)")
         return 0
     if getattr(arguments, "probe_action", None) is not None:
-        raise ValueError("--probe-action requires --runtime-preflight")
+        raise ValueError("--probe-action requires a runtime preflight")
 
     runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
 
