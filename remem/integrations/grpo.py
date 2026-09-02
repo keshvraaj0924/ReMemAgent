@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from math import sqrt
+from math import isfinite, sqrt
 
 from remem.execution import EpisodeResult
 from remem.memory.policy import MemoryGuidanceDecision
@@ -30,6 +30,20 @@ class GrpoSample:
     reward: float
     group_id: str
     memory_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        """Reject malformed training fields before they reach dataset storage."""
+
+        if not self.prompt.strip():
+            raise ValueError("prompt must be a non-empty string")
+        if not self.completion.strip():
+            raise ValueError("completion must be a non-empty string")
+        if not self.group_id.strip():
+            raise ValueError("group_id must be a non-empty string")
+        if not isfinite(self.reward):
+            raise ValueError("reward must be finite")
+        if any(not memory_id.strip() for memory_id in self.memory_ids):
+            raise ValueError("memory_ids must contain only non-empty strings")
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-compatible representation for dataset writers."""
@@ -51,12 +65,14 @@ class GrpoBatch:
     advantages: tuple[float, ...]
 
     def __post_init__(self) -> None:
-        """Validate that every training sample has exactly one advantage."""
+        """Validate that every training sample has exactly one finite advantage."""
 
         if len(self.samples) != len(self.advantages):
             raise ValueError("samples and advantages must have equal lengths")
         if not self.samples:
             raise ValueError("GRPO batches must contain at least one sample")
+        if any(not isfinite(advantage) for advantage in self.advantages):
+            raise ValueError("advantages must be finite")
 
     def to_dicts(self) -> tuple[dict[str, object], ...]:
         """Return ordered rows suitable for a framework-specific dataset writer."""
