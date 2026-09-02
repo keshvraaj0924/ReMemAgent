@@ -18,6 +18,7 @@ from experiments.external_benchmark import (
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 from remem.integrations.loading import resolve_callable as load_callable
+from remem.integrations.loading import resolve_callable as load_typed_callable
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
