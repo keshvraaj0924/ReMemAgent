@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from experiments.benchmark_manifest import save_benchmark_artifact_manifest
 from experiments.benchmark_report import save_benchmark_report, save_repeated_benchmark_reports
 from experiments.benchmark_statistics import summarize_benchmark_reports
 from experiments.external_benchmark import (
@@ -37,6 +38,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--success-evaluator", required=True)
     parser.add_argument("--transfer-success-evaluator")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Optional path for the exact-byte benchmark artifact integrity manifest",
+    )
     preflight_group = parser.add_mutually_exclusive_group()
     preflight_group.add_argument(
         "--preflight",
@@ -74,10 +80,14 @@ def main() -> int:
     if getattr(arguments, "preflight", False):
         if getattr(arguments, "probe_action", None) is not None:
             raise ValueError("--probe-action requires --runtime-preflight")
+        if getattr(arguments, "manifest", None) is not None:
+            raise ValueError("--manifest requires a measured benchmark run")
         validate_external_benchmark(spec)
         print("benchmark callable preflight succeeded")
         return 0
     if getattr(arguments, "runtime_preflight", False):
+        if getattr(arguments, "manifest", None) is not None:
+            raise ValueError("--manifest requires a measured benchmark run")
         report = validate_external_benchmark_runtime(
             spec,
             probe_action=getattr(arguments, "probe_action", None),
@@ -107,6 +117,11 @@ def main() -> int:
             runtime_provenance=runtime_provenance,
             statistics=statistics,
         )
+
+    manifest_path = getattr(arguments, "manifest", None)
+    if manifest_path is not None:
+        manifest_output = save_benchmark_artifact_manifest(output_path, manifest_path)
+        print(f"saved benchmark artifact manifest: {manifest_output}")
     print(f"saved benchmark report: {output_path}")
     return 0
 

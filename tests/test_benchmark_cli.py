@@ -8,10 +8,8 @@ from experiments.external_benchmark import ExternalBenchmarkSpec
 from remem.environments import EnvironmentContractReport
 
 
-def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Path) -> None:
-    report = object()
-    output_path = tmp_path / "report.json"
-    arguments = Namespace(
+def _base_arguments(tmp_path: Path) -> Namespace:
+    return Namespace(
         benchmark="webshop-eval",
         episodes=3,
         max_steps=7,
@@ -22,8 +20,18 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
         minimum_trust=0.25,
         success_evaluator="example:is_success",
         transfer_success_evaluator="example:is_transfer_success",
-        output=output_path,
+        output=tmp_path / "report.json",
+        manifest=None,
+        preflight=False,
+        runtime_preflight=False,
+        probe_action=None,
+        seeds=None,
     )
+
+
+def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Path) -> None:
+    report = object()
+    arguments = _base_arguments(tmp_path)
     captured: dict[str, ExternalBenchmarkSpec] = {}
     captured_provenance: dict[str, str] = {}
 
@@ -63,19 +71,14 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
 
 def test_main_builds_memory_guided_spec(monkeypatch, tmp_path: Path) -> None:
     report = object()
-    arguments = Namespace(
-        benchmark="alfworld-eval",
-        episodes=2,
-        max_steps=5,
-        seed=9,
-        environment_factory="example:make_environment",
-        policy_factory=None,
-        action_policy_factory="model_policy:make_action_policy",
-        minimum_trust=0.8,
-        success_evaluator="example:is_success",
-        transfer_success_evaluator=None,
-        output=tmp_path / "report.json",
-    )
+    arguments = _base_arguments(tmp_path)
+    arguments.benchmark = "alfworld-eval"
+    arguments.episodes = 2
+    arguments.max_steps = 5
+    arguments.seed = 9
+    arguments.policy_factory = None
+    arguments.action_policy_factory = "model_policy:make_action_policy"
+    arguments.minimum_trust = 0.8
     captured: dict[str, ExternalBenchmarkSpec] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
@@ -94,22 +97,12 @@ def test_main_builds_memory_guided_spec(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_main_runtime_preflight_uses_configured_seed_and_probe_action(monkeypatch) -> None:
-    arguments = Namespace(
-        benchmark="webshop-eval",
-        episodes=1,
-        max_steps=3,
-        seed=17,
-        environment_factory="example:make_environment",
-        policy_factory="example:make_policy",
-        action_policy_factory=None,
-        minimum_trust=0.2,
-        success_evaluator="example:is_success",
-        transfer_success_evaluator=None,
-        output=Path("unused.json"),
-        preflight=False,
-        runtime_preflight=True,
-        probe_action="look",
-    )
+    arguments = _base_arguments(Path("unused"))
+    arguments.episodes = 1
+    arguments.max_steps = 3
+    arguments.seed = 17
+    arguments.runtime_preflight = True
+    arguments.probe_action = "look"
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
@@ -128,25 +121,48 @@ def test_main_runtime_preflight_uses_configured_seed_and_probe_action(monkeypatc
 
 
 def test_main_rejects_probe_action_without_runtime_preflight(monkeypatch) -> None:
-    arguments = Namespace(
-        benchmark="webshop-eval",
-        episodes=1,
-        max_steps=3,
-        seed=17,
-        environment_factory="example:make_environment",
-        policy_factory="example:make_policy",
-        action_policy_factory=None,
-        minimum_trust=0.2,
-        success_evaluator="example:is_success",
-        transfer_success_evaluator=None,
-        output=Path("unused.json"),
-        preflight=False,
-        runtime_preflight=False,
-        probe_action="look",
-    )
+    arguments = _base_arguments(Path("unused"))
+    arguments.probe_action = "look"
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
     import pytest
 
     with pytest.raises(ValueError, match="--probe-action requires --runtime-preflight"):
+        benchmark_cli.main()
+
+
+def test_main_persists_requested_benchmark_manifest(monkeypatch, tmp_path: Path) -> None:
+    arguments = _base_arguments(tmp_path)
+    manifest_path = tmp_path / "report.manifest.json"
+    arguments.manifest = manifest_path
+    report = object()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", lambda spec: report)
+    monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
+
+    def save_manifest(report_path: Path, requested_path: Path) -> Path:
+        captured["report_path"] = report_path
+        captured["manifest_path"] = requested_path
+        return requested_path
+
+    monkeypatch.setattr(benchmark_cli, "save_benchmark_artifact_manifest", save_manifest)
+
+    assert benchmark_cli.main() == 0
+    assert captured == {
+        "report_path": arguments.output,
+        "manifest_path": manifest_path,
+    }
+
+
+def test_main_rejects_manifest_during_preflight(monkeypatch) -> None:
+    arguments = _base_arguments(Path("unused"))
+    arguments.preflight = True
+    arguments.manifest = Path("manifest.json")
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    import pytest
+
+    with pytest.raises(ValueError, match="--manifest requires a measured benchmark run"):
         benchmark_cli.main()

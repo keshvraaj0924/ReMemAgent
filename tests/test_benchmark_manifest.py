@@ -6,6 +6,8 @@ import pytest
 from experiments.benchmark_manifest import (
     BenchmarkArtifactManifest,
     build_benchmark_artifact_manifest,
+    load_benchmark_artifact_manifest,
+    save_benchmark_artifact_manifest,
     verify_benchmark_artifact,
 )
 
@@ -63,3 +65,26 @@ def test_verify_benchmark_artifact_rejects_wrong_manifest(tmp_path: Path) -> Non
 
     with pytest.raises(ValueError, match="integrity verification failed"):
         verify_benchmark_artifact(report_path, manifest)
+
+
+def test_save_and_load_benchmark_artifact_manifest_round_trip(tmp_path: Path) -> None:
+    report_path = tmp_path / "report.json"
+    manifest_path = tmp_path / "integrity" / "report.manifest.json"
+    _write_valid_report(report_path)
+
+    saved_path = save_benchmark_artifact_manifest(report_path, manifest_path)
+    loaded_manifest = load_benchmark_artifact_manifest(saved_path)
+
+    assert saved_path == manifest_path
+    verify_benchmark_artifact(report_path, loaded_manifest)
+
+
+def test_load_benchmark_artifact_manifest_rejects_unsupported_schema(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps({"manifest_schema_version": 999}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unsupported benchmark artifact manifest schema version"):
+        load_benchmark_artifact_manifest(manifest_path)
