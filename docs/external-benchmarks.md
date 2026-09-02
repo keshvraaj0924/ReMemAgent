@@ -41,6 +41,8 @@ remem-benchmark \
 
 A successful preflight verifies import paths and callable types only. It does not verify that the external environment can execute a reset/step cycle, that a checkpoint is loadable, or that the model produces valid actions. Those checks require the real dependencies and are intentionally left to the measured run.
 
+The stronger `--runtime-preflight` path constructs the real environment and probes its reset contract. When a probe action is supplied, it also validates one real normalized step and constructs the configured policy against the observed reset text. The probe is closed before the command returns and is never included in benchmark measurements.
+
 ## Command-line execution
 
 The `remem-benchmark` entry point accepts the same explicit callable specifications:
@@ -58,6 +60,10 @@ remem-benchmark \
 ```
 
 The CLI does not install benchmark packages or create model checkpoints. Those dependencies remain owned by the experiment environment.
+
+## Factory lifecycle guarantees
+
+The concrete WebShop factory validates and seeds the environment immediately after `gym.make`. If reset fails, the newly created environment is closed before the original reset exception is re-raised. If an older Gym-compatible environment exposes `reset()` without a `seed` keyword, the factory detects that signature and calls the legacy reset form rather than catching and masking arbitrary `TypeError` exceptions raised from inside reset.
 
 ## Current boundary
 
