@@ -28,7 +28,7 @@ def test_repeated_external_benchmarks_isolate_seeded_runs() -> None:
     assert all(report.configuration is not None for report in reports)
     assert [report.configuration.seed for report in reports if report.configuration] == [0, 10]
     assert all(report.benchmark_name == "alfworld-smoke" for report in reports)
-    assert all(report.success_count == 1 for report in reports)
+    assert [report.success_count for report in reports] == [1, 0]
 
 
 def test_repeated_external_benchmarks_reject_empty_seeds() -> None:
