@@ -47,6 +47,23 @@ def test_invalid_events_are_rejected() -> None:
         collector.observe_duration("invalid", -1.0)
 
 
+def test_record_outcome_tracks_mutually_exclusive_results() -> None:
+    collector = ObservationCollector()
+
+    collector.record_outcome("benchmark.episode", True)
+    collector.record_outcome("benchmark.episode", False)
+
+    assert collector.snapshot().counters == {
+        "benchmark.episode.failed": 1.0,
+        "benchmark.episode.succeeded": 1.0,
+    }
+
+
+def test_record_outcome_rejects_empty_name() -> None:
+    with pytest.raises(ValueError, match="outcome name"):
+        ObservationCollector().record_outcome("   ", True)
+
+
 def test_merge_observation_snapshots_adds_workers_without_mutating_inputs() -> None:
     first = ObservationSnapshot(
         counters={"retrieval.calls": 2.0},
