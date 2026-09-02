@@ -8,13 +8,18 @@ from experiments.benchmark_manifest import (
     build_benchmark_artifact_manifest,
     verify_benchmark_artifact,
 )
-from experiments.benchmark_report import save_benchmark_report
-from tests.test_benchmark_report import _build_report
+
+
+def _write_valid_report(path: Path) -> None:
+    path.write_text(
+        json.dumps({"schema_version": 1, "benchmark_name": "test"}, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def test_build_benchmark_artifact_manifest_hashes_serialized_report(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
-    save_benchmark_report(_build_report(seed=17), report_path)
+    _write_valid_report(report_path)
 
     manifest = build_benchmark_artifact_manifest(report_path)
 
@@ -25,7 +30,7 @@ def test_build_benchmark_artifact_manifest_hashes_serialized_report(tmp_path: Pa
 
 def test_verify_benchmark_artifact_accepts_unchanged_report(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
-    save_benchmark_report(_build_report(seed=17), report_path)
+    _write_valid_report(report_path)
     manifest = build_benchmark_artifact_manifest(report_path)
 
     verify_benchmark_artifact(report_path, manifest)
@@ -33,7 +38,7 @@ def test_verify_benchmark_artifact_accepts_unchanged_report(tmp_path: Path) -> N
 
 def test_verify_benchmark_artifact_rejects_mutated_report(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
-    save_benchmark_report(_build_report(seed=17), report_path)
+    _write_valid_report(report_path)
     manifest = build_benchmark_artifact_manifest(report_path)
     payload = json.loads(report_path.read_text(encoding="utf-8"))
     payload["seed"] = 18
@@ -53,7 +58,7 @@ def test_build_benchmark_artifact_manifest_rejects_invalid_schema(tmp_path: Path
 
 def test_verify_benchmark_artifact_rejects_wrong_manifest(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
-    save_benchmark_report(_build_report(seed=17), report_path)
+    _write_valid_report(report_path)
     manifest = BenchmarkArtifactManifest(schema_version=1, byte_count=0, sha256="0" * 64)
 
     with pytest.raises(ValueError, match="integrity verification failed"):
