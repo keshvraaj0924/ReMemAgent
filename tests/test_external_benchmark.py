@@ -40,8 +40,18 @@ class FakeEnvironment:
         CLOSED_SEEDS.append(self.seed)
 
 
+class BrokenCloseEnvironment(FakeEnvironment):
+    def close(self) -> None:
+        CLOSED_SEEDS.append(self.seed)
+        raise RuntimeError("close failed")
+
+
 def make_environment(seed: int) -> FakeEnvironment:
     return FakeEnvironment(seed)
+
+
+def make_broken_close_environment(seed: int) -> BrokenCloseEnvironment:
+    return BrokenCloseEnvironment(seed)
 
 
 def make_policy(seed: int, store: MemoryStore):
@@ -131,6 +141,19 @@ def test_validate_external_benchmark_runtime_probes_one_step() -> None:
 def test_validate_external_benchmark_runtime_closes_environment_when_policy_probe_fails() -> None:
     CLOSED_SEEDS.clear()
     spec = _build_spec(policy_factory="tests.test_external_benchmark:make_invalid_policy")
+
+    with pytest.raises(ValueError, match="non-empty string action"):
+        validate_external_benchmark_runtime(spec)
+
+    assert CLOSED_SEEDS == [7]
+
+
+def test_validate_external_benchmark_runtime_preserves_probe_failure_when_close_fails() -> None:
+    CLOSED_SEEDS.clear()
+    spec = _build_spec(
+        environment_factory="tests.test_external_benchmark:make_broken_close_environment",
+        policy_factory="tests.test_external_benchmark:make_invalid_policy",
+    )
 
     with pytest.raises(ValueError, match="non-empty string action"):
         validate_external_benchmark_runtime(spec)
