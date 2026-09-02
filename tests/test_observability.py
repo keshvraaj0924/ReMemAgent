@@ -34,6 +34,34 @@ def test_duration_context_records_elapsed_time() -> None:
     assert snapshot.durations_seconds["routing.seconds"] >= 0.0
 
 
+def test_observed_scope_records_success_and_duration() -> None:
+    collector = ObservationCollector()
+
+    with collector.observed("retrieval"):
+        pass
+
+    snapshot = collector.snapshot()
+    assert snapshot.counters == {"retrieval.succeeded": 1.0}
+    assert snapshot.durations_seconds["retrieval"] >= 0.0
+
+
+def test_observed_scope_records_failure_and_preserves_exception() -> None:
+    collector = ObservationCollector()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with collector.observed("policy"):
+            raise RuntimeError("boom")
+
+    snapshot = collector.snapshot()
+    assert snapshot.counters == {"policy.failed": 1.0}
+    assert snapshot.durations_seconds["policy"] >= 0.0
+
+
+def test_observed_scope_rejects_empty_name() -> None:
+    with pytest.raises(ValueError, match="operation name"):
+        ObservationCollector().observed("   ")
+
+
 def test_invalid_events_are_rejected() -> None:
     collector = ObservationCollector()
 
