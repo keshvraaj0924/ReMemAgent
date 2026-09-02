@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import isfinite, sqrt
 
 from remem.execution import EpisodeResult
@@ -34,15 +34,17 @@ class GrpoSample:
     def __post_init__(self) -> None:
         """Reject malformed training fields before they reach dataset storage."""
 
-        if not self.prompt.strip():
+        if not isinstance(self.prompt, str) or not self.prompt.strip():
             raise ValueError("prompt must be a non-empty string")
-        if not self.completion.strip():
+        if not isinstance(self.completion, str) or not self.completion.strip():
             raise ValueError("completion must be a non-empty string")
-        if not self.group_id.strip():
+        if not isinstance(self.group_id, str) or not self.group_id.strip():
             raise ValueError("group_id must be a non-empty string")
         if not isfinite(self.reward):
             raise ValueError("reward must be finite")
-        if any(not memory_id.strip() for memory_id in self.memory_ids):
+        if not isinstance(self.memory_ids, tuple):
+            raise TypeError("memory_ids must be a tuple of strings")
+        if any(not isinstance(memory_id, str) or not memory_id.strip() for memory_id in self.memory_ids):
             raise ValueError("memory_ids must contain only non-empty strings")
 
     def to_dict(self) -> dict[str, object]:

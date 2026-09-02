@@ -45,6 +45,39 @@ def test_grpo_batch_validation_rejects_empty_samples() -> None:
         build_grpo_batch(())
 
 
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("prompt", None),
+        ("completion", None),
+        ("group_id", None),
+    ),
+)
+def test_grpo_sample_rejects_non_string_text_fields(field_name: str, value: object) -> None:
+    fields: dict[str, object] = {
+        "prompt": "task",
+        "completion": "finish",
+        "reward": 1.0,
+        "group_id": "group",
+        "memory_ids": (),
+    }
+    fields[field_name] = value
+
+    with pytest.raises(ValueError, match="non-empty string"):
+        GrpoSample(**fields)  # type: ignore[arg-type]
+
+
+def test_grpo_sample_rejects_non_tuple_memory_ids() -> None:
+    with pytest.raises(TypeError, match="tuple of strings"):
+        GrpoSample(
+            prompt="task",
+            completion="finish",
+            reward=1.0,
+            group_id="group",
+            memory_ids=["memory-1"],  # type: ignore[arg-type]
+        )
+
+
 def test_episode_fixture_remains_compatible_with_sample_contract() -> None:
     episode = EpisodeResult(
         initial_observation="task",
