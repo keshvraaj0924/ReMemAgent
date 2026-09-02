@@ -27,6 +27,11 @@ class FakeEnvironment:
         self.closed = True
 
 
+class FailingEnvironment(FakeEnvironment):
+    def step(self, action: str) -> StepResult:
+        raise RuntimeError("step failed")
+
+
 def test_benchmark_runner_shares_memory_store_and_closes_environments() -> None:
     environments: list[FakeEnvironment] = []
     seen_memory_counts: list[int] = []
@@ -75,9 +80,65 @@ def test_benchmark_runner_records_observability_counters_and_duration() -> None:
     assert snapshot.counters["benchmark.runs"] == 1.0
     assert snapshot.counters["benchmark.episodes.started"] == 2.0
     assert snapshot.counters["benchmark.episodes.completed"] == 2.0
+    assert snapshot.counters["benchmark.episodes.succeeded"] == 2.0
+    assert snapshot.counters.get("benchmark.episodes.failed", 0.0) == 0.0
     assert snapshot.counters["benchmark.episodes.successful"] == 2.0
     assert snapshot.counters["benchmark.transfers.attributed"] == 0.0
     assert snapshot.durations_seconds["benchmark.episode.duration_seconds"] >= 0.0
+
+
+def test_benchmark_runner_records_episode_failure_and_closes_environment() -> None:
+    collector = ObservationCollector()
+    environment = FailingEnvironment(0)
+
+    def environment_factory(index: int) -> FailingEnvironment:
+        return environment
+
+    try:
+        BenchmarkSuiteRunner(observation_collector=collector).run(
+            benchmark_name="failure-smoke",
+            episode_count=1,
+            max_steps=1,
+            environment_factory=environment_factory,
+            policy_factory=lambda index, store: lambda state: "act",
+            success_evaluator=lambda episode: True,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "step failed"
+    else:
+        raise AssertionError("episode failure should be propagated")
+
+    snapshot = collector.snapshot()
+    assert snapshot.counters["benchmark.episodes.started"] == 1.0
+    assert snapshot.counters["benchmark.episodes.succeeded"] == 0.0
+    assert snapshot.counters["benchmark.episodes.failed"] == 1.0
+    assert snapshot.counters.get("benchmark.episodes.completed", 0.0) == 0.0
+    assert environment.closed
+
+
+def test_benchmark_runner_records_factory_failure() -> None:
+    collector = ObservationCollector()
+
+    def environment_factory(index: int) -> FakeEnvironment:
+        raise RuntimeError("factory failed")
+
+    try:
+        BenchmarkSuiteRunner(observation_collector=collector).run(
+            benchmark_name="factory-failure-smoke",
+            episode_count=1,
+            max_steps=1,
+            environment_factory=environment_factory,
+            policy_factory=lambda index, store: lambda state: "act",
+            success_evaluator=lambda episode: True,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "factory failed"
+    else:
+        raise AssertionError("factory failure should be propagated")
+
+    snapshot = collector.snapshot()
+    assert snapshot.counters["benchmark.episodes.started"] == 1.0
+    assert snapshot.counters["benchmark.episodes.failed"] == 1.0
 
 
 def test_benchmark_runner_allows_zero_episodes() -> None:
