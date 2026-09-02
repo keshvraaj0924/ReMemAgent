@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Mapping
@@ -139,10 +141,39 @@ def _without_seed(
 
 
 def _write_json(payload: Mapping[str, Any], output_path: Path) -> None:
-    """Write a JSON payload using deterministic serialization settings."""
+    """Atomically write deterministic JSON, replacing the destination only on success."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
-        encoding="utf-8",
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{output_path.name}.",
+        suffix=".tmp",
+        dir=output_path.parent,
     )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(payload, indent=2, sort_keys=True, allow_nan=False))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, output_path)
+        _fsync_directory(output_path.parent)
+    except BaseException:
+        try:
+            temporary_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Flush directory metadata when supported by the current platform."""
+
+    try:
+        directory_descriptor = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(directory_descriptor)
+    finally:
+        os.close(directory_descriptor)

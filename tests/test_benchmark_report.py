@@ -157,6 +157,17 @@ def test_save_benchmark_report_writes_json(tmp_path) -> None:
     assert persisted["episodes"][0]["transfer_outcomes"] == []
 
 
+def test_save_benchmark_report_atomically_replaces_existing_output(tmp_path) -> None:
+    output_path = tmp_path / "report.json"
+    output_path.write_text("stale artifact\n", encoding="utf-8")
+
+    save_benchmark_report(_build_report(seed=23), output_path)
+
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["seed"] == 23
+    assert not tuple(tmp_path.glob(".report.json.*.tmp"))
+
+
 def test_save_benchmark_report_includes_runtime_provenance(tmp_path) -> None:
     output_path = save_benchmark_report(
         _build_report(),
