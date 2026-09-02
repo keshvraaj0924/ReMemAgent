@@ -47,3 +47,13 @@ def test_repeated_runtime_preflight_rejects_empty_seed_sequence() -> None:
 def test_repeated_runtime_preflight_rejects_duplicate_seeds() -> None:
     with pytest.raises(ValueError, match="unique"):
         validate_repeated_external_benchmark_runtime(_build_spec(), [7, 7])
+
+
+def test_repeated_runtime_preflight_rejects_non_integer_seed() -> None:
+    with pytest.raises(TypeError, match="only integers"):
+        validate_repeated_external_benchmark_runtime(_build_spec(), [7, "11"])  # type: ignore[list-item]
+
+
+def test_repeated_runtime_preflight_rejects_boolean_seed() -> None:
+    with pytest.raises(TypeError, match="only integers"):
+        validate_repeated_external_benchmark_runtime(_build_spec(), [True])  # type: ignore[list-item]
