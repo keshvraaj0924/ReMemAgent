@@ -66,11 +66,13 @@ def run_repeated_external_benchmarks_with_preflight(
 
 
 def _validate_seed_sequence(seeds: Sequence[int]) -> tuple[int, ...]:
-    """Normalize and validate an independent seed sequence."""
+    """Normalize and validate an independent integer seed sequence."""
 
     selected_seeds = tuple(seeds)
     if not selected_seeds:
         raise ValueError("seeds must contain at least one seed")
+    if any(isinstance(seed, bool) or not isinstance(seed, int) for seed in selected_seeds):
+        raise TypeError("seeds must contain only integers")
     if len(selected_seeds) != len(set(selected_seeds)):
         raise ValueError("seeds must be unique")
     return selected_seeds
