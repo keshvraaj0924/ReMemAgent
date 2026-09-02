@@ -17,4 +17,4 @@ It verifies:
 
 The validator deliberately does **not** evaluate scientific quality, statistical significance, benchmark validity, or model effectiveness. Those require actual experimental execution and separate analysis.
 
-The function is intentionally side-effect free and raises `ValueError` on structural corruption. This makes it suitable as a publication or serialization boundary without coupling the research core to a filesystem format or external benchmark package.
+The function is intentionally side-effect free and raises `ValueError` on structural corruption. The benchmark serializer now invokes this validator before converting a report to a persisted payload, and repeated-report persistence validates every constituent run before aggregation. This makes invalid in-memory reports fail closed at the artifact boundary instead of allowing malformed results to be written and discovered later.
