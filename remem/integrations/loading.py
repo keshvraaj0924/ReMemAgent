@@ -19,8 +19,6 @@ def resolve_callable(specification: str) -> Callable[..., Any]:
     module = importlib.import_module(module_name)
     value: Any = module
     for attribute_name in attribute_path.split("."):
-        if not attribute_name.strip():
-            raise ValueError(f"invalid callable specification: {specification!r}")
         try:
             value = getattr(value, attribute_name)
         except AttributeError as exc:
@@ -35,6 +33,12 @@ def split_callable_specification(specification: str) -> tuple[str, str]:
     """Validate and split explicit ``module:attribute`` callable notation."""
 
     module_name, separator, attribute_path = specification.partition(":")
-    if not separator or not module_name.strip() or not attribute_path.strip():
+    attribute_parts = attribute_path.strip().split(".") if attribute_path.strip() else []
+    if (
+        not separator
+        or not module_name.strip()
+        or not attribute_path.strip()
+        or any(not part.strip() for part in attribute_parts)
+    ):
         raise ValueError(f"invalid callable specification: {specification!r}")
     return module_name.strip(), attribute_path.strip()
