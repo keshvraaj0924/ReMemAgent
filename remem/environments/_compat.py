@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from remem.environments.base import StepResult
+
 
 def normalize_reset(result: Any) -> str:
     """Normalize reset output from legacy and Gymnasium-style environments."""
@@ -16,8 +18,17 @@ def normalize_reset(result: Any) -> str:
     return str(observation)
 
 
-def normalize_step(result: Iterable[Any]) -> tuple[str, float, bool, bool, dict[str, Any]]:
-    """Normalize four- or five-field step results into one stable representation."""
+def normalize_step(result: Iterable[Any] | StepResult) -> tuple[str, float, bool, bool, dict[str, Any]]:
+    """Normalize native or four-/five-field step results into one stable representation."""
+
+    if isinstance(result, StepResult):
+        return (
+            result.observation,
+            result.reward,
+            result.terminated,
+            result.truncated,
+            dict(result.info),
+        )
 
     values = tuple(result)
     if len(values) == 5:
