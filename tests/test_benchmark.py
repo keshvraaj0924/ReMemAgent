@@ -32,6 +32,18 @@ class FailingEnvironment(FakeEnvironment):
         raise RuntimeError("step failed")
 
 
+class CloseFailingEnvironment(FakeEnvironment):
+    def close(self) -> None:
+        self.closed = True
+        raise RuntimeError("close failed")
+
+
+class StepAndCloseFailingEnvironment(FailingEnvironment):
+    def close(self) -> None:
+        self.closed = True
+        raise RuntimeError("close failed")
+
+
 def test_benchmark_runner_shares_memory_store_and_closes_environments() -> None:
     environments: list[FakeEnvironment] = []
     seen_memory_counts: list[int] = []
@@ -227,3 +239,46 @@ def test_benchmark_runner_accepts_matching_provenance_configuration() -> None:
     )
 
     assert report.configuration == configuration
+
+
+def test_benchmark_runner_surfaces_cleanup_failure_when_episode_succeeds() -> None:
+    collector = ObservationCollector()
+
+    try:
+        BenchmarkSuiteRunner(observation_collector=collector).run(
+            benchmark_name="cleanup-failure-smoke",
+            episode_count=1,
+            max_steps=1,
+            environment_factory=lambda index: CloseFailingEnvironment(index),
+            policy_factory=lambda index, store: lambda state: "act",
+            success_evaluator=lambda episode: True,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "close failed"
+    else:
+        raise AssertionError("cleanup failure should fail a successful run")
+
+    snapshot = collector.snapshot()
+    assert snapshot.counters["benchmark.environment.close_failures"] == 1.0
+
+
+def test_benchmark_runner_does_not_mask_episode_failure_with_cleanup_failure() -> None:
+    collector = ObservationCollector()
+
+    try:
+        BenchmarkSuiteRunner(observation_collector=collector).run(
+            benchmark_name="dual-failure-smoke",
+            episode_count=1,
+            max_steps=1,
+            environment_factory=lambda index: StepAndCloseFailingEnvironment(index),
+            policy_factory=lambda index, store: lambda state: "act",
+            success_evaluator=lambda episode: True,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "step failed"
+    else:
+        raise AssertionError("episode failure should remain the primary exception")
+
+    snapshot = collector.snapshot()
+    assert snapshot.counters["benchmark.episodes.failed"] == 1.0
+    assert snapshot.counters["benchmark.environment.close_failures"] == 1.0
