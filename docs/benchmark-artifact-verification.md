@@ -4,10 +4,11 @@ ReMemAgent can persist an exact-byte SHA-256 manifest beside a benchmark report.
 
 ## Verify an artifact offline
 
-After a measured run has produced `artifacts/benchmark.json` and its sidecar manifest:
+After a measured run has produced `artifacts/benchmark.json` and its sidecar manifest, use either the module form or the installed console command:
 
 ```text
 python -m experiments.verify_benchmark_artifact artifacts/benchmark.json
+remem-verify-benchmark artifacts/benchmark.json
 ```
 
 The verifier derives the conventional sidecar path:
