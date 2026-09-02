@@ -112,6 +112,8 @@ def validate_external_benchmark_runtime(
 
     Runtime preflight can therefore load a real checkpoint when the caller's
     policy factory does so, but it never records the probe as benchmark data.
+    The constructed environment is always closed after probing. If probing
+    fails, cleanup is attempted without replacing the original exception.
     """
 
     validate_external_benchmark(spec)
@@ -120,17 +122,24 @@ def validate_external_benchmark_runtime(
         spec.environment_factory,
     )
     probe_seed = 0 if spec.seed is None else spec.seed
-    environment_report = validate_environment_contract(
-        environment_factory(probe_seed),
-        probe_action=probe_action,
-    )
-    policy_factory = _resolve_policy_factory(spec)
-    validate_policy_contract(
-        policy_factory,
-        seed=probe_seed,
-        observation=environment_report.initial_observation,
-        store=MemoryStore(),
-    )
+    environment = environment_factory(probe_seed)
+    try:
+        environment_report = validate_environment_contract(
+            environment,
+            probe_action=probe_action,
+        )
+        policy_factory = _resolve_policy_factory(spec)
+        validate_policy_contract(
+            policy_factory,
+            seed=probe_seed,
+            observation=environment_report.initial_observation,
+            store=MemoryStore(),
+        )
+    except Exception:
+        _close_preflight_environment(environment)
+        raise
+    else:
+        _close_preflight_environment(environment)
     return environment_report
 
 
@@ -224,6 +233,14 @@ def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     if spec.policy_factory is None:
         raise ValueError("policy_factory is required when action_policy_factory is absent")
     return cast(PolicyFactory, resolve_callable(spec.policy_factory))
+
+
+def _close_preflight_environment(environment: object) -> None:
+    """Close a preflight environment when it exposes a callable close method."""
+
+    close = getattr(environment, "close", None)
+    if callable(close):
+        close()
 
 
 def _validate_callable_specification(field_name: str, specification: str) -> None:
