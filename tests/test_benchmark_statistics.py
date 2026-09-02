@@ -4,11 +4,17 @@ from experiments.benchmark_statistics import (
     compare_benchmark_reports,
     summarize_benchmark_reports,
 )
-from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunReport
+from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.execution import EpisodeResult
 
 
-def _report(seed: int, reward: float, success: bool) -> BenchmarkRunReport:
+def _report(
+    seed: int,
+    reward: float,
+    success: bool,
+    *,
+    max_steps: int | None = None,
+) -> BenchmarkRunReport:
     episode = EpisodeResult(
         initial_observation="start",
         steps=(),
@@ -16,6 +22,17 @@ def _report(seed: int, reward: float, success: bool) -> BenchmarkRunReport:
         terminated=True,
         truncated=False,
     )
+    configuration = None
+    if max_steps is not None:
+        configuration = BenchmarkRunConfiguration(
+            benchmark_name="synthetic-test",
+            episode_count=1,
+            max_steps=max_steps,
+            seed=seed,
+            environment_factory="tests.fixtures:environment_factory",
+            policy_factory="tests.fixtures:policy_factory",
+            success_evaluator="tests.fixtures:success_evaluator",
+        )
     return BenchmarkRunReport(
         benchmark_name="synthetic-test",
         episodes=(
@@ -28,6 +45,7 @@ def _report(seed: int, reward: float, success: bool) -> BenchmarkRunReport:
         ),
         final_memory_count=0,
         seed=seed,
+        configuration=configuration,
     )
 
 
@@ -109,6 +127,28 @@ def test_compare_benchmark_reports_rejects_mismatched_seed_sets() -> None:
         assert "same seed set" in str(exc)
     else:
         raise AssertionError("mismatched seed sets must be rejected")
+
+
+def test_compare_benchmark_reports_rejects_configuration_drift() -> None:
+    baseline = (_report(1, 0.0, False, max_steps=5),)
+    treatment = (_report(1, 1.0, True, max_steps=10),)
+
+    try:
+        compare_benchmark_reports(baseline, treatment)
+    except ValueError as exc:
+        assert "configuration apart from the seed" in str(exc)
+    else:
+        raise AssertionError("paired conditions with different configurations must be rejected")
+
+
+def test_compare_benchmark_reports_accepts_same_configuration_across_conditions() -> None:
+    baseline = (_report(1, 0.0, False, max_steps=5), _report(2, 0.5, True, max_steps=5))
+    treatment = (_report(1, 1.0, True, max_steps=5), _report(2, 0.5, True, max_steps=5))
+
+    comparison = compare_benchmark_reports(baseline, treatment)
+
+    assert comparison.seeds == (1, 2)
+    assert comparison.success_rate_delta.mean == 0.5
 
 
 def test_compare_benchmark_reports_rejects_empty_labels() -> None:
