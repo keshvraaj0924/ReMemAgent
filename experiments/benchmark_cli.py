@@ -73,12 +73,12 @@ def main() -> int:
         episode_count=arguments.episodes,
         max_steps=arguments.max_steps,
         environment_factory=arguments.environment_factory,
-        policy_factory=arguments.policy_factory,
-        action_policy_factory=arguments.action_policy_factory,
-        minimum_trust=arguments.minimum_trust,
+        policy_factory=getattr(arguments, "policy_factory", None),
+        action_policy_factory=getattr(arguments, "action_policy_factory", None),
+        minimum_trust=getattr(arguments, "minimum_trust", 0.0),
         success_evaluator=arguments.success_evaluator,
-        transfer_success_evaluator=arguments.transfer_success_evaluator,
-        seed=arguments.seed,
+        transfer_success_evaluator=getattr(arguments, "transfer_success_evaluator", None),
+        seed=getattr(arguments, "seed", None),
     )
     if getattr(arguments, "preflight", False):
         if getattr(arguments, "probe_action", None) is not None:
