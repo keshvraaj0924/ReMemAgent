@@ -28,7 +28,9 @@ from .official_benchmarks import (
 from .policies import (
     ActionPolicyFactory,
     MemoryGuidedPolicyFactory,
+    PolicyContractReport,
     build_memory_guided_policy_factory,
+    validate_policy_contract,
 )
 from .verl import (
     VerlTrainingBatch,
@@ -56,6 +58,7 @@ __all__ = [
     "GrpoBatch",
     "GrpoSample",
     "MemoryGuidedPolicyFactory",
+    "PolicyContractReport",
     "RawEnvironmentFactory",
     "TRAINING_ARTIFACT_SCHEMA_VERSION",
     "TrainingArtifactManifest",
@@ -80,6 +83,7 @@ __all__ = [
     "run_agent_loop",
     "run_agent_loop_batch",
     "validate_agent_loop_output",
+    "validate_policy_contract",
     "verify_training_artifact",
     "write_grpo_jsonl",
     "write_training_artifact_manifest",
