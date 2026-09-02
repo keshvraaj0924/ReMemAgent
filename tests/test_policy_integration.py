@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from remem.integrations.policies import build_memory_guided_policy_factory
+from remem.integrations.policies import (
+    build_memory_guided_policy_factory,
+    validate_policy_contract,
+)
 from remem.memory.store import MemoryStore
 
 
@@ -49,4 +52,44 @@ def test_factory_rejects_invalid_minimum_trust() -> None:
         build_memory_guided_policy_factory(
             lambda _: lambda state, guidance: state,
             minimum_trust=1.1,
+        )
+
+
+def test_validate_policy_contract_probes_seed_and_observation() -> None:
+    received: list[tuple[int, str]] = []
+
+    def policy_factory(seed: int, store: MemoryStore):
+        del store
+
+        def policy(observation: str) -> str:
+            received.append((seed, observation))
+            return "look"
+
+        return policy
+
+    report = validate_policy_contract(
+        policy_factory,
+        seed=41,
+        observation="room description",
+    )
+
+    assert report.action == "look"
+    assert received == [(41, "room description")]
+
+
+def test_validate_policy_contract_rejects_empty_observation() -> None:
+    with pytest.raises(ValueError, match="observation"):
+        validate_policy_contract(
+            lambda seed, store: lambda observation: "look",
+            seed=1,
+            observation=" ",
+        )
+
+
+def test_validate_policy_contract_rejects_invalid_action() -> None:
+    with pytest.raises(ValueError, match="non-empty string action"):
+        validate_policy_contract(
+            lambda seed, store: lambda observation: "",
+            seed=1,
+            observation="room",
         )
