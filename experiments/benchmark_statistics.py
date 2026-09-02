@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from math import sqrt
 from typing import Any, Sequence
 
+from experiments.benchmark_report import benchmark_configuration_fingerprint
 from remem.benchmark import BenchmarkRunReport
 
 CONFIDENCE_Z_95 = 1.96
@@ -93,10 +94,11 @@ def compare_benchmark_reports(
 ) -> BenchmarkConditionComparison:
     """Compute paired treatment-minus-baseline deltas by independent seed.
 
-    Both conditions must contain the same unique seed set and benchmark name.
-    Each seed contributes exactly one paired observation to the descriptive
-    delta statistics. The function does not pool episodes and does not perform
-    a hypothesis test or claim statistical significance.
+    Both conditions must contain the same unique seed set, benchmark name, and
+    seed-independent configuration. Each seed contributes exactly one paired
+    observation to the descriptive delta statistics. The function does not
+    pool episodes and does not perform a hypothesis test or claim statistical
+    significance.
     """
 
     baseline = tuple(baseline_reports)
@@ -106,6 +108,8 @@ def compare_benchmark_reports(
 
     if baseline[0].benchmark_name != treatment[0].benchmark_name:
         raise ValueError("baseline and treatment reports must use one benchmark name")
+
+    _validate_paired_configuration(baseline, treatment)
 
     baseline_by_seed = {report.seed: report for report in baseline}
     treatment_by_seed = {report.seed: report for report in treatment}
@@ -150,6 +154,32 @@ def _validate_report_collection(reports: tuple[BenchmarkRunReport, ...]) -> None
     benchmark_names = {report.benchmark_name for report in reports}
     if len(benchmark_names) != 1:
         raise ValueError("benchmark reports must use one benchmark name")
+
+
+def _validate_paired_configuration(
+    baseline: tuple[BenchmarkRunReport, ...],
+    treatment: tuple[BenchmarkRunReport, ...],
+) -> None:
+    """Ensure paired conditions share the same seed-independent configuration."""
+
+    baseline_fingerprints = {
+        _configuration_fingerprint(report) for report in baseline
+    }
+    treatment_fingerprints = {
+        _configuration_fingerprint(report) for report in treatment
+    }
+    if baseline_fingerprints != treatment_fingerprints:
+        raise ValueError(
+            "baseline and treatment reports must share configuration apart from the seed"
+        )
+
+
+def _configuration_fingerprint(report: BenchmarkRunReport) -> str | None:
+    """Return the canonical seed-independent configuration fingerprint."""
+
+    if report.configuration is None:
+        return None
+    return benchmark_configuration_fingerprint(report.configuration)
 
 
 def _validate_label(label: str, field_name: str) -> str:
