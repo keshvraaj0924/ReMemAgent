@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from math import isfinite
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from threading import Lock
 from time import monotonic
 from typing import Self
@@ -27,11 +31,7 @@ class ObservationSnapshot:
     durations_seconds: Mapping[str, float]
 
     def to_dict(self) -> dict[str, dict[str, float]]:
-        """Return a deterministic JSON-compatible representation.
-
-        Keys are sorted at the serialization boundary so experiment artifacts
-        do not depend on the order in which concurrent observations arrived.
-        """
+        """Return a deterministic JSON-compatible representation."""
 
         return {
             "counters": dict(sorted(self.counters.items())),
@@ -40,13 +40,7 @@ class ObservationSnapshot:
 
 
 class ObservationCollector:
-    """Thread-safe in-process collector with deterministic snapshots.
-
-    The collector deliberately stores only scalar counters and duration totals.
-    It has no dependency on OpenTelemetry, Prometheus, or a logging backend, so
-    research components can be instrumented without coupling the core to an
-    operational stack.
-    """
+    """Thread-safe in-process collector with deterministic snapshots."""
 
     def __init__(self) -> None:
         self._counters: dict[str, float] = {}
@@ -113,3 +107,48 @@ class ObservationTimer:
         if self._started_at is None:
             return
         self._collector.observe_duration(self._name, monotonic() - self._started_at)
+
+
+def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) -> None:
+    """Atomically persist one deterministic observation snapshot as JSON.
+
+    The destination is replaced only after the complete JSON document has been
+    flushed to a temporary file in the same directory. This avoids leaving a
+    partially written telemetry artifact when a process fails during a write.
+    """
+
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(
+        snapshot.to_dict(),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ) + "\n"
+
+    with NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=destination.parent,
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as temporary_file:
+        temporary_path = Path(temporary_file.name)
+        try:
+            temporary_file.write(payload)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+            os.replace(temporary_path, destination)
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
+
+
+__all__ = [
+    "ObservationCollector",
+    "ObservationEvent",
+    "ObservationSnapshot",
+    "ObservationTimer",
+    "write_observation_snapshot",
+]
