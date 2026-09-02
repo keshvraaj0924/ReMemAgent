@@ -24,8 +24,10 @@ from remem.integrations.loading import resolve_callable, split_callable_specific
 from remem.integrations.policies import (
     ActionPolicyFactory,
     build_memory_guided_policy_factory,
+    validate_policy_contract,
 )
 from remem.memory.attribution import TransferSuccessEvaluator
+from remem.memory.store import MemoryStore
 from remem.services import SuccessEvaluator
 
 
@@ -98,14 +100,18 @@ def validate_external_benchmark_runtime(
     *,
     probe_action: str | None = None,
 ) -> EnvironmentContractReport:
-    """Probe the real configured benchmark environment before full execution.
+    """Probe the real configured environment and policy before execution.
 
     The probe resolves and constructs the caller-owned environment factory,
     passes its seed through the same normalized benchmark adapter used by the
-    measured runner, and validates reset plus an optional concrete action. A
-    missing run seed uses zero only for this preflight probe; measured runs
-    retain their explicit seed contract. The environment is closed by the
-    contract validator in both success and failure paths.
+    measured runner, validates reset plus an optional concrete action, and then
+    constructs the configured policy against the observed reset text. Policy
+    probing uses an isolated memory store and the same episode seed contract as
+    measured execution. A missing run seed uses zero only for this preflight
+    probe; measured runs retain their explicit seed contract.
+
+    Runtime preflight can therefore load a real checkpoint when the caller's
+    policy factory does so, but it never records the probe as benchmark data.
     """
 
     validate_external_benchmark(spec)
@@ -114,10 +120,18 @@ def validate_external_benchmark_runtime(
         spec.environment_factory,
     )
     probe_seed = 0 if spec.seed is None else spec.seed
-    return validate_environment_contract(
+    environment_report = validate_environment_contract(
         environment_factory(probe_seed),
         probe_action=probe_action,
     )
+    policy_factory = _resolve_policy_factory(spec)
+    validate_policy_contract(
+        policy_factory,
+        seed=probe_seed,
+        observation=environment_report.initial_observation,
+        store=MemoryStore(),
+    )
+    return environment_report
 
 
 def run_external_benchmark(
