@@ -8,6 +8,7 @@ before a multi-seed experiment is launched.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 
 from remem.environments import EnvironmentContractReport
 
@@ -36,25 +37,13 @@ def validate_repeated_external_benchmark_runtime(
     if len(selected_seeds) != len(set(selected_seeds)):
         raise ValueError("seeds must be unique")
 
-    reports: list[EnvironmentContractReport] = []
-    for seed in selected_seeds:
-        reports.append(
-            validate_external_benchmark_runtime(
-                spec.__class__(**{**spec.__dict__, "seed": seed})
-                if hasattr(spec, "__dict__")
-                else _replace_seed(spec, seed),
-                probe_action=probe_action,
-            )
+    return tuple(
+        validate_external_benchmark_runtime(
+            replace(spec, seed=seed),
+            probe_action=probe_action,
         )
-    return tuple(reports)
-
-
-def _replace_seed(spec: ExternalBenchmarkSpec, seed: int) -> ExternalBenchmarkSpec:
-    """Create a seed-specific immutable benchmark specification."""
-
-    from dataclasses import replace
-
-    return replace(spec, seed=seed)
+        for seed in selected_seeds
+    )
 
 
 __all__ = ["validate_repeated_external_benchmark_runtime"]
