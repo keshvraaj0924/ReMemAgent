@@ -1,8 +1,9 @@
-"""Command-line entry point for externally supplied benchmark experiments."""
+"""Command-line entry point for caller-owned external benchmark experiments."""
 
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
@@ -16,6 +17,7 @@ from experiments.external_benchmark import (
     validate_external_benchmark_runtime,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
+from remem.integrations.loading import resolve_callable as load_callable
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
@@ -98,7 +100,7 @@ def main() -> int:
     if getattr(arguments, "probe_action", None) is not None:
         raise ValueError("--probe-action requires --runtime-preflight")
 
-    runtime_provenance = collect_runtime_provenance().to_dict()
+    runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
 
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
     if seeds is None:
