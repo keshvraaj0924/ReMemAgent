@@ -37,7 +37,10 @@ def test_write_grpo_jsonl_preserves_order_and_serializes_advantages(tmp_path) ->
 
 
 def test_write_verl_jsonl_preserves_token_and_metadata_fields(tmp_path) -> None:
-    samples = build_grpo_samples([_episode(2.0)])
+    samples = build_grpo_samples(
+        [_episode(1.0), _episode(3.0)],
+        group_id_builder=lambda _index, _: "episode-0",
+    )
     batch = build_grpo_batch(samples)
     verl_batch = encode_grpo_batch_for_verl(
         batch,
@@ -48,16 +51,20 @@ def test_write_verl_jsonl_preserves_token_and_metadata_fields(tmp_path) -> None:
 
     write_verl_jsonl(verl_batch, output_path)
 
-    row = json.loads(output_path.read_text(encoding="utf-8").strip())
-    assert row["prompt_ids"] == list(_encode("start"))
-    assert row["response_ids"] == list(_encode("look\nfinish"))
-    assert row["response_mask"] == [1] * len(row["response_ids"])
-    assert row["advantage"] == 0.0
-    assert row["metadata"]["group_id"] == "episode-0"
+    rows = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
+    assert [row["prompt_ids"] for row in rows] == [list(_encode("start"))] * 2
+    assert [row["response_ids"] for row in rows] == [list(_encode("look\nfinish"))] * 2
+    assert all(row["response_mask"] == [1] * len(row["response_ids"]) for row in rows)
+    assert [row["advantage"] for row in rows] == [-1.0, 1.0]
+    assert all(row["metadata"]["group_id"] == "episode-0" for row in rows)
 
 
 def test_writers_produce_identical_bytes_for_identical_batches(tmp_path) -> None:
-    batch = build_grpo_batch(build_grpo_samples([_episode(2.0)]))
+    samples = build_grpo_samples(
+        [_episode(1.0), _episode(3.0)],
+        group_id_builder=lambda _index, _: "task-1",
+    )
+    batch = build_grpo_batch(samples)
     first = tmp_path / "first.jsonl"
     second = tmp_path / "second.jsonl"
 
