@@ -97,10 +97,14 @@ def load_benchmark_artifact_manifest(manifest_path: Path) -> BenchmarkArtifactMa
         raise ValueError(f"invalid benchmark artifact manifest: {manifest_path}") from exc
     if not isinstance(document, dict):
         raise ValueError("benchmark artifact manifest root must be an object")
-    if document.get("manifest_schema_version") != MANIFEST_SCHEMA_VERSION:
+    manifest_schema_version = document.get("manifest_schema_version")
+    if (
+        not _is_strict_integer(manifest_schema_version)
+        or manifest_schema_version != MANIFEST_SCHEMA_VERSION
+    ):
         raise ValueError(
             "unsupported benchmark artifact manifest schema version: "
-            f"{document.get('manifest_schema_version')!r}"
+            f"{manifest_schema_version!r}"
         )
     schema_version = document.get("schema_version")
     byte_count = document.get("byte_count")
