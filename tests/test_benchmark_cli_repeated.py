@@ -40,7 +40,9 @@ def test_main_persists_statistics_for_repeated_runs(monkeypatch, tmp_path: Path)
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda: benchmark_cli.collect_runtime_provenance(environment={"REMEM_GIT_COMMIT": "abc"}),
+        lambda **kwargs: benchmark_cli.collect_runtime_provenance(
+            environment={"REMEM_GIT_COMMIT": "abc"}
+        ),
     )
 
     captured: dict[str, object] = {}
