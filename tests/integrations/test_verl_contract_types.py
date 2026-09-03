@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from remem.integrations.verl import VerlTrajectory
 from remem.integrations.verl_contract import validate_agent_loop_output
 
 
@@ -49,3 +50,42 @@ def test_validate_agent_loop_output_accepts_integer_mask_and_token_ids() -> None
     assert result.prompt_ids == (1, 2)
     assert result.response_ids == (3, 4)
     assert result.response_mask == (1, 0)
+
+
+def test_verl_trajectory_rejects_boolean_response_mask() -> None:
+    """Direct construction cannot bypass strict mask typing."""
+
+    with pytest.raises(TypeError, match="response_mask must contain only integer values"):
+        VerlTrajectory(
+            prompt_ids=(1,),
+            response_ids=(2,),
+            response_mask=(True,),
+            reward=1.0,
+            metadata={},
+        )
+
+
+def test_verl_trajectory_rejects_mismatched_response_mask_length() -> None:
+    """A response mask must align one-to-one with response tokens."""
+
+    with pytest.raises(ValueError, match="same length as response_ids"):
+        VerlTrajectory(
+            prompt_ids=(1,),
+            response_ids=(2, 3),
+            response_mask=(1,),
+            reward=1.0,
+            metadata={},
+        )
+
+
+def test_verl_trajectory_rejects_mask_values_other_than_zero_or_one() -> None:
+    """Masks remain binary at the framework-facing trajectory boundary."""
+
+    with pytest.raises(ValueError, match="either 0 or 1"):
+        VerlTrajectory(
+            prompt_ids=(1,),
+            response_ids=(2,),
+            response_mask=(2,),
+            reward=1.0,
+            metadata={},
+        )
