@@ -104,8 +104,13 @@ def build_alfworld_text_environment_factory(
         raise ValueError("ReMemAgent's ALFWorld adapter requires batch_size=1")
     if not isinstance(config, Mapping):
         raise TypeError("config must be a mapping")
-    if not train_eval.strip():
-        raise ValueError("train_eval must not be empty")
+    if not isinstance(train_eval, str) or not train_eval.strip():
+        raise ValueError("train_eval must be a non-empty string")
+    if env_type is not None and (not isinstance(env_type, str) or not env_type.strip()):
+        raise ValueError("env_type must be a non-empty string when provided")
+    config_env = config.get("env", {})
+    if not isinstance(config_env, Mapping):
+        raise TypeError("config['env'] must be a mapping when provided")
 
     try:
         from alfworld.agents.environment import get_environment
@@ -115,7 +120,7 @@ def build_alfworld_text_environment_factory(
             "install alfworld before creating this factory"
         ) from exc
 
-    selected_env_type = env_type or str(config.get("env", {}).get("type", "AlfredTWEnv"))
+    selected_env_type = env_type or str(config_env.get("type", "AlfredTWEnv"))
     environment_class = get_environment(selected_env_type)
 
     def create_environment(seed: int) -> Any:
@@ -148,12 +153,15 @@ def build_webshop_text_environment_factory(
     upstream constructor configuration used for smaller local runs.
     """
 
-    if not observation_mode.strip():
-        raise ValueError("observation_mode must not be empty")
-    if not environment_id.strip():
-        raise ValueError("environment_id must not be empty")
-    if num_products is not None and num_products <= 0:
-        raise ValueError("num_products must be positive when provided")
+    if not isinstance(observation_mode, str) or not observation_mode.strip():
+        raise ValueError("observation_mode must be a non-empty string")
+    if not isinstance(environment_id, str) or not environment_id.strip():
+        raise ValueError("environment_id must be a non-empty string")
+    if num_products is not None:
+        if isinstance(num_products, bool) or not isinstance(num_products, int):
+            raise TypeError("num_products must be an integer when provided")
+        if num_products <= 0:
+            raise ValueError("num_products must be positive when provided")
 
     try:
         import gym
