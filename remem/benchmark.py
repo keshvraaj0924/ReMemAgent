@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import math
 import sys
 from typing import Any
 
@@ -42,6 +43,26 @@ class BenchmarkRunConfiguration:
     success_evaluator: str | None = None
     transfer_success_evaluator: str | None = None
     minimum_trust: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Reject malformed provenance metadata at construction time."""
+
+        if not isinstance(self.benchmark_name, str) or not self.benchmark_name.strip():
+            raise ValueError("benchmark_name must be a non-empty string")
+        if not _is_strict_integer(self.episode_count) or self.episode_count < 0:
+            raise ValueError("episode_count must be a non-negative integer")
+        if not _is_strict_integer(self.max_steps) or self.max_steps <= 0:
+            raise ValueError("max_steps must be a positive integer")
+        if self.seed is not None and not _is_strict_integer(self.seed):
+            raise ValueError("seed must be an integer when provided")
+        if isinstance(self.minimum_trust, bool) or not isinstance(
+            self.minimum_trust, (int, float)
+        ):
+            raise TypeError("minimum_trust must be a number between 0 and 1")
+        if not math.isfinite(float(self.minimum_trust)):
+            raise ValueError("minimum_trust must be finite")
+        if not 0.0 <= self.minimum_trust <= 1.0:
+            raise ValueError("minimum_trust must be between 0 and 1")
 
 
 @dataclass(frozen=True, slots=True)
