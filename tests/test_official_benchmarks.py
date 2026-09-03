@@ -42,7 +42,9 @@ def test_seeded_webshop_reset_is_reproducible_and_restores_rng() -> None:
 
     first_adapter.reset()
     second_adapter.reset()
-    assert first.reset_values == second.reset_values
+    assert first.reset_values == [first.reset_values[0], first.reset_values[0]]
+    assert second.reset_values == [second.reset_values[0]]
+    assert first.reset_values[0] == second.reset_values[0]
 
 
 def test_webshop_factory_restores_rng_after_gym_construction(monkeypatch: pytest.MonkeyPatch) -> None:
