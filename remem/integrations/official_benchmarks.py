@@ -164,17 +164,19 @@ def build_webshop_text_environment_factory(
         ) from exc
 
     def create_environment(seed: int) -> Any:
-        """Create one upstream WebShop text environment and seed its reset boundary."""
+        """Create one upstream WebShop text environment with isolated construction RNG."""
 
         _validate_seed(seed)
-        previous_state = random.getstate()
-        try:
-            kwargs: dict[str, Any] = {"observation_mode": observation_mode}
-            if num_products is not None:
-                kwargs["num_products"] = num_products
-            environment = gym.make(environment_id, **kwargs)
-        finally:
-            random.setstate(previous_state)
+        with _WEBSHOP_RANDOM_LOCK:
+            previous_state = random.getstate()
+            random.seed(seed)
+            try:
+                kwargs: dict[str, Any] = {"observation_mode": observation_mode}
+                if num_products is not None:
+                    kwargs["num_products"] = num_products
+                environment = gym.make(environment_id, **kwargs)
+            finally:
+                random.setstate(previous_state)
 
         reset = getattr(environment, "reset", None)
         if not callable(reset):
