@@ -26,6 +26,22 @@ class VerlTrajectory:
     reward: float
     metadata: Mapping[str, object]
 
+    def __post_init__(self) -> None:
+        """Validate the token-level contract for directly constructed records."""
+
+        _validate_token_ids(self.prompt_ids, "prompt")
+        _validate_token_ids(self.response_ids, "response")
+        if not self.response_ids:
+            raise ValueError("response_ids must contain at least one token")
+
+        normalized_mask = tuple(self.response_mask)
+        if len(normalized_mask) != len(self.response_ids):
+            raise ValueError("response_mask must have the same length as response_ids")
+        if any(isinstance(value, bool) or not isinstance(value, int) for value in normalized_mask):
+            raise TypeError("response_mask must contain only integer values")
+        if any(value not in (0, 1) for value in normalized_mask):
+            raise ValueError("response_mask values must be either 0 or 1")
+
     def to_agent_loop_output(self) -> dict[str, list[int]]:
         """Return the fields required by verl's ``AgentLoopOutput`` contract."""
 
