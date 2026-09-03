@@ -27,6 +27,13 @@ def _benchmark_family(benchmark_name: str) -> str:
     raise ValueError(f"unsupported benchmark: {benchmark_name!r}")
 
 
+def _validate_seed(seed: int) -> None:
+    """Reject seed values that cannot satisfy the deterministic factory contract."""
+
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise TypeError("seed must be an integer")
+
+
 class BenchmarkEnvironmentFactory:
     """Create normalized environments from a caller-owned raw environment factory."""
 
@@ -34,11 +41,14 @@ class BenchmarkEnvironmentFactory:
         """Initialize a factory for one supported benchmark family."""
 
         self._benchmark_family = _benchmark_family(benchmark_name)
+        if not callable(raw_factory):
+            raise TypeError("raw_factory must be callable")
         self._raw_factory = raw_factory
 
     def __call__(self, seed: int) -> EnvironmentAdapter:
         """Create and adapt one environment using the supplied episode seed."""
 
+        _validate_seed(seed)
         try:
             environment = self._raw_factory(seed)
         except Exception as exc:
