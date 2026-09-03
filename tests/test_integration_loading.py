@@ -24,6 +24,12 @@ def test_split_callable_specification_rejects_invalid_values(specification: str)
         split_callable_specification(specification)
 
 
+@pytest.mark.parametrize("specification", [None, 123, True])
+def test_split_callable_specification_rejects_non_string_values(specification: object) -> None:
+    with pytest.raises(TypeError, match="must be a string"):
+        split_callable_specification(specification)  # type: ignore[arg-type]
+
+
 def test_resolve_callable_rejects_missing_attribute() -> None:
     with pytest.raises(ValueError, match="attribute not found"):
         resolve_callable("tests.test_integration_loading:missing")
