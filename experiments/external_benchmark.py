@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from math import isfinite
 from typing import cast
 
 from remem.benchmark import (
@@ -67,17 +68,13 @@ class ExternalBenchmarkSpec:
         if self.policy_factory is not None:
             _validate_callable_specification("policy_factory", self.policy_factory)
         if self.action_policy_factory is not None:
-            _validate_callable_specification(
-                "action_policy_factory", self.action_policy_factory
-            )
+            _validate_callable_specification("action_policy_factory", self.action_policy_factory)
         if self.transfer_success_evaluator is not None:
-            _validate_callable_specification(
-                "transfer_success_evaluator", self.transfer_success_evaluator
-            )
-        if isinstance(self.minimum_trust, bool) or not isinstance(
-            self.minimum_trust, (int, float)
-        ):
-            raise TypeError("minimum_trust must be a number between 0 and 1")
+            _validate_callable_specification("transfer_success_evaluator", self.transfer_success_evaluator)
+        if isinstance(self.minimum_trust, bool) or not isinstance(self.minimum_trust, (int, float)):
+            raise TypeError("minimum_trust must be a finite number between 0 and 1")
+        if not isfinite(float(self.minimum_trust)):
+            raise ValueError("minimum_trust must be finite")
         if not 0.0 <= self.minimum_trust <= 1.0:
             raise ValueError("minimum_trust must be between 0 and 1")
 
@@ -117,19 +114,13 @@ def validate_external_benchmark_runtime(
 ) -> EnvironmentContractReport:
     """Probe the real configured environment and policy before execution.
 
-    The runtime preflight owns the temporary environment because policy
-    validation must happen against the same successfully reset observation.
-    Environment validation therefore disables the validator's default cleanup;
-    this function closes the environment exactly once after policy validation.
-    If policy validation fails, its exception remains primary even when cleanup
-    also fails. Probe output is never benchmark data.
+    The framework creates a temporary environment for contract validation and
+    closes it exactly once. If policy validation fails, its exception remains
+    primary even when cleanup also fails. Probe output is never benchmark data.
     """
 
     validate_external_benchmark(spec)
-    environment_factory = load_benchmark_environment_factory(
-        spec.benchmark_name,
-        spec.environment_factory,
-    )
+    environment_factory = load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
     probe_seed = 0 if spec.seed is None else spec.seed
     environment = environment_factory(probe_seed)
     try:
@@ -168,10 +159,7 @@ def run_external_benchmark(
     """
 
     selected_runner = runner or BenchmarkSuiteRunner()
-    environment_factory = load_benchmark_environment_factory(
-        spec.benchmark_name,
-        spec.environment_factory,
-    )
+    environment_factory = load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
     policy_factory = _resolve_policy_factory(spec)
     success_evaluator = cast(SuccessEvaluator, resolve_callable(spec.success_evaluator))
     transfer_success_evaluator = (
@@ -210,20 +198,14 @@ def run_repeated_external_benchmarks(
     """Execute the same external benchmark independently for each requested seed."""
 
     selected_seeds = validate_seed_sequence(seeds)
-    return tuple(
-        run_external_benchmark(replace(spec, seed=seed))
-        for seed in selected_seeds
-    )
+    return tuple(run_external_benchmark(replace(spec, seed=seed)) for seed in selected_seeds)
 
 
 def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     """Resolve either a complete policy or compose one from an action policy."""
 
     if spec.action_policy_factory is not None:
-        action_policy_factory = cast(
-            ActionPolicyFactory,
-            resolve_callable(spec.action_policy_factory),
-        )
+        action_policy_factory = cast(ActionPolicyFactory, resolve_callable(spec.action_policy_factory))
         return build_memory_guided_policy_factory(
             action_policy_factory,
             minimum_trust=spec.minimum_trust,
