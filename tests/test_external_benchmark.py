@@ -137,7 +137,7 @@ def test_resolve_callable_rejects_malformed_specification() -> None:
 
 def test_resolve_callable_rejects_non_callable_attribute() -> None:
     with pytest.raises(TypeError, match="not callable"):
-        resolve_callable("tests.test_external_benchmark:FakeEnvironment")
+        resolve_callable("tests.test_external_benchmark:CLOSED_SEEDS")
 
 
 def test_validate_external_benchmark_resolves_all_callables_without_running() -> None:
@@ -261,7 +261,7 @@ def test_save_benchmark_report_writes_measured_json(tmp_path: Path) -> None:
     assert '"seed": 7' in payload
     assert '"minimum_trust": 0.0' in payload
     assert '"environment_factory": "tests.test_external_benchmark:make_environment"' in payload
-    assert '"success_rate": 1.0' in payload
+    assert '"episode_success": true' in payload
 
 
 def _build_spec(**overrides: Any) -> ExternalBenchmarkSpec:
