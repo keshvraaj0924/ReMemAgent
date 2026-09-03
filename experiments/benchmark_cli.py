@@ -15,6 +15,7 @@ from experiments.external_benchmark import (
     run_repeated_external_benchmarks,
     validate_external_benchmark,
     validate_external_benchmark_runtime,
+    validate_seed_sequence,
 )
 from experiments.external_preflight import (
     run_repeated_external_benchmarks_with_preflight,
@@ -185,9 +186,7 @@ def _parse_seeds(value: str | None) -> tuple[int, ...] | None:
         seeds = tuple(int(part) for part in parts)
     except ValueError as exc:
         raise ValueError("--seeds must contain comma-separated integers") from exc
-    if len(seeds) != len(set(seeds)):
-        raise ValueError("--seeds must contain unique integers")
-    return seeds
+    return validate_seed_sequence(seeds)
 
 
 if __name__ == "__main__":
