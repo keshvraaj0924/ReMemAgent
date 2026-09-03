@@ -127,7 +127,7 @@ def test_alfworld_factory_rejects_non_singleton_batch() -> None:
         build_alfworld_text_environment_factory({}, batch_size=2)
 
 
-def test_webshop_factory_creates_and_seeds_gym_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_webshop_factory_creates_seeded_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     environment = FakeWebShopEnvironment()
     gym_module = types.ModuleType("gym")
     gym_module.make = lambda environment_id, **kwargs: (  # type: ignore[attr-defined]
@@ -138,8 +138,9 @@ def test_webshop_factory_creates_and_seeds_gym_environment(monkeypatch: pytest.M
     factory = build_webshop_text_environment_factory(num_products=1000)
     result = factory(23)
 
-    assert result is environment
-    assert environment.reset_seeds == [23]
+    assert result is not environment
+    assert result.reset() is None
+    assert environment.reset_seeds == [None]
     assert environment.close_calls == 0
 
 
@@ -152,11 +153,12 @@ def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.
     factory = build_webshop_text_environment_factory()
     result = factory(23)
 
-    assert result is environment
+    assert result is not environment
+    result.reset()
     assert environment.reset_calls == 1
 
 
-def test_webshop_factory_closes_environment_when_reset_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_webshop_factory_preserves_reset_failure_for_caller(monkeypatch: pytest.MonkeyPatch) -> None:
     failure = RuntimeError("reset failed")
     environment = FakeWebShopEnvironment(reset_error=failure)
     gym_module = types.ModuleType("gym")
@@ -164,11 +166,14 @@ def test_webshop_factory_closes_environment_when_reset_fails(monkeypatch: pytest
     monkeypatch.setitem(sys.modules, "gym", gym_module)
 
     factory = build_webshop_text_environment_factory()
+    result = factory(23)
 
     with pytest.raises(RuntimeError, match="reset failed") as raised:
-        factory(23)
+        result.reset()
 
     assert raised.value is failure
+    assert environment.close_calls == 0
+    environment.close()
     assert environment.close_calls == 1
 
 
