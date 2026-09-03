@@ -29,6 +29,7 @@ class _SeededAlfWorldEnvironment:
     """
 
     def __init__(self, environment: Any, seed: int) -> None:
+        _validate_seed(seed)
         self._environment = environment
         self._seed = seed
 
@@ -87,6 +88,7 @@ def build_alfworld_text_environment_factory(
     def create_environment(seed: int) -> Any:
         """Create one isolated upstream ALFWorld environment."""
 
+        _validate_seed(seed)
         environment = environment_class(config, train_eval=train_eval)
         initialized_environment = environment.init_env(batch_size=1)
         return _SeededAlfWorldEnvironment(initialized_environment, seed)
@@ -125,6 +127,7 @@ def build_webshop_text_environment_factory(
     def create_environment(seed: int) -> Any:
         """Create one upstream WebShop text environment and seed it."""
 
+        _validate_seed(seed)
         kwargs: dict[str, Any] = {"observation_mode": observation_mode}
         if num_products is not None:
             kwargs["num_products"] = num_products
@@ -141,6 +144,13 @@ def build_webshop_text_environment_factory(
         return environment
 
     return create_environment
+
+
+def _validate_seed(seed: int) -> None:
+    """Reject non-integer and boolean seeds at the external integration boundary."""
+
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise TypeError("seed must be an integer")
 
 
 def _reset_with_seed(reset: Callable[..., Any], seed: int) -> Any:
