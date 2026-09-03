@@ -335,3 +335,41 @@ def test_benchmark_runner_does_not_mask_episode_failure_with_cleanup_failure() -
     snapshot = collector.snapshot()
     assert snapshot.counters["benchmark.episodes.failed"] == 1.0
     assert snapshot.counters["benchmark.environment.close_failures"] == 1.0
+
+
+def test_benchmark_run_configuration_rejects_boolean_and_non_finite_trust() -> None:
+    for minimum_trust in (True, float("nan"), float("inf")):
+        try:
+            BenchmarkRunConfiguration(
+                benchmark_name="strict-config",
+                episode_count=1,
+                max_steps=1,
+                seed=1,
+                minimum_trust=minimum_trust,
+            )
+        except (TypeError, ValueError):
+            pass
+        else:
+            raise AssertionError("invalid minimum_trust should be rejected")
+
+
+def test_benchmark_run_configuration_rejects_boolean_integer_metadata() -> None:
+    common = {
+        "benchmark_name": "strict-config",
+        "episode_count": 1,
+        "max_steps": 1,
+        "seed": 1,
+    }
+
+    for field_name, invalid_value in (
+        ("episode_count", True),
+        ("max_steps", False),
+        ("seed", True),
+    ):
+        values = {**common, field_name: invalid_value}
+        try:
+            BenchmarkRunConfiguration(**values)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"boolean {field_name} should be rejected")
