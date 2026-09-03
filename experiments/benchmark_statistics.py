@@ -14,6 +14,7 @@ from typing import Any, Sequence
 
 from experiments.benchmark_report import benchmark_configuration_fingerprint
 from remem.benchmark import BenchmarkRunReport
+from remem.benchmark_validation import validate_benchmark_run_report
 
 CONFIDENCE_Z_95 = 1.96
 
@@ -142,10 +143,13 @@ def compare_benchmark_reports(
 
 
 def _validate_report_collection(reports: tuple[BenchmarkRunReport, ...]) -> None:
-    """Validate the minimum invariants required for seed-level statistics."""
+    """Validate report structure before deriving any aggregate statistics."""
 
     if not reports:
         raise ValueError("reports must contain at least one benchmark report")
+
+    for report in reports:
+        validate_benchmark_run_report(report)
 
     seeds = tuple(report.seed for report in reports)
     if len(seeds) != len(set(seeds)):
@@ -162,12 +166,8 @@ def _validate_paired_configuration(
 ) -> None:
     """Ensure paired conditions share the same seed-independent configuration."""
 
-    baseline_fingerprints = {
-        _configuration_fingerprint(report) for report in baseline
-    }
-    treatment_fingerprints = {
-        _configuration_fingerprint(report) for report in treatment
-    }
+    baseline_fingerprints = {_configuration_fingerprint(report) for report in baseline}
+    treatment_fingerprints = {_configuration_fingerprint(report) for report in treatment}
     if baseline_fingerprints != treatment_fingerprints:
         raise ValueError(
             "baseline and treatment reports must share configuration apart from the seed"
@@ -185,6 +185,8 @@ def _configuration_fingerprint(report: BenchmarkRunReport) -> str | None:
 def _validate_label(label: str, field_name: str) -> str:
     """Normalize and validate a human-readable condition label."""
 
+    if not isinstance(label, str):
+        raise TypeError(f"{field_name} must be a string")
     normalized_label = label.strip()
     if not normalized_label:
         raise ValueError(f"{field_name} must not be empty")
