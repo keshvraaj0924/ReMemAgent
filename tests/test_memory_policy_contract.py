@@ -13,7 +13,11 @@ def test_memory_guided_policy_rejects_non_numeric_trust(minimum_trust: object) -
     """Reject values that only appear numeric through Python coercion."""
 
     with pytest.raises(TypeError, match="minimum_trust"):
-        MemoryGuidedPolicy(MemoryStore(), lambda state, guidance: "act", minimum_trust=minimum_trust)  # type: ignore[arg-type]
+        MemoryGuidedPolicy(
+            MemoryStore(),
+            lambda state, guidance: "act",
+            minimum_trust=minimum_trust,  # type: ignore[arg-type]
+        )
 
 
 @pytest.mark.parametrize("minimum_trust", [math.nan, math.inf, -math.inf])
@@ -21,7 +25,11 @@ def test_memory_guided_policy_rejects_non_finite_trust(minimum_trust: float) -> 
     """Reject NaN and infinities before they enter retrieval thresholds."""
 
     with pytest.raises(ValueError, match="finite"):
-        MemoryGuidedPolicy(MemoryStore(), lambda state, guidance: "act", minimum_trust=minimum_trust)
+        MemoryGuidedPolicy(
+            MemoryStore(),
+            lambda state, guidance: "act",
+            minimum_trust=minimum_trust,
+        )
 
 
 def test_memory_guided_policy_rejects_non_callable_action_policy() -> None:
@@ -54,7 +62,10 @@ def test_memory_guided_policy_rejects_non_string_state_before_retrieval() -> Non
 def test_memory_guided_policy_rejects_non_string_action_result() -> None:
     """Prevent non-text actions from crossing the environment policy boundary."""
 
-    policy = MemoryGuidedPolicy(MemoryStore(), lambda state, guidance: 1)  # type: ignore[return-value]
+    policy = MemoryGuidedPolicy(
+        MemoryStore(),
+        lambda state, guidance: 1,  # type: ignore[return-value]
+    )
 
     with pytest.raises(ValueError, match="action_policy"):
         policy("state")
