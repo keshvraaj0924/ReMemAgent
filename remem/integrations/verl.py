@@ -194,9 +194,11 @@ def _format_completion(episode: EpisodeResult) -> str:
 
 
 def _validate_token_ids(token_ids: Sequence[int], field_name: str) -> tuple[int, ...]:
-    """Validate and normalize a tokenizer result into immutable integer IDs."""
+    """Validate and normalize non-negative integer tokenizer IDs."""
 
     normalized = tuple(token_ids)
-    if any(not isinstance(token_id, int) for token_id in normalized):
+    if any(isinstance(token_id, bool) or not isinstance(token_id, int) for token_id in normalized):
         raise TypeError(f"{field_name} tokenizer must return integer token IDs")
+    if any(token_id < 0 for token_id in normalized):
+        raise ValueError(f"{field_name} tokenizer must return non-negative token IDs")
     return normalized
