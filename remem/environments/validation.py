@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,33 +23,61 @@ def validate_environment_contract(
     *,
     reset_kwargs: dict[str, Any] | None = None,
     probe_action: str | None = None,
+    close_environment: bool = True,
 ) -> EnvironmentContractReport:
     """Validate reset and, optionally, one normalized environment step.
 
     The validator intentionally requires a caller-provided ``probe_action``
     before invoking ``step`` because there is no universally safe no-op action
-    across ALFWorld, WebShop, or arbitrary adapters. The environment is always
-    closed after the probe, including when validation fails.
+    across ALFWorld, WebShop, or arbitrary adapters. By default the environment
+    is closed after the probe, including when validation fails. Callers that
+    need to continue using a successfully validated environment may disable
+    cleanup and assume ownership of its lifecycle.
     """
 
-    try:
-        initial_observation = environment.reset(**(reset_kwargs or {}))
-        _validate_observation(initial_observation, field_name="reset observation")
-
-        if probe_action is None:
-            return EnvironmentContractReport(initial_observation=initial_observation)
-
-        if not isinstance(probe_action, str) or not probe_action.strip():
-            raise ValueError("probe_action must be a non-empty string")
-
-        step_result = environment.step(probe_action)
-        _validate_step_result(step_result)
-        return EnvironmentContractReport(
-            initial_observation=initial_observation,
-            step_result=step_result,
+    if not close_environment:
+        return _probe_environment(
+            environment,
+            reset_kwargs=reset_kwargs,
+            probe_action=probe_action,
         )
-    finally:
+
+    try:
+        return _probe_environment(
+            environment,
+            reset_kwargs=reset_kwargs,
+            probe_action=probe_action,
+        )
+    except BaseException:
+        _close_after_failure(environment)
+        raise
+    else:
         _close_environment(environment)
+
+
+def _probe_environment(
+    environment: EnvironmentAdapter,
+    *,
+    reset_kwargs: dict[str, Any] | None,
+    probe_action: str | None,
+) -> EnvironmentContractReport:
+    """Run the actual reset/step validation without owning cleanup."""
+
+    initial_observation = environment.reset(**(reset_kwargs or {}))
+    _validate_observation(initial_observation, field_name="reset observation")
+
+    if probe_action is None:
+        return EnvironmentContractReport(initial_observation=initial_observation)
+
+    if not isinstance(probe_action, str) or not probe_action.strip():
+        raise ValueError("probe_action must be a non-empty string")
+
+    step_result = environment.step(probe_action)
+    _validate_step_result(step_result)
+    return EnvironmentContractReport(
+        initial_observation=initial_observation,
+        step_result=step_result,
+    )
 
 
 def _validate_observation(observation: object, *, field_name: str) -> None:
@@ -73,6 +102,17 @@ def _validate_step_result(step_result: object) -> None:
         raise TypeError("step_result.terminated must be a bool")
     if not isinstance(step_result.truncated, bool):
         raise TypeError("step_result.truncated must be a bool")
+
+
+def _close_after_failure(environment: EnvironmentAdapter) -> None:
+    """Attempt cleanup without replacing an active validation exception."""
+
+    primary_exception = sys.exc_info()[1]
+    try:
+        _close_environment(environment)
+    except BaseException:
+        if primary_exception is None:
+            raise
 
 
 def _close_environment(environment: EnvironmentAdapter) -> None:
