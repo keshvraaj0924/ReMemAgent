@@ -165,13 +165,15 @@ class BenchmarkSuiteRunner:
         argument.
         """
 
-        normalized_name = benchmark_name.strip()
-        if not normalized_name:
-            raise ValueError("benchmark_name must not be empty")
-        if episode_count < 0:
-            raise ValueError("episode_count must be non-negative")
-        if max_steps <= 0:
-            raise ValueError("max_steps must be positive")
+        normalized_name = _validate_run_inputs(
+            benchmark_name=benchmark_name,
+            episode_count=episode_count,
+            max_steps=max_steps,
+            environment_factory=environment_factory,
+            policy_factory=policy_factory,
+            success_evaluator=success_evaluator,
+            seed=seed,
+        )
         _validate_run_configuration(
             configuration,
             benchmark_name=normalized_name,
@@ -295,6 +297,38 @@ class BenchmarkSuiteRunner:
         return execution_result, transfer_outcomes
 
 
+def _validate_run_inputs(
+    *,
+    benchmark_name: str,
+    episode_count: int,
+    max_steps: int,
+    environment_factory: EnvironmentFactory,
+    policy_factory: PolicyFactory,
+    success_evaluator: SuccessEvaluator,
+    seed: int | None,
+) -> str:
+    """Validate execution inputs before invoking any caller-owned component."""
+
+    if not isinstance(benchmark_name, str):
+        raise TypeError("benchmark_name must be a string")
+    normalized_name = benchmark_name.strip()
+    if not normalized_name:
+        raise ValueError("benchmark_name must not be empty")
+    if not _is_strict_integer(episode_count) or episode_count < 0:
+        raise ValueError("episode_count must be a non-negative integer")
+    if not _is_strict_integer(max_steps) or max_steps <= 0:
+        raise ValueError("max_steps must be a positive integer")
+    if seed is not None and not _is_strict_integer(seed):
+        raise ValueError("seed must be an integer when provided")
+    if not callable(environment_factory):
+        raise TypeError("environment_factory must be callable")
+    if not callable(policy_factory):
+        raise TypeError("policy_factory must be callable")
+    if not callable(success_evaluator):
+        raise TypeError("success_evaluator must be callable")
+    return normalized_name
+
+
 def _validate_run_configuration(
     configuration: BenchmarkRunConfiguration | None,
     *,
@@ -386,3 +420,9 @@ def _close_environment(
             observation_collector.increment("benchmark.environment.close_failures")
         if primary_exception is None:
             raise
+
+
+def _is_strict_integer(value: object) -> bool:
+    """Return whether a value is an integer but not a boolean."""
+
+    return isinstance(value, int) and not isinstance(value, bool)
