@@ -6,6 +6,7 @@ import json
 import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
+from math import isfinite
 from pathlib import Path
 
 from experiments.ablations import AblationResult, run_ablations
@@ -29,6 +30,18 @@ class ExperimentConfig:
     seed: int = DEFAULT_SEED
     minimum_delta: float = 0.05
 
+    def __post_init__(self) -> None:
+        """Validate configuration values before an experiment can run."""
+
+        if isinstance(self.seed, bool) or not isinstance(self.seed, int):
+            raise TypeError("seed must be an integer")
+        if isinstance(self.minimum_delta, bool) or not isinstance(self.minimum_delta, (int, float)):
+            raise TypeError("minimum_delta must be numeric")
+        if not isfinite(float(self.minimum_delta)):
+            raise ValueError("minimum_delta must be finite")
+        if self.minimum_delta < 0:
+            raise ValueError("minimum_delta must be non-negative")
+
 
 @dataclass(frozen=True, slots=True)
 class ExperimentReport:
@@ -49,9 +62,6 @@ def run_reproducible_ablation(
     """Run matched ablations with a dedicated seeded random generator."""
 
     selected_config = config or ExperimentConfig()
-    if selected_config.minimum_delta < 0:
-        raise ValueError("minimum_delta must be non-negative")
-
     generator = random.Random(selected_config.seed)
     cases = list(cases_factory(generator))
     _validate_unique_case_ids(cases)
@@ -87,12 +97,7 @@ def run_repeated_ablations(
     the provenance of an individual run.
     """
 
-    selected_seeds = tuple(seeds)
-    if not selected_seeds:
-        raise ValueError("seeds must contain at least one seed")
-    if len(selected_seeds) != len(set(selected_seeds)):
-        raise ValueError("seeds must be unique")
-
+    selected_seeds = _validate_seed_sequence(seeds)
     selected_config = config or ExperimentConfig()
     return tuple(
         run_reproducible_ablation(
@@ -171,12 +176,34 @@ def _serialize_result(result: AblationResult) -> dict[str, object]:
     }
 
 
-def _validate_unique_case_ids(cases: Sequence[BenchmarkCase]) -> None:
-    """Reject duplicate identifiers before an experiment is executed."""
+def _validate_case_ids(cases: Sequence[BenchmarkCase]) -> tuple[str, ...]:
+    """Validate and normalize benchmark case identifiers."""
 
-    case_ids = [case.case_id for case in cases]
+    case_ids = tuple(case.case_id for case in cases)
+    if any(not isinstance(case_id, str) or not case_id.strip() for case_id in case_ids):
+        raise ValueError("case_id values must be non-empty strings")
     if len(case_ids) != len(set(case_ids)):
         raise ValueError("case_id values must be unique")
+    return case_ids
+
+
+def _validate_unique_case_ids(cases: Sequence[BenchmarkCase]) -> None:
+    """Reject duplicate or malformed identifiers before an experiment is executed."""
+
+    _validate_case_ids(cases)
+
+
+def _validate_seed_sequence(seeds: Sequence[int]) -> tuple[int, ...]:
+    """Validate and normalize a repeated-experiment seed sequence."""
+
+    selected_seeds = tuple(seeds)
+    if not selected_seeds:
+        raise ValueError("seeds must contain at least one seed")
+    if any(isinstance(seed, bool) or not isinstance(seed, int) for seed in selected_seeds):
+        raise TypeError("seeds must contain only integers")
+    if len(selected_seeds) != len(set(selected_seeds)):
+        raise ValueError("seeds must be unique")
+    return selected_seeds
 
 
 def _validate_unique_report_seeds(reports: Sequence[ExperimentReport]) -> None:
