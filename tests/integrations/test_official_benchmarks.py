@@ -3,6 +3,9 @@ import sys
 import types
 from typing import Any
 
+import pytest
+
+from remem.integrations.benchmarks import BenchmarkEnvironmentFactory
 from remem.integrations.official_benchmarks import (
     build_alfworld_text_environment_factory,
     build_webshop_text_environment_factory,
@@ -78,3 +81,18 @@ def test_alfworld_factory_scopes_construction_randomness(monkeypatch: Any) -> No
     assert random.getstate() == expected_state
     assert environment.reset() == environment.reset()
     assert random.getstate() == expected_state
+
+
+def test_benchmark_environment_factory_rejects_empty_benchmark_name() -> None:
+    with pytest.raises(ValueError, match="non-empty string"):
+        BenchmarkEnvironmentFactory("   ", lambda seed: object())
+
+
+def test_benchmark_environment_factory_rejects_non_string_benchmark_name() -> None:
+    with pytest.raises(ValueError, match="non-empty string"):
+        BenchmarkEnvironmentFactory(123, lambda seed: object())  # type: ignore[arg-type]
+
+
+def test_benchmark_environment_factory_rejects_unsupported_benchmark_name() -> None:
+    with pytest.raises(ValueError, match="unsupported benchmark"):
+        BenchmarkEnvironmentFactory("unknown-v1", lambda seed: object())
