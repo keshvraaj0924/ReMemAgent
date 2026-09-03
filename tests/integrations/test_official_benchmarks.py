@@ -83,6 +83,37 @@ def test_alfworld_factory_scopes_construction_randomness(monkeypatch: Any) -> No
     assert random.getstate() == expected_state
 
 
+def test_alfworld_factory_rejects_invalid_text_configuration() -> None:
+    with pytest.raises(ValueError, match="train_eval must be a non-empty string"):
+        build_alfworld_text_environment_factory({}, train_eval="   ")
+    with pytest.raises(ValueError, match="train_eval must be a non-empty string"):
+        build_alfworld_text_environment_factory({}, train_eval=1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="env_type must be a non-empty string"):
+        build_alfworld_text_environment_factory({}, env_type="   ")
+    with pytest.raises(ValueError, match="env_type must be a non-empty string"):
+        build_alfworld_text_environment_factory({}, env_type=1)  # type: ignore[arg-type]
+
+
+def test_alfworld_factory_rejects_non_mapping_environment_config() -> None:
+    with pytest.raises(TypeError, match="config\['env'\] must be a mapping"):
+        build_alfworld_text_environment_factory({"env": "invalid"})
+
+
+def test_webshop_factory_rejects_invalid_configuration() -> None:
+    with pytest.raises(ValueError, match="observation_mode must be a non-empty string"):
+        build_webshop_text_environment_factory(observation_mode="   ")
+    with pytest.raises(ValueError, match="observation_mode must be a non-empty string"):
+        build_webshop_text_environment_factory(observation_mode=1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="environment_id must be a non-empty string"):
+        build_webshop_text_environment_factory(environment_id="   ")
+    with pytest.raises(ValueError, match="environment_id must be a non-empty string"):
+        build_webshop_text_environment_factory(environment_id=1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="num_products must be an integer"):
+        build_webshop_text_environment_factory(num_products=True)
+    with pytest.raises(ValueError, match="num_products must be positive"):
+        build_webshop_text_environment_factory(num_products=0)
+
+
 def test_benchmark_environment_factory_rejects_empty_benchmark_name() -> None:
     with pytest.raises(ValueError, match="non-empty string"):
         BenchmarkEnvironmentFactory("   ", lambda seed: object())
