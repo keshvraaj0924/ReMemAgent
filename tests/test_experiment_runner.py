@@ -3,11 +3,18 @@
 import json
 import random
 
+import pytest
+
 from experiments.reproducibility import (
     EXPERIMENT_PROTOCOL_VERSION,
     ROUTING_HEURISTIC_VERSION,
 )
-from experiments.runner import ExperimentConfig, run_reproducible_ablation, save_report
+from experiments.runner import (
+    ExperimentConfig,
+    run_reproducible_ablation,
+    run_repeated_ablations,
+    save_report,
+)
 from experiments.synthetic_negative_transfer import BenchmarkCase
 
 
@@ -38,3 +45,29 @@ def test_saved_report_contains_protocol_metadata(tmp_path) -> None:
     assert payload["protocol_version"] == EXPERIMENT_PROTOCOL_VERSION
     assert payload["routing_heuristic_version"] == ROUTING_HEURISTIC_VERSION
     assert payload["experiment_fingerprint"] == report.experiment_fingerprint
+
+
+@pytest.mark.parametrize("seed", [True, False, "7", 7.0])
+def test_experiment_config_rejects_non_integer_seed(seed: object) -> None:
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        ExperimentConfig(seed=seed)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "minimum_delta",
+    [True, False, float("nan"), float("inf"), float("-inf")],
+)
+def test_experiment_config_rejects_invalid_minimum_delta(minimum_delta: object) -> None:
+    expected_exception = TypeError if isinstance(minimum_delta, bool) else ValueError
+    with pytest.raises(expected_exception):
+        ExperimentConfig(minimum_delta=minimum_delta)  # type: ignore[arg-type]
+
+
+def test_repeated_ablations_reject_non_integer_seed_values() -> None:
+    with pytest.raises(TypeError, match="seeds must contain only integers"):
+        run_repeated_ablations(_cases_factory, [1, "2"])  # type: ignore[list-item]
+
+
+def test_repeated_ablations_reject_boolean_seed_values() -> None:
+    with pytest.raises(TypeError, match="seeds must contain only integers"):
+        run_repeated_ablations(_cases_factory, [1, True])  # type: ignore[list-item]
