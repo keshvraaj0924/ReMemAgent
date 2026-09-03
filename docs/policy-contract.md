@@ -23,6 +23,8 @@ A complete policy factory has the shape:
 
 For an `action_policy_factory`, the integration layer first composes it with `MemoryGuidedPolicy`; the caller-owned factory receives only the deterministic episode seed and returns its own guided-action callable.
 
+Episode seeds are validated at this integration boundary before a caller-owned policy factory is invoked. Seeds must be integers and Python booleans are rejected explicitly even though `bool` is an `int` subtype. This prevents malformed seed values from reaching learned components and keeps direct policy construction consistent with the benchmark runner's reproducibility contract.
+
 Policies must return a non-empty string action. ReMemAgent does not assume a universal no-op action because external environments may have different action spaces.
 
 ## Why this boundary matters
