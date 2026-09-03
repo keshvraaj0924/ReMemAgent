@@ -17,8 +17,11 @@ RawEnvironmentFactory = Callable[[int], Any]
 SUPPORTED_BENCHMARKS = ("alfworld", "webshop")
 
 
-def _benchmark_family(benchmark_name: str) -> str:
-    """Return the supported benchmark family from a benchmark identifier."""
+def _benchmark_family(benchmark_name: object) -> str:
+    """Return the supported benchmark family from a validated identifier."""
+
+    if not isinstance(benchmark_name, str) or not benchmark_name.strip():
+        raise ValueError("benchmark_name must be a non-empty string")
 
     normalized_name = benchmark_name.strip().lower()
     for benchmark in SUPPORTED_BENCHMARKS:
@@ -27,7 +30,7 @@ def _benchmark_family(benchmark_name: str) -> str:
     raise ValueError(f"unsupported benchmark: {benchmark_name!r}")
 
 
-def _validate_seed(seed: int) -> None:
+def _validate_seed(seed: object) -> None:
     """Reject seed values that cannot satisfy the deterministic factory contract."""
 
     if isinstance(seed, bool) or not isinstance(seed, int):
