@@ -8,7 +8,6 @@ first-class, documented path to the real upstream environments.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-import inspect
 import random
 import threading
 from typing import Any
@@ -168,8 +167,6 @@ def build_webshop_text_environment_factory(
             if num_products is not None:
                 kwargs["num_products"] = num_products
             environment = gym.make(environment_id, **kwargs)
-        except BaseException:
-            raise
         finally:
             random.setstate(previous_state)
 
@@ -187,22 +184,6 @@ def _validate_seed(seed: int) -> None:
 
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise TypeError("seed must be an integer")
-
-
-def _reset_with_seed(reset: Callable[..., Any], seed: int) -> Any:
-    """Reset an environment with a seed when its callable supports that keyword."""
-
-    try:
-        signature = inspect.signature(reset)
-    except (TypeError, ValueError):
-        return reset(seed=seed)
-
-    if "seed" in signature.parameters or any(
-        parameter.kind is inspect.Parameter.VAR_KEYWORD
-        for parameter in signature.parameters.values()
-    ):
-        return reset(seed=seed)
-    return reset()
 
 
 def _close_if_supported(environment: Any) -> None:
