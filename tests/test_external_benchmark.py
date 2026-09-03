@@ -75,9 +75,34 @@ def test_external_benchmark_spec_rejects_invalid_episode_count() -> None:
         _build_spec(episode_count=-1)
 
 
+def test_external_benchmark_spec_rejects_non_integer_episode_count() -> None:
+    with pytest.raises(TypeError, match="episode_count must be an integer"):
+        _build_spec(episode_count=1.0)
+
+
+def test_external_benchmark_spec_rejects_boolean_episode_count() -> None:
+    with pytest.raises(TypeError, match="episode_count must be an integer"):
+        _build_spec(episode_count=True)
+
+
 def test_external_benchmark_spec_rejects_invalid_max_steps() -> None:
     with pytest.raises(ValueError, match="max_steps"):
         _build_spec(max_steps=0)
+
+
+def test_external_benchmark_spec_rejects_non_integer_max_steps() -> None:
+    with pytest.raises(TypeError, match="max_steps must be an integer"):
+        _build_spec(max_steps=1.0)
+
+
+def test_external_benchmark_spec_rejects_boolean_max_steps() -> None:
+    with pytest.raises(TypeError, match="max_steps must be an integer"):
+        _build_spec(max_steps=True)
+
+
+def test_external_benchmark_spec_rejects_non_string_benchmark_name() -> None:
+    with pytest.raises(ValueError, match="benchmark_name must be a non-empty string"):
+        _build_spec(benchmark_name=7)
 
 
 def test_external_benchmark_spec_rejects_invalid_seed_type() -> None:
@@ -93,6 +118,16 @@ def test_external_benchmark_spec_rejects_boolean_seed() -> None:
 def test_external_benchmark_spec_rejects_invalid_minimum_trust() -> None:
     with pytest.raises(ValueError, match="minimum_trust"):
         _build_spec(minimum_trust=1.1)
+
+
+def test_external_benchmark_spec_rejects_boolean_minimum_trust() -> None:
+    with pytest.raises(TypeError, match="minimum_trust must be a number"):
+        _build_spec(minimum_trust=True)
+
+
+def test_external_benchmark_spec_rejects_non_numeric_minimum_trust() -> None:
+    with pytest.raises(TypeError, match="minimum_trust must be a number"):
+        _build_spec(minimum_trust="0.5")
 
 
 def test_external_benchmark_spec_rejects_invalid_callable_field() -> None:
