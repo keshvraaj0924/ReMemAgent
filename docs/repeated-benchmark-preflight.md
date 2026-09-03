@@ -6,8 +6,11 @@ provides a fail-fast gate for multi-seed ALFWorld/WebShop launches.
 ## Contract
 
 The helper accepts an `ExternalBenchmarkSpec` and an ordered sequence of
-independent seeds. It rejects an empty seed sequence and duplicate seeds, then
-runs the existing runtime preflight once per seed.
+independent seeds. Seed validation is centralized in
+`experiments.external_benchmark.validate_seed_sequence`, so measured runs,
+preflight-only runs, and the CLI share the same contract. It rejects an empty
+seed sequence, non-integer values (including booleans), and duplicate seeds
+without coercing or silently changing the requested values.
 
 Each probe therefore uses the same environment adapter and policy boundary as a
 measured run. The configured policy factory receives the seed used by that
