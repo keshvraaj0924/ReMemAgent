@@ -94,12 +94,7 @@ def validate_seed_sequence(seeds: Sequence[int]) -> tuple[int, ...]:
 
 
 def validate_external_benchmark(spec: ExternalBenchmarkSpec) -> None:
-    """Resolve every configured callable without constructing an environment.
-
-    This is a dependency-aware preflight check for CI and experiment launchers.
-    It verifies import paths and callable types while deliberately avoiding
-    environment creation, model loading, checkpoint loading, or inference.
-    """
+    """Resolve every configured callable without constructing an environment."""
 
     load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
     resolve_callable(spec.success_evaluator)
@@ -120,15 +115,12 @@ def validate_external_benchmark_runtime(
 ) -> EnvironmentContractReport:
     """Probe the real configured environment and policy before execution.
 
-    The environment contract validator owns the temporary probe environment and
-    closes it in its own ``finally`` block. This function deliberately does not
-    close that environment a second time. Policy probing happens against the
-    validated reset observation and an isolated memory store, so a policy
-    checkpoint can be loaded and invoked without coupling policy lifecycle to
-    the environment cleanup boundary.
-
-    A missing run seed uses zero only for this preflight probe; measured runs
-    retain their explicit seed contract. Probe output is never benchmark data.
+    The runtime preflight owns the temporary environment because policy
+    validation must happen against the same successfully reset observation.
+    Environment validation therefore disables the validator's default cleanup;
+    this function closes the environment exactly once after policy validation.
+    If policy validation fails, its exception remains primary even when cleanup
+    also fails. Probe output is never benchmark data.
     """
 
     validate_external_benchmark(spec)
@@ -138,17 +130,23 @@ def validate_external_benchmark_runtime(
     )
     probe_seed = 0 if spec.seed is None else spec.seed
     environment = environment_factory(probe_seed)
-    environment_report = validate_environment_contract(
-        environment,
-        probe_action=probe_action,
-    )
-    policy_factory = _resolve_policy_factory(spec)
-    validate_policy_contract(
-        policy_factory,
-        seed=probe_seed,
-        observation=environment_report.initial_observation,
-        store=MemoryStore(),
-    )
+    try:
+        environment_report = validate_environment_contract(
+            environment,
+            probe_action=probe_action,
+            close_environment=False,
+        )
+        policy_factory = _resolve_policy_factory(spec)
+        validate_policy_contract(
+            policy_factory,
+            seed=probe_seed,
+            observation=environment_report.initial_observation,
+            store=MemoryStore(),
+        )
+    except BaseException:
+        _close_environment_after_failure(environment)
+        raise
+    _close_environment(environment)
     return environment_report
 
 
@@ -207,16 +205,9 @@ def run_repeated_external_benchmarks(
     spec: ExternalBenchmarkSpec,
     seeds: Sequence[int],
 ) -> tuple[BenchmarkRunReport, ...]:
-    """Execute the same external benchmark independently for each requested seed.
-
-    A fresh runner and specification are used for every seed so memory state,
-    policy state, and episode-local resources cannot leak across independent
-    experimental repetitions. The returned reports retain each seed in their
-    configuration metadata for downstream paired analysis.
-    """
+    """Execute the same external benchmark independently for each requested seed."""
 
     selected_seeds = validate_seed_sequence(seeds)
-
     return tuple(
         run_external_benchmark(replace(spec, seed=seed))
         for seed in selected_seeds
@@ -249,12 +240,18 @@ def _validate_callable_specification(field_name: str, specification: str) -> Non
         raise ValueError(f"{field_name} must use module:attribute notation") from exc
 
 
-__all__ = [
-    "ExternalBenchmarkSpec",
-    "resolve_callable",
-    "run_external_benchmark",
-    "run_repeated_external_benchmarks",
-    "validate_external_benchmark",
-    "validate_external_benchmark_runtime",
-    "validate_seed_sequence",
-]
+def _close_environment_after_failure(environment: object) -> None:
+    """Attempt cleanup without replacing the active preflight exception."""
+
+    try:
+        _close_environment(environment)
+    except BaseException:
+        return
+
+
+def _close_environment(environment: object) -> None:
+    """Close an environment when it exposes a callable cleanup method."""
+
+    close = getattr(environment, "close", None)
+    if callable(close):
+        close()
