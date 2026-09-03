@@ -51,7 +51,9 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda: benchmark_cli.collect_runtime_provenance(environment={"REMEM_GIT_COMMIT": "abc123"}),
+        lambda **kwargs: benchmark_cli.collect_runtime_provenance(
+            environment={"REMEM_GIT_COMMIT": "abc123"}
+        ),
     )
 
     assert benchmark_cli.main() == 0
@@ -127,7 +129,7 @@ def test_main_rejects_probe_action_without_runtime_preflight(monkeypatch) -> Non
 
     import pytest
 
-    with pytest.raises(ValueError, match="--probe-action requires --runtime-preflight"):
+    with pytest.raises(ValueError, match="--probe-action requires a runtime preflight"):
         benchmark_cli.main()
 
 
