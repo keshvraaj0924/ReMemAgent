@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import math
 
 from .pipeline import MemoryCandidate, MemoryGuidancePipeline
 from .store import MemoryStore
@@ -39,6 +40,20 @@ class MemoryGuidedPolicy:
         query_builder: QueryBuilder | None = None,
         minimum_trust: float = 0.0,
     ) -> None:
+        """Create a policy with validated research and learned-component boundaries."""
+
+        if not isinstance(store, MemoryStore):
+            raise TypeError("store must be a MemoryStore")
+        if not callable(action_policy):
+            raise TypeError("action_policy must be callable")
+        if pipeline is not None and not isinstance(pipeline, MemoryGuidancePipeline):
+            raise TypeError("pipeline must be a MemoryGuidancePipeline when provided")
+        if query_builder is not None and not callable(query_builder):
+            raise TypeError("query_builder must be callable when provided")
+        if isinstance(minimum_trust, bool) or not isinstance(minimum_trust, (int, float)):
+            raise TypeError("minimum_trust must be a finite number between 0 and 1")
+        if not math.isfinite(float(minimum_trust)):
+            raise ValueError("minimum_trust must be finite")
         if not 0.0 <= minimum_trust <= 1.0:
             raise ValueError("minimum_trust must be between 0 and 1")
         self.store = store
@@ -56,12 +71,12 @@ class MemoryGuidedPolicy:
 
     def select_guidance(self, current_state: str) -> MemoryGuidanceDecision:
         """Retrieve and reconstruct the strongest trusted guidance candidate."""
-        if not current_state.strip():
-            raise ValueError("current_state must not be empty")
+        if not isinstance(current_state, str) or not current_state.strip():
+            raise ValueError("current_state must be a non-empty string")
 
         query = self.query_builder(current_state)
-        if not query.strip():
-            raise ValueError("query_builder must return a non-empty query")
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query_builder must return a non-empty string")
 
         candidates = self.pipeline.build_candidates(
             self.store,
@@ -85,8 +100,8 @@ class MemoryGuidedPolicy:
         """Generate an action after retrieving state-aligned memory guidance."""
         decision = self.select_guidance(current_state)
         action = self.action_policy(current_state, decision.guidance)
-        if not action.strip():
-            raise ValueError("action_policy must return a non-empty action")
+        if not isinstance(action, str) or not action.strip():
+            raise ValueError("action_policy must return a non-empty string")
         return action
 
 
