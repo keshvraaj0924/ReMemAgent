@@ -57,7 +57,7 @@ def _validate_token_ids(token_ids: Sequence[int], field_name: str) -> tuple[int,
     """Validate and normalize token IDs into immutable integer tuples."""
 
     normalized = tuple(token_ids)
-    if any(not isinstance(token_id, int) for token_id in normalized):
+    if any(isinstance(token_id, bool) or not isinstance(token_id, int) for token_id in normalized):
         raise TypeError(f"{field_name} must contain only integer token IDs")
     if any(token_id < 0 for token_id in normalized):
         raise ValueError(f"{field_name} must contain non-negative token IDs")
@@ -73,6 +73,8 @@ def _validate_response_mask(
     normalized = tuple(response_mask)
     if len(normalized) != response_length:
         raise ValueError("response_mask must have one entry per response token")
+    if any(isinstance(mask, bool) or not isinstance(mask, int) for mask in normalized):
+        raise TypeError("response_mask must contain only integer values")
     if any(mask not in (0, 1) for mask in normalized):
         raise ValueError("response_mask values must be either 0 or 1")
     return normalized
