@@ -80,6 +80,16 @@ def test_external_benchmark_spec_rejects_invalid_max_steps() -> None:
         _build_spec(max_steps=0)
 
 
+def test_external_benchmark_spec_rejects_invalid_seed_type() -> None:
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        _build_spec(seed="7")
+
+
+def test_external_benchmark_spec_rejects_boolean_seed() -> None:
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        _build_spec(seed=True)
+
+
 def test_external_benchmark_spec_rejects_invalid_minimum_trust() -> None:
     with pytest.raises(ValueError, match="minimum_trust"):
         _build_spec(minimum_trust=1.1)
