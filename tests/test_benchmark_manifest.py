@@ -99,6 +99,22 @@ def test_load_benchmark_artifact_manifest_rejects_unsupported_schema(tmp_path: P
         load_benchmark_artifact_manifest(manifest_path)
 
 
+def test_load_benchmark_artifact_manifest_rejects_boolean_manifest_schema(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "report.json"
+    manifest_path = tmp_path / "manifest.json"
+    _write_valid_report(report_path)
+    valid_manifest = build_benchmark_artifact_manifest(report_path).to_dict()
+    manifest_path.write_text(
+        json.dumps({"manifest_schema_version": True, **valid_manifest}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unsupported benchmark artifact manifest schema version"):
+        load_benchmark_artifact_manifest(manifest_path)
+
+
 @pytest.mark.parametrize(
     "field,value",
     [
