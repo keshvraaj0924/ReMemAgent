@@ -39,7 +39,7 @@ def build_benchmark_artifact_manifest(report_path: Path) -> BenchmarkArtifactMan
     payload = report_path.read_bytes()
     document = _load_json_document(report_path, payload)
     schema_version = document.get("schema_version")
-    if schema_version != BENCHMARK_REPORT_SCHEMA_VERSION:
+    if not _is_strict_integer(schema_version) or schema_version != BENCHMARK_REPORT_SCHEMA_VERSION:
         raise ValueError(
             "unsupported benchmark report schema version: "
             f"{schema_version!r}"
@@ -102,13 +102,18 @@ def load_benchmark_artifact_manifest(manifest_path: Path) -> BenchmarkArtifactMa
             "unsupported benchmark artifact manifest schema version: "
             f"{document.get('manifest_schema_version')!r}"
         )
-    try:
-        schema_version = int(document["schema_version"])
-        byte_count = int(document["byte_count"])
-        sha256 = document["sha256"]
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError("benchmark artifact manifest is missing required fields") from exc
-    if byte_count < 0 or not isinstance(sha256, str) or len(sha256) != 64:
+    schema_version = document.get("schema_version")
+    byte_count = document.get("byte_count")
+    sha256 = document.get("sha256")
+    if (
+        not _is_strict_integer(schema_version)
+        or schema_version != BENCHMARK_REPORT_SCHEMA_VERSION
+        or not _is_strict_integer(byte_count)
+        or byte_count < 0
+        or not isinstance(sha256, str)
+        or len(sha256) != 64
+        or not _is_lowercase_hex_digest(sha256)
+    ):
         raise ValueError("benchmark artifact manifest contains invalid integrity fields")
     return BenchmarkArtifactManifest(
         schema_version=schema_version,
@@ -141,6 +146,18 @@ def _load_json_document(report_path: Path, payload: bytes) -> dict[str, Any]:
     if not isinstance(document, dict):
         raise ValueError("benchmark report JSON root must be an object")
     return document
+
+
+def _is_strict_integer(value: object) -> bool:
+    """Return whether a value is an integer but not a boolean."""
+
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_lowercase_hex_digest(value: str) -> bool:
+    """Return whether a value is a canonical lowercase SHA-256 digest."""
+
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def _sync_directory(directory: Path) -> None:
