@@ -8,22 +8,26 @@ ReMemAgent keeps benchmark and training frameworks outside the research core. Th
 
 `BenchmarkSuiteRunner` executes matched cases and records measured outcomes. It does not synthesize benchmark scores. `experiments.external_benchmark.run_external_benchmark()` is the explicit boundary for executing real benchmark environments supplied by an experiment. `load_callable()` can resolve a factory from `module:attribute` notation, allowing benchmark dependencies and model checkpoints to remain in the experiment environment rather than the research package.
 
-For example, an experiment module can expose the concrete ALFWorld or WebShop setup:
+The normalized `BenchmarkEnvironmentFactory` enforces the same deterministic seed contract used by the external benchmark runner: episode seeds must be integers, and booleans are rejected even though Python treats them as integer subclasses. Invalid seeds are rejected before the caller-owned raw environment factory is invoked. This keeps direct adapter usage from bypassing reproducibility validation.
+
+For example, an experiment can compose the normalized runner directly:
 
 ```python
-from experiments.external_benchmark import run_external_benchmark
+from remem.benchmark import BenchmarkSuiteRunner
 
-report = run_external_benchmark(
+runner = BenchmarkSuiteRunner()
+report = runner.run(
     benchmark_name="alfworld-eval",
     episode_count=100,
     max_steps=50,
     environment_factory=make_environment,
     policy_factory=make_policy,
     success_evaluator=is_success,
+    seed=17,
 )
 ```
 
-The supplied `environment_factory` is responsible for constructing the actual benchmark environment and wrapping it with `AlfWorldAdapter` or `WebShopAdapter`. The supplied `policy_factory` is responsible for the real model/checkpoint and action generation. This boundary therefore executes measured episodes without introducing benchmark-specific imports into the core package.
+The supplied `environment_factory` is responsible for constructing the actual benchmark environment and is wrapped by the external integration layer with `AlfWorldAdapter` or `WebShopAdapter`. The supplied `policy_factory` is responsible for the real model/checkpoint and action generation. This boundary therefore executes measured episodes without introducing benchmark-specific imports into the core package.
 
 ### Command-line execution and persisted reports
 
@@ -37,8 +41,27 @@ remem-benchmark \
   --environment-factory my_experiment:make_environment \
   --policy-factory my_experiment:make_policy \
   --success-evaluator my_experiment:is_success \
+  --seed 17 \
   --output artifacts/alfworld-eval.json
 ```
+
+When the learned policy should receive ReMemAgent memory guidance, use `--action-policy-factory` instead. The caller-owned factory receives the deterministic episode seed and returns the model-backed action callable; ReMemAgent owns only memory retrieval/guidance and the shared memory store:
+
+```bash
+remem-benchmark \
+  --benchmark alfworld-eval \
+  --episodes 100 \
+  --max-steps 50 \
+  --environment-factory my_experiment:make_environment \
+  --action-policy-factory my_experiment:make_action_policy \
+  --minimum-trust 0.6 \
+  --success-evaluator my_experiment:is_success \
+  --seed 17 \
+  --output artifacts/alfworld-remem.json \
+  --manifest artifacts/alfworld-remem.json.manifest.json
+```
+
+For repeated independent runs, provide `--seeds 17,23,29` instead of `--seed`. `--preflight-before-run` performs the runtime environment and policy probe for every requested seed before any measured episode starts. This is a launch gate, not benchmark evidence.
 
 The persisted report contains measured episode outcomes and the core trajectory fields needed for analysis. Benchmark-specific `StepResult.info` payloads are deliberately excluded because external environments may place arbitrary non-JSON objects there; this keeps the artifact deterministic without inventing a serialization policy for third-party objects. The benchmark environment, model checkpoint, dependency versions, and experiment configuration remain caller-owned provenance and should be recorded alongside the report.
 
