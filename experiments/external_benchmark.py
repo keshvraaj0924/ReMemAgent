@@ -9,6 +9,7 @@ entrypoint reproducible and testable.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import cast
 
@@ -73,6 +74,19 @@ class ExternalBenchmarkSpec:
             )
         if not 0.0 <= self.minimum_trust <= 1.0:
             raise ValueError("minimum_trust must be between 0 and 1")
+
+
+def validate_seed_sequence(seeds: Sequence[int]) -> tuple[int, ...]:
+    """Normalize and validate an independent integer seed sequence."""
+
+    selected_seeds = tuple(seeds)
+    if not selected_seeds:
+        raise ValueError("seeds must contain at least one seed")
+    if any(isinstance(seed, bool) or not isinstance(seed, int) for seed in selected_seeds):
+        raise TypeError("seeds must contain only integers")
+    if len(selected_seeds) != len(set(selected_seeds)):
+        raise ValueError("seeds must be unique")
+    return selected_seeds
 
 
 def validate_external_benchmark(spec: ExternalBenchmarkSpec) -> None:
@@ -187,7 +201,7 @@ def run_external_benchmark(
 
 def run_repeated_external_benchmarks(
     spec: ExternalBenchmarkSpec,
-    seeds: tuple[int, ...] | list[int],
+    seeds: Sequence[int],
 ) -> tuple[BenchmarkRunReport, ...]:
     """Execute the same external benchmark independently for each requested seed.
 
@@ -197,11 +211,7 @@ def run_repeated_external_benchmarks(
     configuration metadata for downstream paired analysis.
     """
 
-    selected_seeds = tuple(seeds)
-    if not selected_seeds:
-        raise ValueError("seeds must contain at least one seed")
-    if len(selected_seeds) != len(set(selected_seeds)):
-        raise ValueError("seeds must be unique")
+    selected_seeds = validate_seed_sequence(seeds)
 
     return tuple(
         run_external_benchmark(replace(spec, seed=seed))
@@ -242,4 +252,5 @@ __all__ = [
     "run_repeated_external_benchmarks",
     "validate_external_benchmark",
     "validate_external_benchmark_runtime",
+    "validate_seed_sequence",
 ]
