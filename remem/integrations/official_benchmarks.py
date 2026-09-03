@@ -16,6 +16,7 @@ from typing import Any
 
 RawEnvironmentFactory = Callable[[int], Any]
 _ALFWORLD_RANDOM_LOCK = threading.Lock()
+_WEBSHOP_RANDOM_LOCK = threading.Lock()
 
 
 class _SeededAlfWorldEnvironment:
@@ -39,6 +40,39 @@ class _SeededAlfWorldEnvironment:
         if "seed" in kwargs:
             raise TypeError("ALFWorld adapter owns the reset seed; do not pass seed explicitly")
         with _ALFWORLD_RANDOM_LOCK:
+            previous_state = random.getstate()
+            random.seed(self._seed)
+            try:
+                return self._environment.reset(*args, **kwargs)
+            finally:
+                random.setstate(previous_state)
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate non-reset operations to the upstream environment."""
+
+        return getattr(self._environment, name)
+
+
+class _SeededWebShopEnvironment:
+    """Scope WebShop's module-level Python RNG to each benchmark reset.
+
+    The upstream WebShop text environment exposes ``reset(session=None,
+    instruction_text=None)`` rather than Gym's seeded reset contract. Its task
+    selection and generated session identifiers use Python's global ``random``
+    module, so a per-reset RNG scope is required for seed-level reproducibility.
+    """
+
+    def __init__(self, environment: Any, seed: int) -> None:
+        _validate_seed(seed)
+        self._environment = environment
+        self._seed = seed
+
+    def reset(self, *args: Any, **kwargs: Any) -> Any:
+        """Reset WebShop under the configured episode seed."""
+
+        if "seed" in kwargs:
+            raise TypeError("WebShop adapter owns the reset seed; do not pass seed explicitly")
+        with _WEBSHOP_RANDOM_LOCK:
             previous_state = random.getstate()
             random.seed(self._seed)
             try:
@@ -125,23 +159,25 @@ def build_webshop_text_environment_factory(
         ) from exc
 
     def create_environment(seed: int) -> Any:
-        """Create one upstream WebShop text environment and seed it."""
+        """Create one upstream WebShop text environment and seed its reset boundary."""
 
         _validate_seed(seed)
-        kwargs: dict[str, Any] = {"observation_mode": observation_mode}
-        if num_products is not None:
-            kwargs["num_products"] = num_products
-        environment = gym.make(environment_id, **kwargs)
+        previous_state = random.getstate()
+        try:
+            kwargs: dict[str, Any] = {"observation_mode": observation_mode}
+            if num_products is not None:
+                kwargs["num_products"] = num_products
+            environment = gym.make(environment_id, **kwargs)
+        except BaseException:
+            raise
+        finally:
+            random.setstate(previous_state)
+
         reset = getattr(environment, "reset", None)
         if not callable(reset):
             _close_if_supported(environment)
             raise TypeError("WebShop environment must expose reset()")
-        try:
-            _reset_with_seed(reset, seed)
-        except BaseException:
-            _close_if_supported(environment)
-            raise
-        return environment
+        return _SeededWebShopEnvironment(environment, seed)
 
     return create_environment
 
