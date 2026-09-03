@@ -50,12 +50,10 @@ class ExternalBenchmarkSpec:
     def __post_init__(self) -> None:
         """Reject invalid experiment configuration before resolving dependencies."""
 
-        if not self.benchmark_name.strip():
-            raise ValueError("benchmark_name must not be empty")
-        if self.episode_count < 0:
-            raise ValueError("episode_count must be non-negative")
-        if self.max_steps <= 0:
-            raise ValueError("max_steps must be positive")
+        if not isinstance(self.benchmark_name, str) or not self.benchmark_name.strip():
+            raise ValueError("benchmark_name must be a non-empty string")
+        _validate_non_negative_integer("episode_count", self.episode_count)
+        _validate_positive_integer("max_steps", self.max_steps)
         if self.seed is not None and (
             isinstance(self.seed, bool) or not isinstance(self.seed, int)
         ):
@@ -76,6 +74,10 @@ class ExternalBenchmarkSpec:
             _validate_callable_specification(
                 "transfer_success_evaluator", self.transfer_success_evaluator
             )
+        if isinstance(self.minimum_trust, bool) or not isinstance(
+            self.minimum_trust, (int, float)
+        ):
+            raise TypeError("minimum_trust must be a number between 0 and 1")
         if not 0.0 <= self.minimum_trust <= 1.0:
             raise ValueError("minimum_trust must be between 0 and 1")
 
@@ -238,6 +240,24 @@ def _validate_callable_specification(field_name: str, specification: str) -> Non
         split_callable_specification(specification)
     except ValueError as exc:
         raise ValueError(f"{field_name} must use module:attribute notation") from exc
+
+
+def _validate_non_negative_integer(field_name: str, value: object) -> None:
+    """Require an exact integer value greater than or equal to zero."""
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field_name} must be an integer")
+    if value < 0:
+        raise ValueError(f"{field_name} must be non-negative")
+
+
+def _validate_positive_integer(field_name: str, value: object) -> None:
+    """Require an exact integer value greater than zero."""
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field_name} must be an integer")
+    if value <= 0:
+        raise ValueError(f"{field_name} must be positive")
 
 
 def _close_environment_after_failure(environment: object) -> None:
