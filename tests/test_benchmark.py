@@ -193,6 +193,59 @@ def test_benchmark_runner_rejects_invalid_configuration() -> None:
             raise AssertionError("invalid benchmark configuration should fail")
 
 
+def test_benchmark_runner_rejects_boolean_integer_inputs_before_factory_calls() -> None:
+    factory_calls: list[str] = []
+
+    def environment_factory(index: int) -> FakeEnvironment:
+        factory_calls.append("environment")
+        return FakeEnvironment(index)
+
+    common = {
+        "benchmark_name": "strict-input-smoke",
+        "episode_count": 1,
+        "max_steps": 1,
+        "environment_factory": environment_factory,
+        "policy_factory": lambda index, store: lambda state: "act",
+        "success_evaluator": lambda episode: True,
+    }
+
+    for kwargs in (
+        {**common, "episode_count": True},
+        {**common, "max_steps": False},
+        {**common, "seed": True},
+    ):
+        try:
+            BenchmarkSuiteRunner().run(**kwargs)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("boolean integer inputs should be rejected")
+
+    assert factory_calls == []
+
+
+def test_benchmark_runner_rejects_non_callable_dependencies_before_execution() -> None:
+    common = {
+        "benchmark_name": "callable-contract-smoke",
+        "episode_count": 1,
+        "max_steps": 1,
+    }
+
+    invalid_inputs = (
+        {**common, "environment_factory": object(), "policy_factory": lambda index, store: lambda state: "act", "success_evaluator": lambda episode: True},
+        {**common, "environment_factory": lambda index: FakeEnvironment(index), "policy_factory": object(), "success_evaluator": lambda episode: True},
+        {**common, "environment_factory": lambda index: FakeEnvironment(index), "policy_factory": lambda index, store: lambda state: "act", "success_evaluator": object()},
+    )
+
+    for kwargs in invalid_inputs:
+        try:
+            BenchmarkSuiteRunner().run(**kwargs)
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("non-callable benchmark dependencies should fail")
+
+
 def test_benchmark_runner_rejects_stale_provenance_configuration() -> None:
     configuration = BenchmarkRunConfiguration(
         benchmark_name="webshop-smoke",
