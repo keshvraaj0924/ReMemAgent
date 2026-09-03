@@ -56,6 +56,10 @@ class ExternalBenchmarkSpec:
             raise ValueError("episode_count must be non-negative")
         if self.max_steps <= 0:
             raise ValueError("max_steps must be positive")
+        if self.seed is not None and (
+            isinstance(self.seed, bool) or not isinstance(self.seed, int)
+        ):
+            raise TypeError("seed must be an integer or None")
         if self.policy_factory is None and self.action_policy_factory is None:
             raise ValueError("one of policy_factory or action_policy_factory is required")
         if self.policy_factory is not None and self.action_policy_factory is not None:
