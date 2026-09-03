@@ -8,8 +8,10 @@ from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
     resolve_callable,
     run_external_benchmark,
+    run_repeated_external_benchmarks,
     validate_external_benchmark,
     validate_external_benchmark_runtime,
+    validate_seed_sequence,
 )
 from remem.benchmark import BenchmarkSuiteRunner
 from remem.environments.base import StepResult
@@ -86,6 +88,30 @@ def test_external_benchmark_spec_rejects_invalid_minimum_trust() -> None:
 def test_external_benchmark_spec_rejects_invalid_callable_field() -> None:
     with pytest.raises(ValueError, match="policy_factory"):
         _build_spec(policy_factory="not-a-callable-spec")
+
+
+def test_validate_seed_sequence_rejects_empty_sequence() -> None:
+    with pytest.raises(ValueError, match="at least one seed"):
+        validate_seed_sequence(())
+
+
+def test_validate_seed_sequence_rejects_non_integer_seed() -> None:
+    with pytest.raises(TypeError, match="only integers"):
+        validate_seed_sequence((7, "11"))  # type: ignore[arg-type]
+
+
+def test_validate_seed_sequence_rejects_boolean_seed() -> None:
+    with pytest.raises(TypeError, match="only integers"):
+        validate_seed_sequence((True,))  # type: ignore[arg-type]
+
+
+def test_validate_seed_sequence_rejects_duplicate_seed() -> None:
+    with pytest.raises(ValueError, match="unique"):
+        validate_seed_sequence((7, 7))
+
+
+def test_validate_seed_sequence_preserves_order() -> None:
+    assert validate_seed_sequence((23, 7, -1)) == (23, 7, -1)
 
 
 def test_resolve_callable_supports_nested_attributes() -> None:
@@ -180,6 +206,22 @@ def test_run_external_benchmark_passes_seed_to_factories() -> None:
         "act-100",
         "act-101",
     ]
+
+
+def test_run_repeated_external_benchmarks_rejects_invalid_seed_type() -> None:
+    with pytest.raises(TypeError, match="only integers"):
+        run_repeated_external_benchmarks(_build_spec(), (7, "11"))  # type: ignore[arg-type]
+
+
+def test_run_repeated_external_benchmarks_rejects_boolean_seed() -> None:
+    with pytest.raises(TypeError, match="only integers"):
+        run_repeated_external_benchmarks(_build_spec(), (True,))  # type: ignore[arg-type]
+
+
+def test_run_repeated_external_benchmarks_preserves_seed_order() -> None:
+    reports = run_repeated_external_benchmarks(_build_spec(), (23, 7))
+
+    assert [report.seed for report in reports] == [23, 7]
 
 
 def test_run_external_benchmark_records_callable_provenance() -> None:
