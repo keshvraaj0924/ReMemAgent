@@ -75,6 +75,38 @@ def test_encode_episode_rejects_non_integer_token_ids() -> None:
         )
 
 
+def test_encode_episode_rejects_boolean_and_negative_token_ids() -> None:
+    with pytest.raises(TypeError, match="integer token IDs"):
+        encode_episode_for_verl(
+            _episode(),
+            encode_prompt=lambda _: [True],  # type: ignore[list-item]
+            encode_completion=lambda _: [1],
+        )
+
+    with pytest.raises(ValueError, match="non-negative"):
+        encode_episode_for_verl(
+            _episode(),
+            encode_prompt=lambda _: [-1],
+            encode_completion=lambda _: [1],
+        )
+
+
+def test_encode_episode_rejects_invalid_completion_token_ids() -> None:
+    with pytest.raises(TypeError, match="integer token IDs"):
+        encode_episode_for_verl(
+            _episode(),
+            encode_prompt=lambda _: [1],
+            encode_completion=lambda _: [False],  # type: ignore[list-item]
+        )
+
+    with pytest.raises(ValueError, match="non-negative"):
+        encode_episode_for_verl(
+            _episode(),
+            encode_prompt=lambda _: [1],
+            encode_completion=lambda _: [-2],
+        )
+
+
 def test_encode_episode_rejects_blank_memory_identifiers() -> None:
     with pytest.raises(ValueError, match="non-empty identifiers"):
         encode_episode_for_verl(
