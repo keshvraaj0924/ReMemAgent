@@ -122,8 +122,14 @@ def build_alfworld_text_environment_factory(
         """Create one isolated upstream ALFWorld environment."""
 
         _validate_seed(seed)
-        environment = environment_class(config, train_eval=train_eval)
-        initialized_environment = environment.init_env(batch_size=1)
+        with _ALFWORLD_RANDOM_LOCK:
+            previous_state = random.getstate()
+            random.seed(seed)
+            try:
+                environment = environment_class(config, train_eval=train_eval)
+                initialized_environment = environment.init_env(batch_size=1)
+            finally:
+                random.setstate(previous_state)
         return _SeededAlfWorldEnvironment(initialized_environment, seed)
 
     return create_environment
