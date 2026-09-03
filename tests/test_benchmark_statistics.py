@@ -98,6 +98,17 @@ def test_statistics_reject_mixed_benchmarks() -> None:
         raise AssertionError("mixed benchmarks must be rejected")
 
 
+def test_statistics_validate_report_structure_before_aggregation() -> None:
+    invalid_report = _report(1, float("nan"), True)
+
+    try:
+        summarize_benchmark_reports((invalid_report,))
+    except ValueError as exc:
+        assert "total_reward must be finite" in str(exc)
+    else:
+        raise AssertionError("invalid benchmark reports must be rejected")
+
+
 def test_compare_benchmark_reports_pairs_metrics_by_seed() -> None:
     baseline = (_report(1, 0.0, False), _report(2, 0.5, True))
     treatment = (_report(1, 1.0, True), _report(2, 0.5, True))
@@ -160,3 +171,14 @@ def test_compare_benchmark_reports_rejects_empty_labels() -> None:
         assert "baseline_label" in str(exc)
     else:
         raise AssertionError("empty condition labels must be rejected")
+
+
+def test_compare_benchmark_reports_rejects_non_string_labels() -> None:
+    reports = (_report(1, 0.0, False),)
+
+    try:
+        compare_benchmark_reports(reports, reports, baseline_label=123)  # type: ignore[arg-type]
+    except TypeError as exc:
+        assert "baseline_label" in str(exc)
+    else:
+        raise AssertionError("non-string condition labels must be rejected")
