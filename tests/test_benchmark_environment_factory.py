@@ -60,6 +60,43 @@ def test_factory_passes_episode_seed_to_raw_factory() -> None:
     assert observed_seeds == [23]
 
 
+def test_factory_rejects_non_integer_seed_before_environment_creation() -> None:
+    created = False
+
+    def raw_factory(_seed: int) -> FakeEnvironment:
+        nonlocal created
+        created = True
+        return FakeEnvironment()
+
+    factory = BenchmarkEnvironmentFactory("alfworld", raw_factory)
+
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        factory(1.5)  # type: ignore[arg-type]
+
+    assert not created
+
+
+def test_factory_rejects_boolean_seed_before_environment_creation() -> None:
+    created = False
+
+    def raw_factory(_seed: int) -> FakeEnvironment:
+        nonlocal created
+        created = True
+        return FakeEnvironment()
+
+    factory = BenchmarkEnvironmentFactory("webshop", raw_factory)
+
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        factory(True)  # type: ignore[arg-type]
+
+    assert not created
+
+
+def test_factory_rejects_non_callable_raw_factory() -> None:
+    with pytest.raises(TypeError, match="raw_factory must be callable"):
+        BenchmarkEnvironmentFactory("alfworld", object())  # type: ignore[arg-type]
+
+
 def test_factory_adds_benchmark_context_when_environment_creation_fails() -> None:
     def raw_factory(seed: int) -> FakeEnvironment:
         raise OSError(f"seed {seed} unavailable")
