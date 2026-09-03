@@ -32,6 +32,9 @@ def resolve_callable(specification: str) -> Callable[..., Any]:
 def split_callable_specification(specification: str) -> tuple[str, str]:
     """Validate and split explicit ``module:attribute`` callable notation."""
 
+    if not isinstance(specification, str):
+        raise TypeError("callable specification must be a string")
+
     module_name, separator, attribute_path = specification.partition(":")
     attribute_parts = attribute_path.strip().split(".") if attribute_path.strip() else []
     if (
