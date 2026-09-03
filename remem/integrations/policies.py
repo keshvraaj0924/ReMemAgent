@@ -42,6 +42,7 @@ def build_memory_guided_policy_factory(
     def create_policy(seed: int, store: MemoryStore) -> Policy:
         """Create one memory-guided policy for a benchmark episode."""
 
+        _validate_seed(seed)
         action_policy = action_policy_factory(seed)
         if not callable(action_policy):
             raise TypeError("action_policy_factory must return a callable action policy")
@@ -70,6 +71,7 @@ def validate_policy_contract(
     particular model SDK or checkpoint format.
     """
 
+    _validate_seed(seed)
     if not isinstance(observation, str) or not observation.strip():
         raise ValueError("observation must be a non-empty string")
     if not callable(policy_factory):
@@ -84,6 +86,13 @@ def validate_policy_contract(
     if not isinstance(action, str) or not action.strip():
         raise ValueError("policy must return a non-empty string action")
     return PolicyContractReport(action=action)
+
+
+def _validate_seed(seed: object) -> None:
+    """Reject values that are not exact integer episode seeds."""
+
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise TypeError("seed must be an integer")
 
 
 __all__ = [
