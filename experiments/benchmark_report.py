@@ -1,3 +1,5 @@
+"""Serialize measured benchmark reports without coupling to benchmark SDKs."""
+
 from __future__ import annotations
 
 import hashlib
@@ -95,7 +97,7 @@ def save_repeated_benchmark_reports(
         raise ValueError("repeated benchmark reports must use one benchmark name")
 
     _validate_repeated_configuration(selected_reports)
-    ordered_reports = tuple(sorted(selected_reports, key=lambda report: report.seed))
+    ordered_reports = tuple(sorted(selected_reports, key=_seed_sort_key))
 
     payload: dict[str, Any] = {
         "schema_version": BENCHMARK_REPORT_SCHEMA_VERSION,
@@ -114,6 +116,14 @@ def save_repeated_benchmark_reports(
         payload["statistics"] = dict(statistics)
     _write_json(payload, output_path)
     return output_path
+
+
+def _seed_sort_key(report: BenchmarkRunReport) -> int:
+    """Return an explicit seed for deterministic repeated-report ordering."""
+
+    if report.seed is None:
+        raise ValueError("repeated benchmark reports require an explicit seed for every run")
+    return report.seed
 
 
 def _validate_repeated_configuration(reports: tuple[BenchmarkRunReport, ...]) -> None:

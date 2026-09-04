@@ -190,6 +190,35 @@ def test_save_repeated_reports_rejects_different_experimental_configuration(tmp_
         save_repeated_benchmark_reports((first, second), tmp_path / "reports.json")
 
 
+def test_save_repeated_reports_requires_explicit_seed(tmp_path) -> None:
+    with pytest.raises(ValueError, match="explicit seed"):
+        save_repeated_benchmark_reports(
+            (_build_report(seed=None), _build_report(seed=2)),
+            tmp_path / "reports.json",
+        )
+
+
+def test_save_repeated_reports_serializes_in_seed_order(tmp_path) -> None:
+    first = _build_report(seed=17)
+    second = _build_report(seed=3)
+
+    output_path = save_repeated_benchmark_reports((first, second), tmp_path / "reports.json")
+
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["seeds"] == [3, 17]
+    assert [report["seed"] for report in persisted["reports"]] == [3, 17]
+
+
+def test_save_repeated_reports_is_byte_deterministic_for_input_order(tmp_path) -> None:
+    first = _build_report(seed=17)
+    second = _build_report(seed=3)
+
+    first_path = save_repeated_benchmark_reports((first, second), tmp_path / "first.json")
+    second_path = save_repeated_benchmark_reports((second, first), tmp_path / "second.json")
+
+    assert first_path.read_bytes() == second_path.read_bytes()
+
+
 def test_save_repeated_reports_allows_seed_only_configuration_difference(tmp_path) -> None:
     first = _build_report(seed=1)
     second = _build_report(seed=2)
