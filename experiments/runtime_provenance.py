@@ -15,6 +15,7 @@ PACKAGE_NAME = "rememagent"
 UNKNOWN_VALUE = "unknown"
 CLEAN_STATE = "clean"
 DIRTY_STATE = "dirty"
+VALID_WORKING_TREE_STATES = frozenset({CLEAN_STATE, DIRTY_STATE, UNKNOWN_VALUE})
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,12 +51,14 @@ def collect_runtime_provenance(
     ``REMEM_GIT_STATE`` may be supplied by a controlled execution environment.
     Otherwise the checkout is inspected with ``git status --porcelain``. An
     unknown state is retained explicitly when the repository cannot be probed.
+    Invalid explicit states are rejected rather than being persisted as if they
+    were authoritative provenance.
     """
 
     environment_values = environment or {}
     repository = repository_path or Path.cwd()
     code_revision = environment_values.get("REMEM_GIT_COMMIT") or _git_revision(repository)
-    working_tree_state = environment_values.get("REMEM_GIT_STATE") or _git_working_tree_state(repository)
+    working_tree_state = _resolve_working_tree_state(environment_values, repository)
     dependency_versions = _dependency_versions()
     return RuntimeProvenance(
         code_revision=code_revision,
@@ -66,6 +69,23 @@ def collect_runtime_provenance(
         dependency_fingerprint=_dependency_fingerprint(dependency_versions),
         dependency_versions=dependency_versions,
     )
+
+
+def _resolve_working_tree_state(
+    environment: Mapping[str, str],
+    repository_path: Path,
+) -> str:
+    """Resolve an explicit or checkout-derived working-tree state."""
+
+    explicit_state = environment.get("REMEM_GIT_STATE")
+    if explicit_state is not None:
+        if explicit_state not in VALID_WORKING_TREE_STATES:
+            raise ValueError(
+                "REMEM_GIT_STATE must be one of: "
+                f"{', '.join(sorted(VALID_WORKING_TREE_STATES))}"
+            )
+        return explicit_state
+    return _git_working_tree_state(repository_path)
 
 
 def _git_revision(repository_path: Path) -> str:
