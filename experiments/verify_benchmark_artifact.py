@@ -12,27 +12,34 @@ from experiments.benchmark_manifest import (
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse report and manifest paths for integrity verification."""
+    """Parse the report and optional manifest paths."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("report", type=Path, help="Persisted benchmark report JSON")
-    parser.add_argument("manifest", type=Path, help="Benchmark artifact manifest JSON")
+    parser.add_argument("report", type=Path, help="Persisted benchmark JSON artifact")
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Integrity manifest; defaults to <report>.manifest.json",
+    )
     return parser.parse_args()
 
 
-def verify_report_artifact(report_path: Path, manifest_path: Path) -> None:
-    """Verify the report bytes against a persisted benchmark artifact manifest."""
+def verify_report_artifact(report_path: Path, manifest_path: Path | None = None) -> None:
+    """Verify report bytes against a persisted benchmark artifact manifest."""
 
-    manifest = load_benchmark_artifact_manifest(manifest_path)
+    selected_manifest_path = manifest_path or report_path.with_suffix(
+        report_path.suffix + ".manifest.json"
+    )
+    manifest = load_benchmark_artifact_manifest(selected_manifest_path)
     verify_benchmark_artifact(report_path, manifest)
 
 
 def main() -> int:
-    """Verify one benchmark artifact and return a process status."""
+    """Verify a benchmark report and return a process exit status."""
 
     arguments = parse_args()
     verify_report_artifact(arguments.report, arguments.manifest)
-    print(f"benchmark artifact verified: {arguments.report}")
+    print(f"benchmark artifact integrity verified: {arguments.report}")
     return 0
 
 
