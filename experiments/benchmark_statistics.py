@@ -8,12 +8,12 @@ experimental design.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from math import sqrt
 from typing import Any, Sequence
 
 from experiments.benchmark_report import benchmark_configuration_fingerprint
-from remem.benchmark import BenchmarkRunReport
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.benchmark_validation import validate_benchmark_run_report
 
 CONFIDENCE_Z_95 = 1.96
@@ -96,10 +96,12 @@ def compare_benchmark_reports(
     """Compute paired treatment-minus-baseline deltas by independent seed.
 
     Both conditions must contain the same unique, explicitly recorded seed set,
-    benchmark name, and seed-independent configuration. Each seed contributes
-    exactly one paired observation to the descriptive delta statistics. The
-    function does not pool episodes and does not perform a hypothesis test or
-    claim statistical significance.
+    benchmark name, and seed-independent evaluation configuration. The policy
+    implementation itself is allowed to differ because it is the treatment
+    variable in this comparison. Each seed contributes exactly one paired
+    observation to the descriptive delta statistics. The function does not
+    pool episodes and does not perform a hypothesis test or claim statistical
+    significance.
     """
 
     baseline = tuple(baseline_reports)
@@ -176,22 +178,23 @@ def _validate_paired_configuration(
     baseline: tuple[BenchmarkRunReport, ...],
     treatment: tuple[BenchmarkRunReport, ...],
 ) -> None:
-    """Ensure paired conditions share the same seed-independent configuration."""
+    """Ensure paired conditions share evaluation configuration apart from policy."""
 
-    baseline_fingerprints = {_configuration_fingerprint(report) for report in baseline}
-    treatment_fingerprints = {_configuration_fingerprint(report) for report in treatment}
+    baseline_fingerprints = {_paired_configuration_fingerprint(report) for report in baseline}
+    treatment_fingerprints = {_paired_configuration_fingerprint(report) for report in treatment}
     if baseline_fingerprints != treatment_fingerprints:
         raise ValueError(
-            "baseline and treatment reports must share configuration apart from the seed"
+            "baseline and treatment reports must share configuration apart from the seed and policy"
         )
 
 
-def _configuration_fingerprint(report: BenchmarkRunReport) -> str | None:
-    """Return the canonical seed-independent configuration fingerprint."""
+def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str | None:
+    """Return a fingerprint excluding independent seed and policy identity."""
 
     if report.configuration is None:
         return None
-    return benchmark_configuration_fingerprint(report.configuration)
+    configuration = replace(report.configuration, seed=None, policy_factory=None)
+    return benchmark_configuration_fingerprint(configuration)
 
 
 def _validate_label(label: str, field_name: str) -> str:
