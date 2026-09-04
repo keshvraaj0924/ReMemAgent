@@ -2,8 +2,9 @@
 
 The dependency-free verl integration validates the numeric values that cross the token-level training boundary.
 
-- `VerlTrajectory.reward` must be finite.
-- `VerlTrainingBatch.advantages` must contain one finite value per trajectory.
+- `VerlTrajectory.reward` must be a real, finite number.
+- `VerlTrainingBatch.advantages` must contain one real, finite value per trajectory.
+- Boolean values are rejected even though Python treats `bool` as an `int` subclass.
 - NaN and positive/negative infinity are rejected before framework-specific collation.
 
 These checks complement the GRPO layer, which already validates finite rewards and advantages. The duplicated boundary is intentional: `VerlTrajectory` and `VerlTrainingBatch` are public construction points and must remain safe when callers bypass the GRPO helpers.
