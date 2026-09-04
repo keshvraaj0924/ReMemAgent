@@ -20,6 +20,7 @@ class FakeEnvironment:
 
     def __init__(self) -> None:
         self.actions: list[object] = []
+        self.closed = False
 
     def reset(self) -> str:
         return "state"
@@ -27,6 +28,22 @@ class FakeEnvironment:
     def step(self, action: object) -> tuple[str, float, bool, dict[str, object]]:
         self.actions.append(action)
         return "next", 1.0, True, {}
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class MissingStepEnvironment:
+    """Environment intentionally missing the required step method."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    def reset(self) -> str:
+        return "state"
+
+    def close(self) -> None:
+        self.closed = True
 
 
 def test_factory_wraps_alfworld_environment() -> None:
@@ -110,6 +127,17 @@ def test_factory_adds_benchmark_context_when_environment_creation_fails() -> Non
         factory(31)
 
     assert isinstance(error.value.__cause__, OSError)
+
+
+def test_factory_closes_raw_environment_when_adapter_validation_fails() -> None:
+    environment = MissingStepEnvironment()
+
+    factory = BenchmarkEnvironmentFactory("webshop", lambda _seed: environment)
+
+    with pytest.raises(TypeError, match="step"):
+        factory(31)
+
+    assert environment.closed is True
 
 
 def test_factory_rejects_unsupported_benchmark() -> None:
