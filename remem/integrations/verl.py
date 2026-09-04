@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from math import isfinite
+import numbers
 
 from remem.execution import EpisodeResult
 from remem.integrations.grpo import GrpoBatch, GrpoSample
@@ -34,6 +35,7 @@ class VerlTrajectory:
         _validate_token_ids(self.response_ids, "response")
         if not self.response_ids:
             raise ValueError("response_ids must contain at least one token")
+        _validate_real_number(self.reward, "reward")
         if not isfinite(self.reward):
             raise ValueError("reward must be finite")
 
@@ -78,8 +80,10 @@ class VerlTrainingBatch:
             raise ValueError("verl training batches must contain at least one trajectory")
         if len(self.trajectories) != len(self.advantages):
             raise ValueError("trajectories and advantages must have equal lengths")
-        if any(not isfinite(advantage) for advantage in self.advantages):
-            raise ValueError("advantages must be finite")
+        for advantage in self.advantages:
+            _validate_real_number(advantage, "advantages")
+            if not isfinite(advantage):
+                raise ValueError("advantages must be finite")
 
     def to_dicts(self) -> tuple[dict[str, object], ...]:
         """Return ordered rows for framework-specific collation."""
@@ -223,3 +227,12 @@ def _validate_token_ids(token_ids: Sequence[int], field_name: str) -> tuple[int,
     if any(token_id < 0 for token_id in normalized):
         raise ValueError(f"{field_name} tokenizer must return non-negative token IDs")
     return normalized
+
+
+def _validate_real_number(value: object, field_name: str) -> None:
+    """Reject booleans and non-real values at numeric training boundaries."""
+
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        if field_name == "reward":
+            raise TypeError("reward must be a real number")
+        raise TypeError(f"{field_name} must be real numbers")
