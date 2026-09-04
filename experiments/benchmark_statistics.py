@@ -95,11 +95,11 @@ def compare_benchmark_reports(
 ) -> BenchmarkConditionComparison:
     """Compute paired treatment-minus-baseline deltas by independent seed.
 
-    Both conditions must contain the same unique seed set, benchmark name, and
-    seed-independent configuration. Each seed contributes exactly one paired
-    observation to the descriptive delta statistics. The function does not
-    pool episodes and does not perform a hypothesis test or claim statistical
-    significance.
+    Both conditions must contain the same unique, explicitly recorded seed set,
+    benchmark name, and seed-independent configuration. Each seed contributes
+    exactly one paired observation to the descriptive delta statistics. The
+    function does not pool episodes and does not perform a hypothesis test or
+    claim statistical significance.
     """
 
     baseline = tuple(baseline_reports)
@@ -111,13 +111,15 @@ def compare_benchmark_reports(
         raise ValueError("baseline and treatment reports must use one benchmark name")
 
     _validate_paired_configuration(baseline, treatment)
+    _validate_explicit_seeds(baseline, "baseline")
+    _validate_explicit_seeds(treatment, "treatment")
 
     baseline_by_seed = {report.seed: report for report in baseline}
     treatment_by_seed = {report.seed: report for report in treatment}
     if set(baseline_by_seed) != set(treatment_by_seed):
         raise ValueError("baseline and treatment reports must use the same seed set")
 
-    seeds = tuple(report.seed for report in baseline)
+    seeds = tuple(sorted(baseline_by_seed))
     success_deltas = tuple(
         treatment_by_seed[seed].success_rate - baseline_by_seed[seed].success_rate
         for seed in seeds
@@ -158,6 +160,16 @@ def _validate_report_collection(reports: tuple[BenchmarkRunReport, ...]) -> None
     benchmark_names = {report.benchmark_name for report in reports}
     if len(benchmark_names) != 1:
         raise ValueError("benchmark reports must use one benchmark name")
+
+
+def _validate_explicit_seeds(
+    reports: tuple[BenchmarkRunReport, ...],
+    condition_label: str,
+) -> None:
+    """Require explicit seeds before pairing independent experimental runs."""
+
+    if any(report.seed is None for report in reports):
+        raise ValueError(f"{condition_label} reports must provide explicit seeds for pairing")
 
 
 def _validate_paired_configuration(
