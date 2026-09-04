@@ -236,3 +236,20 @@ def _validate_positive_integer(field_name: str, value: object) -> None:
         raise TypeError(f"{field_name} must be an integer")
     if value <= 0:
         raise ValueError(f"{field_name} must be positive")
+
+
+def _close_environment_after_failure(environment: object) -> None:
+    """Attempt cleanup without replacing the active preflight exception."""
+
+    try:
+        _close_environment(environment)
+    except BaseException:
+        return
+
+
+def _close_environment(environment: object) -> None:
+    """Close an environment when it exposes a callable cleanup method."""
+
+    close = getattr(environment, "close", None)
+    if callable(close):
+        close()
