@@ -7,6 +7,7 @@ import pytest
 from experiments.paired_benchmark import (
     preflight_paired_external_benchmarks,
     run_paired_external_benchmarks,
+    run_paired_external_benchmarks_with_preflight,
 )
 from experiments.external_benchmark import ExternalBenchmarkSpec
 
@@ -91,6 +92,40 @@ def test_preflight_paired_external_benchmarks_checks_both_conditions(monkeypatch
         ("tests.test_external_benchmark:make_policy", (3, 5), "look"),
         ("tests.test_external_benchmark:make_memory_policy", (3, 5), "look"),
     ]
+
+
+def test_run_paired_external_benchmarks_with_preflight_orders_preflight_before_run(monkeypatch) -> None:
+    baseline = _spec("tests.test_external_benchmark:make_policy")
+    treatment = _spec("tests.test_external_benchmark:make_memory_policy")
+    events: list[str] = []
+
+    def fake_preflight(*args, **kwargs):
+        events.append("preflight")
+
+    def fake_run(*args, **kwargs):
+        events.append("run")
+        return "result"
+
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.preflight_paired_external_benchmarks",
+        fake_preflight,
+    )
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.run_paired_external_benchmarks",
+        fake_run,
+    )
+
+    result = run_paired_external_benchmarks_with_preflight(
+        baseline,
+        treatment,
+        (11, 17),
+        baseline_label="base",
+        treatment_label="memory",
+        probe_action="look",
+    )
+
+    assert events == ["preflight", "run"]
+    assert result == "result"
 
 
 def test_preflight_rejects_different_benchmark_names(monkeypatch) -> None:
