@@ -115,44 +115,6 @@ def test_webshop_factory_scopes_construction_and_reset_randomness(monkeypatch: A
     assert random.getstate() == expected_state
 
 
-def test_alfworld_factory_isolates_rng_during_construction(monkeypatch: pytest.MonkeyPatch) -> None:
-    environment_module = types.ModuleType("alfworld.agents.environment")
-    agents_module = types.ModuleType("alfworld.agents")
-    alfworld_module = types.ModuleType("alfworld")
-    construction_values: list[int] = []
-
-    class FakeAlfWorldEnvironment:
-        def init_env(self, *, batch_size: int) -> "FakeAlfWorldEnvironment":
-            assert batch_size == 1
-            construction_values.append(random.randrange(1_000_000))
-            return self
-
-        def reset(self) -> str:
-            return "state"
-
-    def get_environment(_environment_type: str) -> type[FakeAlfWorldEnvironment]:
-        return FakeAlfWorldEnvironment
-
-    environment_module.get_environment = get_environment  # type: ignore[attr-defined]
-    agents_module.environment = environment_module  # type: ignore[attr-defined]
-    alfworld_module.agents = agents_module  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "alfworld", alfworld_module)
-    monkeypatch.setitem(sys.modules, "alfworld.agents", agents_module)
-    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", environment_module)
-
-    config = {"env": {"type": "AlfredTWEnv"}}
-    factory = official_benchmarks.build_alfworld_text_environment_factory(config)
-    random.seed(101)
-    expected_next = random.randrange(1_000_000)
-    random.seed(101)
-    adapter = factory(42)
-    observed_next = random.randrange(1_000_000)
-
-    assert construction_values
-    assert observed_next == expected_next
-    assert adapter.reset() == "state"
-
-
 def test_alfworld_factory_scopes_construction_randomness(monkeypatch: Any) -> None:
     construction_values: list[float] = []
 
