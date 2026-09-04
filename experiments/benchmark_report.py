@@ -1,5 +1,3 @@
-"""Serialize measured benchmark reports without coupling to benchmark SDKs."""
-
 from __future__ import annotations
 
 import hashlib
@@ -75,9 +73,8 @@ def save_repeated_benchmark_reports(
     """Persist independent seed reports and optional descriptive statistics.
 
     Repeated reports must describe the same experimental configuration apart
-    from their independent seed. This prevents accidentally aggregating runs
-    with different episode counts, step limits, callable implementations, or
-    trust thresholds.
+    from their independent seed. Reports are serialized in ascending seed order
+    so artifact bytes do not depend on caller iteration order.
     """
 
     selected_reports = tuple(reports)
@@ -88,6 +85,8 @@ def save_repeated_benchmark_reports(
         validate_benchmark_run_report(report)
 
     seeds = tuple(report.seed for report in selected_reports)
+    if any(seed is None for seed in seeds):
+        raise ValueError("repeated benchmark reports require an explicit seed for every run")
     if len(seeds) != len(set(seeds)):
         raise ValueError("benchmark report seeds must be unique")
 
@@ -96,14 +95,15 @@ def save_repeated_benchmark_reports(
         raise ValueError("repeated benchmark reports must use one benchmark name")
 
     _validate_repeated_configuration(selected_reports)
+    ordered_reports = tuple(sorted(selected_reports, key=lambda report: report.seed))
 
     payload: dict[str, Any] = {
         "schema_version": BENCHMARK_REPORT_SCHEMA_VERSION,
-        "benchmark_name": selected_reports[0].benchmark_name,
-        "seeds": list(seeds),
-        "reports": [benchmark_report_to_dict(report) for report in selected_reports],
+        "benchmark_name": ordered_reports[0].benchmark_name,
+        "seeds": [report.seed for report in ordered_reports],
+        "reports": [benchmark_report_to_dict(report) for report in ordered_reports],
     }
-    reference_configuration = selected_reports[0].configuration
+    reference_configuration = ordered_reports[0].configuration
     if reference_configuration is not None:
         payload["configuration_fingerprint"] = benchmark_configuration_fingerprint(
             reference_configuration
