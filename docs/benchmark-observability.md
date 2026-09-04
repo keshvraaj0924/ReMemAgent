@@ -21,3 +21,9 @@ This separation prevents infrastructure failures from being silently mixed with 
 Failure telemetry is emitted before the original exception is propagated. The runner does not convert failures into synthetic `BenchmarkEpisodeReport` values and does not fabricate reward or success values for failed episodes.
 
 The collector remains optional and backend-neutral. External telemetry exporters can consume these counters without becoming part of the benchmark execution contract.
+
+## Runtime provenance
+
+Measured benchmark artifacts also capture `working_tree_state` alongside `code_revision`. The state is `clean` when `git status --porcelain` reports no changes, `dirty` when tracked or untracked changes are present, and `unknown` when the checkout cannot be inspected. CI/container environments may explicitly provide `REMEM_GIT_STATE` when Git metadata is unavailable.
+
+A dirty or unknown state is evidence about the execution environment, not a benchmark result. The framework records it rather than assuming a clean checkout, so downstream analysis can distinguish experiments executed from a committed tree from experiments executed with local modifications.
