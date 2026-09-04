@@ -19,14 +19,7 @@ _WEBSHOP_RANDOM_LOCK = threading.Lock()
 
 
 class _SeededAlfWorldEnvironment:
-    """Preserve an episode seed while adapting ALFWorld's global RNG API.
-
-    The upstream ALFWorld text environment selects tasks through Python's module
-    level ``random`` state and does not expose a seed argument on ``reset``.
-    ReMemAgent therefore scopes the seed to each reset, restores the caller's
-    RNG state afterwards, and serializes that small critical section so parallel
-    benchmark workers cannot interleave global RNG mutations.
-    """
+    """Preserve an episode seed while adapting ALFWorld's global RNG API."""
 
     def __init__(self, environment: Any, seed: int) -> None:
         _validate_seed(seed)
@@ -53,13 +46,7 @@ class _SeededAlfWorldEnvironment:
 
 
 class _SeededWebShopEnvironment:
-    """Scope WebShop's module-level Python RNG to each benchmark reset.
-
-    The upstream WebShop text environment exposes ``reset(session=None,
-    instruction_text=None)`` rather than Gym's seeded reset contract. Its task
-    selection and generated session identifiers use Python's global ``random``
-    module, so a per-reset RNG scope is required for seed-level reproducibility.
-    """
+    """Scope WebShop's module-level Python RNG to each benchmark reset."""
 
     def __init__(self, environment: Any, seed: int) -> None:
         _validate_seed(seed)
@@ -92,13 +79,7 @@ def build_alfworld_text_environment_factory(
     train_eval: str = "eval",
     batch_size: int = 1,
 ) -> RawEnvironmentFactory:
-    """Build a seed-aware factory for the upstream ALFWorld text environment.
-
-    ALFWorld exposes a batch-oriented ``get_environment(...).init_env`` API.
-    ReMemAgent's :class:`AlfWorldAdapter` removes the singleton batch dimension,
-    while this factory owns upstream environment construction and deterministic
-    episode seeding.
-    """
+    """Build a seed-aware factory for the upstream ALFWorld text environment."""
 
     if batch_size != 1:
         raise ValueError("ReMemAgent's ALFWorld adapter requires batch_size=1")
@@ -130,9 +111,14 @@ def build_alfworld_text_environment_factory(
         with _ALFWORLD_RANDOM_LOCK:
             previous_state = random.getstate()
             random.seed(seed)
+            environment: Any | None = None
             try:
                 environment = environment_class(config, train_eval=train_eval)
                 initialized_environment = environment.init_env(batch_size=1)
+            except Exception:
+                if environment is not None:
+                    _close_if_supported(environment)
+                raise
             finally:
                 random.setstate(previous_state)
         return _SeededAlfWorldEnvironment(initialized_environment, seed)
@@ -146,12 +132,7 @@ def build_webshop_text_environment_factory(
     observation_mode: str = "text",
     environment_id: str = "WebAgentTextEnv-v0",
 ) -> RawEnvironmentFactory:
-    """Build a factory for the upstream WebShop Gym text environment.
-
-    WebShop's simple environment is exposed as ``WebAgentTextEnv-v0`` through
-    its Gym registration. The optional ``num_products`` argument mirrors the
-    upstream constructor configuration used for smaller local runs.
-    """
+    """Build a factory for the upstream WebShop Gym text environment."""
 
     if not isinstance(observation_mode, str) or not observation_mode.strip():
         raise ValueError("observation_mode must be a non-empty string")
