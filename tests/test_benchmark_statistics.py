@@ -185,6 +185,18 @@ def test_compare_benchmark_reports_rejects_configuration_drift() -> None:
         raise AssertionError("paired conditions with different configurations must be rejected")
 
 
+def test_compare_benchmark_reports_rejects_missing_configuration() -> None:
+    baseline = (_report(1, 0.0, False),)
+    treatment = (_report(1, 1.0, True),)
+
+    try:
+        compare_benchmark_reports(baseline, treatment)
+    except ValueError as exc:
+        assert "explicit configuration" in str(exc)
+    else:
+        raise AssertionError("paired comparisons must require explicit protocol configuration")
+
+
 def test_compare_benchmark_reports_allows_policy_change() -> None:
     baseline = (
         _report(1, 0.0, False, max_steps=5, policy_factory="tests.fixtures:baseline_policy"),
