@@ -27,6 +27,7 @@ def test_main_forwards_seed_to_external_benchmark(monkeypatch, tmp_path: Path) -
         seeds=None,
     )
     captured: dict[str, object] = {}
+    original_collect_runtime_provenance = benchmark_cli.collect_runtime_provenance
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
@@ -43,7 +44,7 @@ def test_main_forwards_seed_to_external_benchmark(monkeypatch, tmp_path: Path) -
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda **kwargs: benchmark_cli.collect_runtime_provenance(
+        lambda **kwargs: original_collect_runtime_provenance(
             environment={"REMEM_GIT_COMMIT": "abc"}
         ),
     )
