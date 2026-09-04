@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from math import isfinite
 
 from remem.execution import EpisodeResult
 from remem.integrations.grpo import GrpoBatch, GrpoSample
@@ -33,6 +34,8 @@ class VerlTrajectory:
         _validate_token_ids(self.response_ids, "response")
         if not self.response_ids:
             raise ValueError("response_ids must contain at least one token")
+        if not isfinite(self.reward):
+            raise ValueError("reward must be finite")
 
         normalized_mask = tuple(self.response_mask)
         if len(normalized_mask) != len(self.response_ids):
@@ -69,12 +72,14 @@ class VerlTrainingBatch:
     advantages: tuple[float, ...]
 
     def __post_init__(self) -> None:
-        """Validate one advantage exists for every encoded trajectory."""
+        """Validate one finite advantage exists for every trajectory."""
 
         if not self.trajectories:
             raise ValueError("verl training batches must contain at least one trajectory")
         if len(self.trajectories) != len(self.advantages):
             raise ValueError("trajectories and advantages must have equal lengths")
+        if any(not isfinite(advantage) for advantage in self.advantages):
+            raise ValueError("advantages must be finite")
 
     def to_dicts(self) -> tuple[dict[str, object], ...]:
         """Return ordered rows for framework-specific collation."""
