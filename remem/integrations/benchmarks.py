@@ -59,9 +59,13 @@ class BenchmarkEnvironmentFactory:
                 f"failed to create {self._benchmark_family} environment for seed {seed}"
             ) from exc
 
-        if self._benchmark_family == "alfworld":
-            return AlfWorldAdapter(environment)
-        return WebShopAdapter(environment)
+        try:
+            if self._benchmark_family == "alfworld":
+                return AlfWorldAdapter(environment)
+            return WebShopAdapter(environment)
+        except Exception:
+            _close_if_supported(environment)
+            raise
 
 
 def load_benchmark_environment_factory(
@@ -78,3 +82,15 @@ def resolve_environment_factory(specification: str) -> RawEnvironmentFactory:
     """Resolve a callable environment factory from ``module:attribute`` notation."""
 
     return cast(RawEnvironmentFactory, resolve_callable(specification))
+
+
+def _close_if_supported(environment: object) -> None:
+    """Release a partially constructed environment without masking adapter failure."""
+
+    close = getattr(environment, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception:
+        return
