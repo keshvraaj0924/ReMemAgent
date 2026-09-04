@@ -14,6 +14,7 @@ def _report(
     success: bool,
     *,
     max_steps: int | None = None,
+    policy_factory: str = "tests.fixtures:policy_factory",
 ) -> BenchmarkRunReport:
     episode = EpisodeResult(
         initial_observation="start",
@@ -30,7 +31,7 @@ def _report(
             max_steps=max_steps,
             seed=seed,
             environment_factory="tests.fixtures:environment_factory",
-            policy_factory="tests.fixtures:policy_factory",
+            policy_factory=policy_factory,
             success_evaluator="tests.fixtures:success_evaluator",
         )
     return BenchmarkRunReport(
@@ -179,9 +180,25 @@ def test_compare_benchmark_reports_rejects_configuration_drift() -> None:
     try:
         compare_benchmark_reports(baseline, treatment)
     except ValueError as exc:
-        assert "configuration apart from the seed" in str(exc)
+        assert "configuration apart from the seed and policy" in str(exc)
     else:
         raise AssertionError("paired conditions with different configurations must be rejected")
+
+
+def test_compare_benchmark_reports_allows_policy_change() -> None:
+    baseline = (
+        _report(1, 0.0, False, max_steps=5, policy_factory="tests.fixtures:baseline_policy"),
+        _report(2, 0.5, True, max_steps=5, policy_factory="tests.fixtures:baseline_policy"),
+    )
+    treatment = (
+        _report(1, 1.0, True, max_steps=5, policy_factory="tests.fixtures:treatment_policy"),
+        _report(2, 0.5, True, max_steps=5, policy_factory="tests.fixtures:treatment_policy"),
+    )
+
+    comparison = compare_benchmark_reports(baseline, treatment)
+
+    assert comparison.seeds == (1, 2)
+    assert comparison.success_rate_delta.mean == 0.5
 
 
 def test_compare_benchmark_reports_accepts_same_configuration_across_conditions() -> None:
