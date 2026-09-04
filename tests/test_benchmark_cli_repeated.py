@@ -36,11 +36,12 @@ def test_main_persists_statistics_for_repeated_runs(monkeypatch, tmp_path: Path)
         "transfer_success_evaluator": None,
         "output": tmp_path / "repeated.json",
     })()
+    original_collect_runtime_provenance = benchmark_cli.collect_runtime_provenance
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda **kwargs: benchmark_cli.collect_runtime_provenance(
+        lambda **kwargs: original_collect_runtime_provenance(
             environment={"REMEM_GIT_COMMIT": "abc"}
         ),
     )
