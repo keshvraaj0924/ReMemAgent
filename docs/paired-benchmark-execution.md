@@ -22,6 +22,8 @@ Each condition is executed independently for every requested seed through the ex
 
 `preflight_paired_external_benchmarks` performs the same configuration validation and then runs the existing repeated runtime preflight independently for both conditions. An optional concrete action can be supplied to exercise one normalized environment step before measurement.
 
+`run_paired_external_benchmarks_with_preflight` composes that validation into a fail-fast measured workflow: both conditions are preflighted for every requested seed before either condition starts measured execution. This prevents a later policy or environment construction failure from leaving an experiment with only one measured condition.
+
 Preflight is not benchmark data. A measured run should only begin after both conditions pass the same preflight contract.
 
 ## Research interpretation
@@ -37,6 +39,7 @@ The paired runner also does not load models, tokenize prompts, or own third-part
 - shared-seed execution for both conditions;
 - rejection of evaluation configuration drift before execution;
 - independent preflight of both conditions;
+- preflight completing before measured execution;
 - rejection of benchmark-family mismatches.
 
 The repository quality workflow remains the authoritative execution gate for these tests.
