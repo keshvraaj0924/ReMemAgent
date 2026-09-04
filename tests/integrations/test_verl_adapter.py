@@ -224,3 +224,32 @@ def test_run_agent_loop_batch_rejects_non_positive_concurrency() -> None:
 
     with pytest.raises(ValueError, match="max_concurrency must be positive"):
         asyncio.run(run_agent_loop_batch(agent_loop, (), max_concurrency=0))
+
+
+def test_agent_loop_request_freezes_caller_owned_mappings() -> None:
+    """Queued requests must remain stable after their input mappings are mutated."""
+
+    sampling_params = {"temperature": 0.2}
+    metadata = {"episode_id": "episode-1"}
+    kwargs = {"raw_prompt": "hello"}
+
+    request = AgentLoopRequest(
+        sampling_params=sampling_params,
+        reward=0.5,
+        metadata=metadata,
+        kwargs=kwargs,
+    )
+    sampling_params["temperature"] = 0.9
+    metadata["episode_id"] = "episode-2"
+    kwargs["raw_prompt"] = "mutated"
+
+    assert dict(request.sampling_params) == {"temperature": 0.2}
+    assert dict(request.metadata) == {"episode_id": "episode-1"}
+    assert dict(request.kwargs) == {"raw_prompt": "hello"}
+
+
+def test_agent_loop_request_rejects_non_finite_reward() -> None:
+    """Invalid rewards fail before a request can enter concurrent execution."""
+
+    with pytest.raises(ValueError, match="reward must be finite"):
+        AgentLoopRequest(sampling_params={}, reward=float("inf"))
