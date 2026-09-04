@@ -12,9 +12,9 @@ def build_spec(minimum_trust: float) -> ExternalBenchmarkSpec:
         benchmark_name="alfworld",
         episode_count=1,
         max_steps=1,
-        environment_factory="example.environment_factory",
-        policy_factory="example.policy_factory",
-        success_evaluator="example.success_evaluator",
+        environment_factory="example:environment_factory",
+        policy_factory="example:policy_factory",
+        success_evaluator="example:success_evaluator",
         minimum_trust=minimum_trust,
     )
 
