@@ -151,3 +151,13 @@ def _dependency_fingerprint(dependency_versions: Mapping[str, str]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+__all__ = [
+    "CLEAN_STATE",
+    "DIRTY_STATE",
+    "RuntimeProvenance",
+    "UNKNOWN_VALUE",
+    "VALID_WORKING_TREE_STATES",
+    "collect_runtime_provenance",
+]
