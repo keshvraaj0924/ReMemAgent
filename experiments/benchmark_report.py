@@ -60,7 +60,7 @@ def save_benchmark_report(
 
     payload = benchmark_report_to_dict(report)
     if runtime_provenance is not None:
-        payload["runtime_provenance"] = dict(runtime_provenance)
+        payload["runtime_provenance"] = _normalize_runtime_provenance(runtime_provenance)
     _write_json(payload, output_path)
     return output_path
 
@@ -111,11 +111,27 @@ def save_repeated_benchmark_reports(
             reference_configuration
         )
     if runtime_provenance is not None:
-        payload["runtime_provenance"] = dict(runtime_provenance)
+        payload["runtime_provenance"] = _normalize_runtime_provenance(runtime_provenance)
     if statistics is not None:
         payload["statistics"] = dict(statistics)
     _write_json(payload, output_path)
     return output_path
+
+
+def _normalize_runtime_provenance(runtime_provenance: Mapping[str, str]) -> dict[str, str]:
+    """Validate and detach string runtime provenance before artifact persistence."""
+
+    if not isinstance(runtime_provenance, Mapping):
+        raise TypeError("runtime_provenance must be a mapping of strings")
+
+    normalized: dict[str, str] = {}
+    for key, value in runtime_provenance.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("runtime_provenance keys must be non-empty strings")
+        if not isinstance(value, str):
+            raise TypeError("runtime_provenance values must be strings")
+        normalized[key] = value
+    return normalized
 
 
 def _seed_sort_key(report: BenchmarkRunReport) -> int:
