@@ -115,31 +115,27 @@ def validate_external_benchmark_runtime(
     """Probe the real configured environment and policy before execution.
 
     The framework creates a temporary environment for contract validation and
-    closes it exactly once. If policy validation fails, its exception remains
-    primary even when cleanup also fails. Probe output is never benchmark data.
+    closes it as part of the environment probe. Policy validation only consumes
+    the captured initial observation, so it does not need the environment to
+    remain alive. Probe output is never benchmark data.
     """
 
     validate_external_benchmark(spec)
     environment_factory = load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
     probe_seed = 0 if spec.seed is None else spec.seed
     environment = environment_factory(probe_seed)
-    try:
-        environment_report = validate_environment_contract(
-            environment,
-            probe_action=probe_action,
-            close_environment=False,
-        )
-        policy_factory = _resolve_policy_factory(spec)
-        validate_policy_contract(
-            policy_factory,
-            seed=probe_seed,
-            observation=environment_report.initial_observation,
-            store=MemoryStore(),
-        )
-    except BaseException:
-        _close_environment_after_failure(environment)
-        raise
-    _close_environment(environment)
+    environment_report = validate_environment_contract(
+        environment,
+        probe_action=probe_action,
+        close_environment=True,
+    )
+    policy_factory = _resolve_policy_factory(spec)
+    validate_policy_contract(
+        policy_factory,
+        seed=probe_seed,
+        observation=environment_report.initial_observation,
+        store=MemoryStore(),
+    )
     return environment_report
 
 
@@ -240,20 +236,3 @@ def _validate_positive_integer(field_name: str, value: object) -> None:
         raise TypeError(f"{field_name} must be an integer")
     if value <= 0:
         raise ValueError(f"{field_name} must be positive")
-
-
-def _close_environment_after_failure(environment: object) -> None:
-    """Attempt cleanup without replacing the active preflight exception."""
-
-    try:
-        _close_environment(environment)
-    except BaseException:
-        return
-
-
-def _close_environment(environment: object) -> None:
-    """Close an environment when it exposes a callable cleanup method."""
-
-    close = getattr(environment, "close", None)
-    if callable(close):
-        close()
