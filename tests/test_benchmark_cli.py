@@ -34,6 +34,7 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
     arguments = _base_arguments(tmp_path)
     captured: dict[str, ExternalBenchmarkSpec] = {}
     captured_provenance: dict[str, str] = {}
+    original_collect_runtime_provenance = benchmark_cli.collect_runtime_provenance
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
@@ -51,7 +52,7 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda **kwargs: benchmark_cli.collect_runtime_provenance(
+        lambda **kwargs: original_collect_runtime_provenance(
             environment={"REMEM_GIT_COMMIT": "abc123"}
         ),
     )
@@ -71,7 +72,7 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
     assert captured_provenance["code_revision"] == "abc123"
 
 
-def test_main_builds_memory_guided_spec(monkeypatch, tmp_path: Path) -> None:
+def test_main_builds_memory_guided_spec(monkeypatch, tmp_path) -> None:
     report = object()
     arguments = _base_arguments(tmp_path)
     arguments.benchmark = "alfworld-eval"
