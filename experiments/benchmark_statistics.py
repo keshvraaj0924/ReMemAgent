@@ -180,6 +180,9 @@ def _validate_paired_configuration(
 ) -> None:
     """Ensure paired conditions share evaluation configuration apart from policy."""
 
+    if any(report.configuration is None for report in baseline + treatment):
+        raise ValueError("paired benchmark reports must include explicit configuration")
+
     baseline_fingerprints = {_paired_configuration_fingerprint(report) for report in baseline}
     treatment_fingerprints = {_paired_configuration_fingerprint(report) for report in treatment}
     if baseline_fingerprints != treatment_fingerprints:
@@ -188,11 +191,11 @@ def _validate_paired_configuration(
         )
 
 
-def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str | None:
+def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str:
     """Return a fingerprint excluding independent seed and policy identity."""
 
     if report.configuration is None:
-        return None
+        raise ValueError("paired benchmark reports must include explicit configuration")
     configuration = replace(report.configuration, seed=None, policy_factory=None)
     return benchmark_configuration_fingerprint(configuration)
 
