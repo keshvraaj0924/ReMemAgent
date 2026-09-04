@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from experiments.runtime_provenance import (
     CLEAN_STATE,
     DIRTY_STATE,
@@ -58,3 +60,21 @@ def test_working_tree_state_distinguishes_clean_and_dirty_output(monkeypatch) ->
 
     assert runtime_provenance._git_working_tree_state(Path(".")) == CLEAN_STATE
     assert runtime_provenance._git_working_tree_state(Path(".")) == DIRTY_STATE
+
+
+@pytest.mark.parametrize("invalid_state", ["", "modified", "CLEAN", "false"])
+def test_collect_runtime_provenance_rejects_invalid_explicit_state(invalid_state: str) -> None:
+    with pytest.raises(ValueError, match="REMEM_GIT_STATE"):
+        collect_runtime_provenance(
+            repository_path=Path("/missing"),
+            environment={"REMEM_GIT_STATE": invalid_state},
+        )
+
+
+def test_collect_runtime_provenance_accepts_unknown_explicit_state() -> None:
+    provenance = collect_runtime_provenance(
+        repository_path=Path("/missing"),
+        environment={"REMEM_GIT_STATE": UNKNOWN_VALUE},
+    )
+
+    assert provenance.working_tree_state == UNKNOWN_VALUE
