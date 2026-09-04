@@ -6,6 +6,8 @@ ReMemAgent keeps benchmark and training frameworks outside the research core. Th
 
 `EnvironmentAdapter` exposes `reset()` and `step()` and normalizes legacy four-field and Gymnasium five-field step APIs into `StepResult`. The ALFWorld and WebShop adapters wrap caller-supplied environments rather than importing benchmark packages.
 
+Both benchmark adapters now fail closed on malformed measured step data: rewards must be finite numeric values (booleans and numeric strings are rejected), and `terminated` / `truncated` must be actual booleans. Legacy four-field APIs remain supported by mapping `done` to `terminated` and setting `truncated=False`. This avoids silently changing malformed upstream values into scientifically different trajectories.
+
 `BenchmarkSuiteRunner` executes matched cases and records measured outcomes. It does not synthesize benchmark scores. `experiments.external_benchmark.run_external_benchmark()` is the explicit boundary for executing real benchmark environments supplied by an experiment. `load_callable()` can resolve a factory from `module:attribute` notation, allowing benchmark dependencies and model checkpoints to remain in the experiment environment rather than the research package.
 
 The normalized `BenchmarkEnvironmentFactory` enforces the same deterministic seed contract used by the external benchmark runner: episode seeds must be integers, and booleans are rejected even though Python treats them as integer subclasses. Invalid seeds are rejected before the caller-owned raw environment factory is invoked. This keeps direct adapter usage from bypassing reproducibility validation.
