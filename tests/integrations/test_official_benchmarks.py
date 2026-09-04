@@ -156,6 +156,47 @@ def test_alfworld_factory_scopes_construction_randomness(monkeypatch: Any) -> No
     assert random.getstate() == expected_state
 
 
+def test_alfworld_factory_closes_environment_when_initialization_fails(monkeypatch: Any) -> None:
+    class FailingEnvironment:
+        closed = False
+
+        def __init__(self, _config: object, train_eval: str) -> None:
+            assert train_eval == "eval"
+
+        def init_env(self, batch_size: int) -> Any:
+            assert batch_size == 1
+            raise RuntimeError("initialization failed")
+
+        def close(self) -> None:
+            self.closed = True
+
+    instances: list[FailingEnvironment] = []
+
+    def environment_class(config: object, train_eval: str) -> FailingEnvironment:
+        instance = FailingEnvironment(config, train_eval)
+        instances.append(instance)
+        return instance
+
+    fake_environment_module = types.ModuleType("alfworld.agents.environment")
+    fake_environment_module.get_environment = lambda _name: environment_class  # type: ignore[attr-defined]
+    fake_agents_module = types.ModuleType("alfworld.agents")
+    fake_alfworld_module = types.ModuleType("alfworld")
+    fake_alfworld_module.agents = fake_agents_module  # type: ignore[attr-defined]
+    fake_agents_module.environment = fake_environment_module  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "alfworld", fake_alfworld_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents", fake_agents_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", fake_environment_module)
+
+    factory = build_alfworld_text_environment_factory({"env": {"type": "AlfredTWEnv"}})
+
+    with pytest.raises(RuntimeError, match="initialization failed"):
+        factory(23)
+
+    assert len(instances) == 1
+    assert instances[0].closed is True
+
+
 def test_alfworld_factory_rejects_invalid_text_configuration() -> None:
     with pytest.raises(ValueError, match="train_eval must be a non-empty string"):
         build_alfworld_text_environment_factory({}, train_eval="   ")
