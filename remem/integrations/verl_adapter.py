@@ -43,7 +43,7 @@ class AsyncVerlAgentLoop(Protocol):
         self,
         sampling_params: Mapping[str, Any],
         **kwargs: Any,
-    ) -> Awaitable[Mapping[str, Sequence[int]] | AgentLoopOutputLike]:
+    ) -> Awaitable[Mapping[str, object] | AgentLoopOutputLike]:
         """Run one external agent loop and return its token-level output."""
 
 
@@ -58,8 +58,8 @@ class AgentLoopRequest:
 
 
 def _normalize_agent_loop_output(
-    output: Mapping[str, Sequence[int]] | AgentLoopOutputLike,
-) -> Mapping[str, Sequence[int]]:
+    output: Mapping[str, object] | AgentLoopOutputLike,
+) -> Mapping[str, object]:
     """Normalize a mapping or a verl-style model output into a field mapping."""
 
     if isinstance(output, Mapping):
@@ -68,11 +68,26 @@ def _normalize_agent_loop_output(
     dumped_output = output.model_dump()
     if not isinstance(dumped_output, Mapping):
         raise TypeError("agent loop model_dump() must return a mapping")
-    return cast(Mapping[str, Sequence[int]], dumped_output)
+    return cast(Mapping[str, object], dumped_output)
+
+
+def _merge_external_extra_fields(
+    metadata: Mapping[str, object] | None,
+    extra_fields: Mapping[str, object],
+) -> dict[str, object]:
+    """Merge verl dynamic fields without silently overwriting research metadata."""
+
+    normalized_metadata = dict(metadata or {})
+    if not extra_fields:
+        return normalized_metadata
+    if "verl_extra_fields" in normalized_metadata:
+        raise ValueError("metadata already contains reserved key 'verl_extra_fields'")
+    normalized_metadata["verl_extra_fields"] = dict(extra_fields)
+    return normalized_metadata
 
 
 def adapt_agent_loop_output(
-    output: Mapping[str, Sequence[int]] | AgentLoopOutputLike,
+    output: Mapping[str, object] | AgentLoopOutputLike,
     *,
     reward: float,
     metadata: Mapping[str, object] | None = None,
@@ -83,18 +98,25 @@ def adapt_agent_loop_output(
     tuples. Reward and provenance metadata are supplied by the caller because
     the external loop owns environment execution while ReMemAgent owns the
     research record that links the outcome to memory and episode context.
+    verl's dynamic ``extra_fields`` are preserved under a reserved metadata key
+    rather than silently discarded.
     """
 
     if not isfinite(reward):
         raise ValueError("reward must be finite")
 
-    validated = validate_agent_loop_output(_normalize_agent_loop_output(output))
+    normalized_output = _normalize_agent_loop_output(output)
+    validated = validate_agent_loop_output(normalized_output)
+    trajectory_metadata = _merge_external_extra_fields(
+        metadata,
+        validated.extra_fields,
+    )
     return VerlTrajectory(
         prompt_ids=validated.prompt_ids,
         response_ids=validated.response_ids,
         response_mask=validated.response_mask,
         reward=reward,
-        metadata=dict(metadata or {}),
+        metadata=trajectory_metadata,
     )
 
 
