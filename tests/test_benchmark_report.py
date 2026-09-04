@@ -182,6 +182,37 @@ def test_save_benchmark_report_includes_runtime_provenance(tmp_path) -> None:
     }
 
 
+def test_save_benchmark_report_rejects_non_string_provenance_values(tmp_path) -> None:
+    with pytest.raises(TypeError, match="values must be strings"):
+        save_benchmark_report(
+            _build_report(),
+            tmp_path / "report.json",
+            runtime_provenance={"episode_count": 1},  # type: ignore[arg-type]
+        )
+
+
+def test_save_benchmark_report_rejects_empty_provenance_keys(tmp_path) -> None:
+    with pytest.raises(ValueError, match="keys must be non-empty strings"):
+        save_benchmark_report(
+            _build_report(),
+            tmp_path / "report.json",
+            runtime_provenance={"": "unknown"},
+        )
+
+
+def test_save_benchmark_report_detaches_runtime_provenance(tmp_path) -> None:
+    provenance = {"code_revision": "abc123"}
+    output_path = save_benchmark_report(
+        _build_report(),
+        tmp_path / "report.json",
+        runtime_provenance=provenance,
+    )
+    provenance["code_revision"] = "mutated"
+
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["runtime_provenance"]["code_revision"] == "abc123"
+
+
 def test_save_repeated_reports_rejects_different_experimental_configuration(tmp_path) -> None:
     first = _build_report(seed=1, max_steps=1)
     second = _build_report(seed=2, max_steps=2)
