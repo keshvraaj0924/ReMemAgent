@@ -43,7 +43,7 @@ def validate_environment_contract(
         )
 
     try:
-        return _probe_environment(
+        report = _probe_environment(
             environment,
             reset_kwargs=reset_kwargs,
             probe_action=probe_action,
@@ -51,8 +51,9 @@ def validate_environment_contract(
     except BaseException:
         _close_after_failure(environment)
         raise
-    else:
-        _close_environment(environment)
+
+    _close_environment(environment)
+    return report
 
 
 def _probe_environment(
