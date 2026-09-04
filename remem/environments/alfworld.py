@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from math import isfinite
 from typing import Any
 
 from remem.environments._compat import require_callable
@@ -50,9 +51,9 @@ class AlfWorldAdapter:
 
         return StepResult(
             observation=str(_unwrap_batch_value(observation)),
-            reward=float(_unwrap_batch_value(reward)),
-            terminated=bool(_unwrap_batch_value(terminated)),
-            truncated=bool(_unwrap_batch_value(truncated)),
+            reward=_normalize_reward(reward),
+            terminated=_normalize_terminal_flag(terminated, "terminated"),
+            truncated=_normalize_terminal_flag(truncated, "truncated"),
             info=_unwrap_info(info),
         )
 
@@ -70,6 +71,27 @@ def _unwrap_batch_value(value: Any) -> Any:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) == 1:
         return value[0]
     return value
+
+
+def _normalize_reward(value: Any) -> float:
+    """Normalize an ALFWorld reward while rejecting ambiguous values."""
+
+    unwrapped = _unwrap_batch_value(value)
+    if isinstance(unwrapped, bool) or not isinstance(unwrapped, (int, float)):
+        raise TypeError("ALFWorld reward must be a finite numeric value")
+    reward = float(unwrapped)
+    if not isfinite(reward):
+        raise ValueError("ALFWorld reward must be finite")
+    return reward
+
+
+def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
+    """Normalize a scalar ALFWorld terminal flag without truthiness coercion."""
+
+    unwrapped = _unwrap_batch_value(value)
+    if not isinstance(unwrapped, bool):
+        raise TypeError(f"ALFWorld {field_name} flag must be a boolean")
+    return unwrapped
 
 
 def _unwrap_info(info: Any) -> dict[str, Any]:
