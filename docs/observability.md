@@ -36,6 +36,12 @@ The merge operation deliberately does not invent event ordering, timestamps, per
 
 This provides a useful research boundary for measuring execution overhead and memory-transfer activity without coupling the benchmark runner to a metrics vendor or external tracing SDK.
 
+## Runtime provenance
+
+Measured benchmark artifacts capture the checkout state alongside the Git revision. `REMEM_GIT_STATE` can be supplied by controlled CI/container execution and must be exactly `clean`, `dirty`, or `unknown`; invalid values fail closed instead of being persisted as authoritative provenance. When the variable is absent, the runtime probes `git status --porcelain` and records `unknown` if the checkout cannot be inspected.
+
+This distinction matters because a valid commit SHA alone does not prove that the executed source tree matched that revision. Provenance remains descriptive metadata: it does not provide cryptographic authenticity, prove dependency availability outside the recorded environment, or establish scientific reproducibility by itself.
+
 ## Current limitation
 
 The collector aggregates counters and total durations only. It does not provide histograms, distributed traces, or external exporters. Those concerns should remain optional integrations rather than becoming dependencies of the deterministic research core. Snapshot persistence and additive multi-worker merging are available for local artifacts, but exporting to Prometheus, OpenTelemetry, or another operational backend remains deployment-specific.
