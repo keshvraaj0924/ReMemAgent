@@ -1,6 +1,8 @@
+import math
+
 import pytest
 
-from experiments.ablations import AblationStrategy, run_ablations
+from experiments.ablations import AblationResult, AblationStrategy, run_ablations
 from experiments.metrics import compare_strategies
 from experiments.synthetic_negative_transfer import BenchmarkCase
 from remem.routing.counterfactual import CounterfactualRouter
@@ -29,9 +31,50 @@ def test_compare_strategies_rejects_missing_baseline() -> None:
         if result.strategy is not AblationStrategy.SELF_REASONING_ALWAYS
     ]
 
-    try:
+    with pytest.raises(ValueError, match="results must contain exactly one self-reasoning baseline"):
         compare_strategies(without_baseline)
-    except ValueError as error:
-        assert str(error) == "results must contain exactly one self-reasoning baseline"
-    else:
-        raise AssertionError("Expected missing baseline to be rejected")
+
+
+def test_compare_strategies_rejects_duplicate_strategies() -> None:
+    result = AblationResult(
+        strategy=AblationStrategy.MEMORY_ALWAYS,
+        total_cases=1,
+        selected_memory=1,
+        mean_utility=0.5,
+        negative_transfer_cases=0,
+        selected_negative_transfer_cases=0,
+        routing_regret=0.0,
+    )
+
+    with pytest.raises(ValueError, match="each strategy at most once"):
+        compare_strategies([result, result])
+
+
+def test_compare_strategies_rejects_inconsistent_counts() -> None:
+    result = AblationResult(
+        strategy=AblationStrategy.SELF_REASONING_ALWAYS,
+        total_cases=2,
+        selected_memory=3,
+        mean_utility=0.5,
+        negative_transfer_cases=0,
+        selected_negative_transfer_cases=0,
+        routing_regret=0.0,
+    )
+
+    with pytest.raises(ValueError, match="selected_memory must be between"):
+        compare_strategies([result])
+
+
+def test_compare_strategies_rejects_non_finite_metrics() -> None:
+    result = AblationResult(
+        strategy=AblationStrategy.SELF_REASONING_ALWAYS,
+        total_cases=1,
+        selected_memory=0,
+        mean_utility=math.nan,
+        negative_transfer_cases=0,
+        selected_negative_transfer_cases=0,
+        routing_regret=0.0,
+    )
+
+    with pytest.raises(ValueError, match="mean_utility must be finite"):
+        compare_strategies([result])
