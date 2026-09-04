@@ -49,6 +49,16 @@ def _report(
     )
 
 
+def _unseeded_report(reward: float, success: bool) -> BenchmarkRunReport:
+    report = _report(0, reward, success)
+    return BenchmarkRunReport(
+        benchmark_name=report.benchmark_name,
+        episodes=report.episodes,
+        final_memory_count=report.final_memory_count,
+        seed=None,
+    )
+
+
 def test_summarize_benchmark_reports_uses_seed_level_observations() -> None:
     summary = summarize_benchmark_reports(
         (_report(1, 1.0, True), _report(2, 0.0, False), _report(3, 1.0, True))
@@ -126,6 +136,28 @@ def test_compare_benchmark_reports_pairs_metrics_by_seed() -> None:
     assert comparison.success_rate_delta.mean == 0.5
     assert comparison.mean_reward_delta.mean == 0.5
     assert comparison.transfer_success_rate_delta.mean == 0.0
+
+
+def test_compare_benchmark_reports_canonicalizes_seed_order() -> None:
+    baseline = (_report(2, 0.5, True), _report(1, 0.0, False))
+    treatment = (_report(1, 1.0, True), _report(2, 0.5, True))
+
+    comparison = compare_benchmark_reports(baseline, treatment)
+
+    assert comparison.seeds == (1, 2)
+    assert comparison.success_rate_delta.mean == 0.5
+
+
+def test_compare_benchmark_reports_rejects_unseeded_runs() -> None:
+    baseline = (_unseeded_report(0.0, False),)
+    treatment = (_unseeded_report(1.0, True),)
+
+    try:
+        compare_benchmark_reports(baseline, treatment)
+    except ValueError as exc:
+        assert "explicit seeds" in str(exc)
+    else:
+        raise AssertionError("paired comparisons must require explicit seeds")
 
 
 def test_compare_benchmark_reports_rejects_mismatched_seed_sets() -> None:
