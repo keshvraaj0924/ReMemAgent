@@ -13,6 +13,8 @@ from typing import Mapping
 
 PACKAGE_NAME = "rememagent"
 UNKNOWN_VALUE = "unknown"
+CLEAN_STATE = "clean"
+DIRTY_STATE = "dirty"
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +22,7 @@ class RuntimeProvenance:
     """Environment metadata captured alongside a measured experiment."""
 
     code_revision: str
+    working_tree_state: str
     python_version: str
     platform: str
     package_version: str
@@ -43,15 +46,20 @@ def collect_runtime_provenance(
     absent, a repository checkout is inspected with ``git rev-parse``. Failure
     to resolve a revision is represented explicitly as ``"unknown"`` rather
     than inventing a revision.
+
+    ``REMEM_GIT_STATE`` may be supplied by a controlled execution environment.
+    Otherwise the checkout is inspected with ``git status --porcelain``. An
+    unknown state is retained explicitly when the repository cannot be probed.
     """
 
     environment_values = environment or {}
-    code_revision = environment_values.get("REMEM_GIT_COMMIT") or _git_revision(
-        repository_path or Path.cwd()
-    )
+    repository = repository_path or Path.cwd()
+    code_revision = environment_values.get("REMEM_GIT_COMMIT") or _git_revision(repository)
+    working_tree_state = environment_values.get("REMEM_GIT_STATE") or _git_working_tree_state(repository)
     dependency_versions = _dependency_versions()
     return RuntimeProvenance(
         code_revision=code_revision,
+        working_tree_state=working_tree_state,
         python_version=platform.python_version(),
         platform=platform.platform(),
         package_version=_package_version(),
@@ -76,6 +84,23 @@ def _git_revision(repository_path: Path) -> str:
 
     revision = result.stdout.strip()
     return revision or UNKNOWN_VALUE
+
+
+def _git_working_tree_state(repository_path: Path) -> str:
+    """Return clean, dirty, or unknown for the checkout working tree."""
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repository_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return UNKNOWN_VALUE
+
+    return DIRTY_STATE if result.stdout else CLEAN_STATE
 
 
 def _package_version() -> str:
