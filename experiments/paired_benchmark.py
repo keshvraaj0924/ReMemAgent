@@ -57,6 +57,32 @@ def run_paired_external_benchmarks(
     )
 
 
+def run_paired_external_benchmarks_with_preflight(
+    baseline_spec: ExternalBenchmarkSpec,
+    treatment_spec: ExternalBenchmarkSpec,
+    seeds: Sequence[int],
+    *,
+    baseline_label: str = "baseline",
+    treatment_label: str = "treatment",
+    probe_action: str | None = None,
+) -> PairedBenchmarkResult:
+    """Preflight both conditions before running a paired benchmark experiment."""
+
+    preflight_paired_external_benchmarks(
+        baseline_spec,
+        treatment_spec,
+        seeds,
+        probe_action=probe_action,
+    )
+    return run_paired_external_benchmarks(
+        baseline_spec,
+        treatment_spec,
+        seeds,
+        baseline_label=baseline_label,
+        treatment_label=treatment_label,
+    )
+
+
 def preflight_paired_external_benchmarks(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
@@ -111,4 +137,5 @@ __all__ = [
     "PairedBenchmarkResult",
     "preflight_paired_external_benchmarks",
     "run_paired_external_benchmarks",
+    "run_paired_external_benchmarks_with_preflight",
 ]
