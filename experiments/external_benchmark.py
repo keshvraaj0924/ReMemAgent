@@ -72,7 +72,7 @@ class ExternalBenchmarkSpec:
         if self.transfer_success_evaluator is not None:
             _validate_callable_specification("transfer_success_evaluator", self.transfer_success_evaluator)
         if isinstance(self.minimum_trust, bool) or not isinstance(self.minimum_trust, (int, float)):
-            raise TypeError("minimum_trust must be a finite number between 0 and 1")
+            raise TypeError("minimum_trust must be a number between 0 and 1")
         if not isfinite(float(self.minimum_trust)):
             raise ValueError("minimum_trust must be finite")
         if not 0.0 <= self.minimum_trust <= 1.0:
