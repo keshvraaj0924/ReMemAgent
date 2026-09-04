@@ -11,6 +11,7 @@ import asyncio
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field
 from math import isfinite
+from types import MappingProxyType
 from typing import Any, Protocol, TypeVar, cast
 
 from remem.integrations.verl import VerlTrainingBatch, VerlTrajectory
@@ -49,12 +50,34 @@ class AsyncVerlAgentLoop(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class AgentLoopRequest:
-    """One ordered request for an external async agent loop."""
+    """One ordered request for an external async agent loop.
+
+    Caller-owned mappings are copied into immutable mapping proxies at
+    construction time. This prevents a request queued for concurrent execution
+    from changing underneath the batch because another component mutates the
+    original sampling parameters or keyword arguments.
+    """
 
     sampling_params: Mapping[str, Any]
     reward: float
     metadata: Mapping[str, object] = field(default_factory=dict)
     kwargs: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate scalar values and freeze caller-owned request mappings."""
+
+        if not isinstance(self.sampling_params, Mapping):
+            raise TypeError("sampling_params must be a mapping")
+        if not isfinite(self.reward):
+            raise ValueError("reward must be finite")
+        if not isinstance(self.metadata, Mapping):
+            raise TypeError("metadata must be a mapping")
+        if not isinstance(self.kwargs, Mapping):
+            raise TypeError("kwargs must be a mapping")
+
+        object.__setattr__(self, "sampling_params", MappingProxyType(dict(self.sampling_params)))
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+        object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
 
 
 def _normalize_agent_loop_output(
