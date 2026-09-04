@@ -52,7 +52,11 @@ def test_save_repeated_benchmark_reports_rejects_mixed_benchmarks(tmp_path) -> N
     """One repeated artifact cannot combine unrelated benchmark families."""
 
     first = run_external_benchmark(_smoke_spec("alfworld-smoke", 0))
-    second = replace(first, benchmark_name="webshop-smoke")
+    second = replace(
+        first,
+        benchmark_name="webshop-smoke",
+        configuration=replace(first.configuration, benchmark_name="webshop-smoke"),
+    )
 
     with pytest.raises(ValueError, match="^repeated benchmark reports must use one benchmark name$"):
         save_repeated_benchmark_reports([first, second], tmp_path / "repeated.json")
