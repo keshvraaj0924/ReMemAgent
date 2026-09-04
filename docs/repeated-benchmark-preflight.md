@@ -21,6 +21,15 @@ Every probe environment is closed by the existing runtime-preflight lifecycle.
 Probe results are returned as `EnvironmentContractReport` values; they are not
 benchmark reports and must not be included as scientific measurements.
 
+## Deterministic repeated artifacts
+
+Measured repeated reports also require an explicit seed on every report. The
+serializer rejects unseeded reports rather than treating `None` as an
+independent experimental condition. Reports are serialized in ascending seed
+order, so callers that provide the same runs in different iteration orders
+produce byte-identical JSON artifacts. This makes artifact digests stable and
+prevents ordering differences from creating false reproducibility failures.
+
 ## CLI entry points
 
 A preflight-only command is available without importing experiment modules:
