@@ -36,6 +36,58 @@ def test_adapt_agent_loop_output_preserves_tokens_and_metadata() -> None:
     assert trajectory.metadata == metadata
 
 
+def test_adapt_agent_loop_output_preserves_external_extra_fields() -> None:
+    """Dynamic verl fields remain available to downstream research artifacts."""
+
+    trajectory = adapt_agent_loop_output(
+        {
+            "prompt_ids": (1,),
+            "response_ids": (2,),
+            "response_mask": (1,),
+            "extra_fields": {"turn_scores": [0.1, 1.0], "tool_rewards": [0.0]},
+        },
+        reward=1.0,
+        metadata={"episode_id": "episode-10"},
+    )
+
+    assert trajectory.metadata["episode_id"] == "episode-10"
+    assert trajectory.metadata["verl_extra_fields"] == {
+        "turn_scores": [0.1, 1.0],
+        "tool_rewards": [0.0],
+    }
+
+
+def test_adapt_agent_loop_output_rejects_reserved_extra_field_collision() -> None:
+    """The adapter must not silently overwrite caller-owned provenance."""
+
+    with pytest.raises(ValueError, match="reserved key 'verl_extra_fields'"):
+        adapt_agent_loop_output(
+            {
+                "prompt_ids": (1,),
+                "response_ids": (2,),
+                "response_mask": (1,),
+                "extra_fields": {"turn_scores": [1.0]},
+            },
+            reward=1.0,
+            metadata={"verl_extra_fields": {"source": "caller"}},
+        )
+
+
+def test_adapt_agent_loop_output_rejects_non_mapping_extra_fields() -> None:
+    """Malformed dynamic fields fail at the external output boundary."""
+
+    with pytest.raises(TypeError, match="extra_fields must be a mapping"):
+        adapt_agent_loop_output(
+            {
+                "prompt_ids": (1,),
+                "response_ids": (2,),
+                "response_mask": (1,),
+                "extra_fields": ["invalid"],
+            },
+            reward=1.0,
+        )
+
+
 def test_adapt_agent_loop_output_accepts_model_dump_objects() -> None:
     """A real verl-style Pydantic output can cross the boundary without conversion by callers."""
 
