@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from math import isfinite
 
 from remem.execution import Policy
 from remem.memory.pipeline import MemoryGuidancePipeline
@@ -36,8 +37,7 @@ def build_memory_guided_policy_factory(
 
     if not callable(action_policy_factory):
         raise TypeError("action_policy_factory must be callable")
-    if not 0.0 <= minimum_trust <= 1.0:
-        raise ValueError("minimum_trust must be between 0 and 1")
+    _validate_minimum_trust(minimum_trust)
 
     def create_policy(seed: int, store: MemoryStore) -> Policy:
         """Create one memory-guided policy for a benchmark episode."""
@@ -86,6 +86,17 @@ def validate_policy_contract(
     if not isinstance(action, str) or not action.strip():
         raise ValueError("policy must return a non-empty string action")
     return PolicyContractReport(action=action)
+
+
+def _validate_minimum_trust(value: object) -> None:
+    """Require a finite numeric trust threshold in the closed unit interval."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError("minimum_trust must be a number between 0 and 1")
+    if not isfinite(float(value)):
+        raise ValueError("minimum_trust must be finite")
+    if not 0.0 <= float(value) <= 1.0:
+        raise ValueError("minimum_trust must be between 0 and 1")
 
 
 def _validate_seed(seed: object) -> None:
