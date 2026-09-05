@@ -43,6 +43,8 @@ A successful preflight verifies import paths and callable types only. It does no
 
 The stronger `--runtime-preflight` path constructs the real environment and probes its reset contract. When a probe action is supplied, it also validates one real normalized step and constructs the configured policy against the observed reset text. The probe is closed before the command returns and is never included in benchmark measurements.
 
+For repeated experiments, `--repeated-runtime-preflight --seeds 11,22,33` runs that runtime probe independently for every requested seed. `--preflight-before-run` provides the corresponding fail-fast measured mode: every requested seed is runtime-preflighted before the first measured run starts. A failed probe prevents the measured repeated run from starting.
+
 ## Command-line execution
 
 The `remem-benchmark` entry point accepts the same explicit callable specifications:
@@ -56,8 +58,11 @@ remem-benchmark \
   --policy-factory my_policy:build_policy \
   --success-evaluator my_alfworld:evaluate_success \
   --seed 123 \
-  --output artifacts/alfworld-test.json
+  --output artifacts/alfworld-test.json \
+  --manifest artifacts/alfworld-test.json.manifest.json
 ```
+
+Benchmark artifacts are protected against accidental replacement. If the report path already exists, the CLI fails before measured execution unless `--overwrite` is supplied. The same protection applies to an explicitly requested integrity-manifest path. This prevents a rerun from silently destroying an earlier experiment artifact; use a new output path for independent runs or opt into replacement deliberately.
 
 The CLI does not install benchmark packages or create model checkpoints. Those dependencies remain owned by the experiment environment.
 
