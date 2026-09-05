@@ -197,6 +197,97 @@ def test_alfworld_factory_closes_environment_when_initialization_fails(monkeypat
     assert instances[0].closed is True
 
 
+def test_alfworld_factory_freezes_mutable_configuration(monkeypatch: Any) -> None:
+    observed_configs: list[dict[str, Any]] = []
+
+    class FakeInitializedEnvironment:
+        def reset(self) -> str:
+            return "state"
+
+    class FakeEnvironment:
+        def __init__(self, config: dict[str, Any], train_eval: str) -> None:
+            observed_configs.append(config)
+            assert train_eval == "eval"
+
+        def init_env(self, batch_size: int) -> FakeInitializedEnvironment:
+            assert batch_size == 1
+            return FakeInitializedEnvironment()
+
+    fake_environment_module = types.ModuleType("alfworld.agents.environment")
+    fake_environment_module.get_environment = lambda _name: FakeEnvironment  # type: ignore[attr-defined]
+    fake_agents_module = types.ModuleType("alfworld.agents")
+    fake_alfworld_module = types.ModuleType("alfworld")
+    fake_alfworld_module.agents = fake_agents_module  # type: ignore[attr-defined]
+    fake_agents_module.environment = fake_environment_module  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "alfworld", fake_alfworld_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents", fake_agents_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", fake_environment_module)
+
+    config = {"env": {"type": "AlfredTWEnv", "nested": {"split": "eval"}}}
+    factory = build_alfworld_text_environment_factory(config, train_eval=" eval ")
+    config["env"]["type"] = "MutatedEnv"
+    config["env"]["nested"]["split"] = "train"
+
+    factory(7)
+
+    assert observed_configs == [
+        {"env": {"type": "AlfredTWEnv", "nested": {"split": "eval"}}}
+    ]
+
+
+def test_alfworld_factory_normalizes_train_eval_before_external_construction(monkeypatch: Any) -> None:
+    observed_train_eval: list[str] = []
+
+    class FakeInitializedEnvironment:
+        def reset(self) -> str:
+            return "state"
+
+    class FakeEnvironment:
+        def __init__(self, _config: object, train_eval: str) -> None:
+            observed_train_eval.append(train_eval)
+
+        def init_env(self, batch_size: int) -> FakeInitializedEnvironment:
+            assert batch_size == 1
+            return FakeInitializedEnvironment()
+
+    fake_environment_module = types.ModuleType("alfworld.agents.environment")
+    fake_environment_module.get_environment = lambda _name: FakeEnvironment  # type: ignore[attr-defined]
+    fake_agents_module = types.ModuleType("alfworld.agents")
+    fake_alfworld_module = types.ModuleType("alfworld")
+    fake_alfworld_module.agents = fake_agents_module  # type: ignore[attr-defined]
+    fake_agents_module.environment = fake_environment_module  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "alfworld", fake_alfworld_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents", fake_agents_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", fake_environment_module)
+
+    factory = build_alfworld_text_environment_factory({}, train_eval=" eval ")
+    factory(5)
+
+    assert observed_train_eval == ["eval"]
+
+
+def test_webshop_factory_normalizes_external_identifiers(monkeypatch: Any) -> None:
+    fake_gym = types.ModuleType("gym")
+    observed: list[tuple[str, dict[str, object]]] = []
+
+    def make(environment_id: str, **kwargs: object) -> FakeWebShopEnvironment:
+        observed.append((environment_id, kwargs))
+        return FakeWebShopEnvironment()
+
+    fake_gym.make = make  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "gym", fake_gym)
+
+    factory = build_webshop_text_environment_factory(
+        observation_mode=" text ",
+        environment_id=" WebAgentTextEnv-v0 ",
+    )
+    factory(11)
+
+    assert observed == [("WebAgentTextEnv-v0", {"observation_mode": "text"})]
+
+
 def test_alfworld_factory_rejects_invalid_text_configuration() -> None:
     with pytest.raises(ValueError, match="train_eval must be a non-empty string"):
         build_alfworld_text_environment_factory({}, train_eval="   ")
