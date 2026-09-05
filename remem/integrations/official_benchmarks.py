@@ -112,12 +112,16 @@ def build_alfworld_text_environment_factory(
         """Create one isolated upstream ALFWorld environment."""
 
         _validate_seed(seed)
+        environment: Any | None = None
         with _ALFWORLD_RANDOM_LOCK:
             previous_state = random.getstate()
             random.seed(seed)
-            environment: Any | None = None
             try:
-                environment = environment_class(config_snapshot, train_eval=normalized_train_eval)
+                environment_config = _copy_alfworld_config(config_snapshot)
+                environment = environment_class(
+                    environment_config,
+                    train_eval=normalized_train_eval,
+                )
                 initialized_environment = environment.init_env(batch_size=1)
             except Exception:
                 if environment is not None:
