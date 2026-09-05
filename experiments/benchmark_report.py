@@ -8,11 +8,13 @@ import os
 import tempfile
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
-from experiments.benchmark_statistics import BenchmarkConditionComparison
 from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.benchmark_validation import validate_benchmark_run_report
+
+if TYPE_CHECKING:
+    from experiments.benchmark_statistics import BenchmarkConditionComparison
 
 BENCHMARK_REPORT_SCHEMA_VERSION = 1
 
