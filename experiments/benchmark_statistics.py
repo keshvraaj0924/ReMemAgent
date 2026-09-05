@@ -1,19 +1,19 @@
-"""Descriptive statistics for independent benchmark seed reports.
+"""Descriptive and inferential statistics for benchmark seed reports.
 
-The statistics layer operates on one aggregate observation per seed. It never
-pools episode-level observations across seeds and never performs significance
-testing. This keeps uncertainty estimates aligned with the independent-run
-experimental design.
+The descriptive layer operates on one aggregate observation per seed. It never
+pools episode-level observations across seeds. The paired sign-flip test is a
+separate, explicitly opt-in inferential primitive for matched seed deltas.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
-from math import sqrt
+from itertools import product
+from math import isfinite, sqrt
 from typing import Any, Sequence
 
 from experiments.benchmark_report import benchmark_configuration_fingerprint
-from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
+from remem.benchmark import BenchmarkRunReport
 from remem.benchmark_validation import validate_benchmark_run_report
 
 CONFIDENCE_Z_95 = 1.96
@@ -58,6 +58,22 @@ class BenchmarkConditionComparison:
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation of the paired comparison."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class PairedSignFlipResult:
+    """Exact two-sided paired sign-flip test result for one metric."""
+
+    observed_mean_delta: float
+    p_value: float
+    sample_size: int
+    nonzero_delta_count: int
+    evaluated_permutations: int
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe representation of the test result."""
 
         return asdict(self)
 
@@ -146,6 +162,58 @@ def compare_benchmark_reports(
     )
 
 
+def exact_paired_sign_flip_test(
+    deltas: Sequence[float],
+) -> PairedSignFlipResult:
+    """Run an exact two-sided paired sign-flip test on seed-level deltas.
+
+    Under the null hypothesis that treatment has no systematic paired effect,
+    each non-zero paired difference is assigned either sign with equal
+    probability. All ``2**n`` sign assignments are enumerated for up to 20
+    non-zero differences. The two-sided p-value counts assignments whose
+    absolute mean delta is at least as large as the observed absolute mean.
+
+    Zero differences do not contribute sign choices. This test is intentionally
+    separate from descriptive benchmark summaries and makes no adjustment for
+    multiple metrics or multiple comparisons.
+    """
+
+    normalized_deltas = tuple(deltas)
+    _validate_deltas(normalized_deltas)
+    nonzero_deltas = tuple(delta for delta in normalized_deltas if delta != 0.0)
+    nonzero_count = len(nonzero_deltas)
+    if nonzero_count > 20:
+        raise ValueError("exact sign-flip test supports at most 20 non-zero deltas")
+
+    observed_mean = sum(normalized_deltas) / len(normalized_deltas)
+    if nonzero_count == 0:
+        return PairedSignFlipResult(
+            observed_mean_delta=observed_mean,
+            p_value=1.0,
+            sample_size=len(normalized_deltas),
+            nonzero_delta_count=0,
+            evaluated_permutations=1,
+        )
+
+    observed_statistic = abs(observed_mean)
+    total_assignments = 1 << nonzero_count
+    extreme_assignments = 0
+    scale = len(normalized_deltas)
+
+    for signs in product((-1.0, 1.0), repeat=nonzero_count):
+        permuted_mean = sum(delta * sign for delta, sign in zip(nonzero_deltas, signs)) / scale
+        if abs(permuted_mean) >= observed_statistic:
+            extreme_assignments += 1
+
+    return PairedSignFlipResult(
+        observed_mean_delta=observed_mean,
+        p_value=extreme_assignments / total_assignments,
+        sample_size=len(normalized_deltas),
+        nonzero_delta_count=nonzero_count,
+        evaluated_permutations=total_assignments,
+    )
+
+
 def _validate_report_collection(reports: tuple[BenchmarkRunReport, ...]) -> None:
     """Validate report structure before deriving any aggregate statistics."""
 
@@ -211,6 +279,17 @@ def _validate_label(label: str, field_name: str) -> str:
     return normalized_label
 
 
+def _validate_deltas(deltas: tuple[float, ...]) -> None:
+    """Validate paired deltas before inferential analysis."""
+
+    if not deltas:
+        raise ValueError("deltas must contain at least one paired observation")
+    if any(not isinstance(delta, (int, float)) or isinstance(delta, bool) for delta in deltas):
+        raise TypeError("deltas must contain real numeric values")
+    if any(not isfinite(float(delta)) for delta in deltas):
+        raise ValueError("deltas must contain only finite values")
+
+
 def _summarize(values: tuple[float, ...]) -> MetricSummary:
     """Compute mean, sample deviation, standard error, and 95% interval."""
 
@@ -235,6 +314,8 @@ __all__ = [
     "BenchmarkConditionComparison",
     "BenchmarkSeedStatistics",
     "MetricSummary",
+    "PairedSignFlipResult",
     "compare_benchmark_reports",
+    "exact_paired_sign_flip_test",
     "summarize_benchmark_reports",
 ]
