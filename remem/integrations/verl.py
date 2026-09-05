@@ -27,6 +27,7 @@ class VerlTrajectory:
     response_mask: tuple[int, ...]
     reward: float
     metadata: Mapping[str, object]
+    response_logprobs: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
         """Validate the token-level contract for directly constructed records."""
@@ -47,14 +48,29 @@ class VerlTrajectory:
         if any(value not in (0, 1) for value in normalized_mask):
             raise ValueError("response_mask values must be either 0 or 1")
 
-    def to_agent_loop_output(self) -> dict[str, list[int]]:
-        """Return the fields required by verl's ``AgentLoopOutput`` contract."""
+        if self.response_logprobs is not None:
+            normalized_logprobs = tuple(self.response_logprobs)
+            if len(normalized_logprobs) != len(self.response_ids):
+                raise ValueError(
+                    "response_logprobs must have the same length as response_ids"
+                )
+            for logprob in normalized_logprobs:
+                _validate_real_number(logprob, "response_logprobs")
+                if not isfinite(logprob):
+                    raise ValueError("response_logprobs must be finite")
+            object.__setattr__(self, "response_logprobs", normalized_logprobs)
 
-        return {
+    def to_agent_loop_output(self) -> dict[str, list[int] | list[float]]:
+        """Return fields required by verl plus optional rollout log probabilities."""
+
+        output: dict[str, list[int] | list[float]] = {
             "prompt_ids": list(self.prompt_ids),
             "response_ids": list(self.response_ids),
             "response_mask": list(self.response_mask),
         }
+        if self.response_logprobs is not None:
+            output["response_logprobs"] = list(self.response_logprobs)
+        return output
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-compatible offline-training representation."""
