@@ -18,6 +18,19 @@ The policy specification is intentionally allowed to differ. This is the expecte
 
 Each condition is executed independently for every requested seed through the existing repeated external benchmark runner. The resulting reports are passed to `compare_benchmark_reports`, which aligns the conditions by explicit seed and computes descriptive treatment-minus-baseline deltas.
 
+## Artifact persistence
+
+`save_paired_benchmark_result` persists both ordered per-seed condition reports and the paired descriptive comparison in one deterministic JSON artifact. The artifact records:
+
+- the common benchmark name and ordered seed set;
+- baseline and treatment labels;
+- every measured report for both conditions;
+- seed-aligned success-rate, reward, and transfer-success deltas;
+- the shared configuration fingerprint when configuration metadata is available;
+- optional runtime provenance.
+
+Input reports are validated and sorted by seed before serialization, so caller iteration order does not change artifact bytes. The persistence layer does not calculate or claim statistical significance; the stored comparison remains descriptive.
+
 ## Preflight
 
 `preflight_paired_external_benchmarks` performs the same configuration validation and then runs the existing repeated runtime preflight independently for both conditions. An optional concrete action can be supplied to exercise one normalized environment step before measurement.
@@ -41,5 +54,7 @@ The paired runner also does not load models, tokenize prompts, or own third-part
 - independent preflight of both conditions;
 - preflight completing before measured execution;
 - rejection of benchmark-family mismatches.
+
+`tests/test_benchmark_report.py` additionally covers paired artifact ordering, deterministic bytes, and comparison-seed validation.
 
 The repository quality workflow remains the authoritative execution gate for these tests.
