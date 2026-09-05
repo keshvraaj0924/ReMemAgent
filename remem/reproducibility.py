@@ -23,6 +23,20 @@ class ExperimentManifest:
             raise TypeError("manifest values must be a mapping")
         self._values = _normalize_mapping(values)
 
+    @classmethod
+    def from_json(cls, payload: str) -> "ExperimentManifest":
+        """Load and validate a manifest from JSON without trusting its formatting."""
+
+        if not isinstance(payload, str):
+            raise TypeError("manifest JSON must be a string")
+        try:
+            values = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError("manifest JSON is invalid") from exc
+        if not isinstance(values, Mapping):
+            raise ValueError("manifest JSON must contain an object")
+        return cls(values)
+
     @property
     def values(self) -> dict[str, Any]:
         """Return a detached canonical manifest mapping."""
@@ -45,6 +59,17 @@ class ExperimentManifest:
         """Return the SHA-256 digest of the canonical JSON representation."""
 
         return hashlib.sha256(self.to_json().encode("utf-8")).hexdigest()
+
+    def verify_sha256(self, expected_sha256: str) -> None:
+        """Raise when an expected digest does not match the canonical manifest."""
+
+        if not isinstance(expected_sha256, str) or not expected_sha256:
+            raise ValueError("expected_sha256 must be a non-empty string")
+        if self.sha256 != expected_sha256:
+            raise ValueError(
+                "manifest SHA-256 mismatch: "
+                f"expected {expected_sha256}, computed {self.sha256}"
+            )
 
 
 def _normalize_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
