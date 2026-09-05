@@ -198,15 +198,62 @@ def test_main_allows_existing_output_with_overwrite(monkeypatch, tmp_path: Path)
     assert captured["output"] == arguments.output
 
 
-def test_main_rejects_existing_manifest_without_overwrite(monkeypatch, tmp_path: Path) -> None:
+def test_main_rejects_existing_manifest_before_running(monkeypatch, tmp_path: Path) -> None:
     arguments = _base_arguments(tmp_path)
     arguments.manifest = tmp_path / "report.manifest.json"
     arguments.manifest.write_text("existing", encoding="utf-8")
+    run_called = False
+
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    def run_external_benchmark(spec: ExternalBenchmarkSpec) -> object:
+        nonlocal run_called
+        run_called = True
+        return object()
+
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
+
+    with pytest.raises(FileExistsError, match="pass --overwrite"):
+        benchmark_cli.main()
+    assert run_called is False
+
+
+def test_main_rejects_manifest_equal_to_output_before_running(monkeypatch, tmp_path: Path) -> None:
+    arguments = _base_arguments(tmp_path)
+    arguments.manifest = arguments.output
+    run_called = False
+
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    def run_external_benchmark(spec: ExternalBenchmarkSpec) -> object:
+        nonlocal run_called
+        run_called = True
+        return object()
+
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
+
+    with pytest.raises(ValueError, match="different path from --output"):
+        benchmark_cli.main()
+    assert run_called is False
+
+
+def test_main_allows_existing_manifest_with_overwrite(monkeypatch, tmp_path: Path) -> None:
+    arguments = _base_arguments(tmp_path)
+    arguments.manifest = tmp_path / "report.manifest.json"
+    arguments.manifest.write_text("existing", encoding="utf-8")
+    arguments.overwrite = True
     report = object()
+    captured: dict[str, object] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
     monkeypatch.setattr(benchmark_cli, "run_external_benchmark", lambda spec: report)
     monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
-    with pytest.raises(FileExistsError, match="pass --overwrite"):
-        benchmark_cli.main()
+    def save_manifest(report_path: Path, requested_path: Path) -> Path:
+        captured["manifest_path"] = requested_path
+        return requested_path
+
+    monkeypatch.setattr(benchmark_cli, "save_benchmark_artifact_manifest", save_manifest)
+
+    assert benchmark_cli.main() == 0
+    assert captured["manifest_path"] == arguments.manifest
