@@ -17,6 +17,8 @@ ReMemAgent can produce measured benchmark JSON artifacts, but serialization alon
 
 `verify_benchmark_artifact(path, manifest)` repeats the report hashing process and fails closed if either the bytes or declared schema differs.
 
+`verify_benchmark_artifact_manifest(report_path, manifest_path)` is the complete load-and-verify operation for archive consumers. It validates the sidecar, verifies the report against it, and returns the verified metadata for downstream logging.
+
 The digest covers the complete serialized report, including its final newline. A manifest is therefore a statement about the exact file that was measured or archived, not about an equivalent parsed JSON object.
 
 ## CLI usage
@@ -28,6 +30,18 @@ python -m experiments.benchmark_cli ... --output artifacts/alfworld.json --manif
 ```
 
 The manifest option is rejected during callable or runtime preflight because those modes do not produce benchmark artifacts.
+
+The verification helper is intended for archive and analysis tooling:
+
+```text
+from pathlib import Path
+from experiments.benchmark_manifest import verify_benchmark_artifact_manifest
+
+verify_benchmark_artifact_manifest(
+    Path("artifacts/alfworld.json"),
+    Path("artifacts/alfworld.json.manifest.json"),
+)
+```
 
 A benchmark archive should preserve the report and manifest together and verify the pair before downstream analysis or publication.
 
