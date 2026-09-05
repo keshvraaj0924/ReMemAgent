@@ -14,6 +14,12 @@ The comparison remains descriptive. It does not pool episode observations, perfo
 2. Run both conditions independently for the same unique seed set.
 3. Persist the per-run reports with their configuration metadata.
 4. Call `compare_benchmark_reports` to obtain seed-aligned treatment-minus-baseline deltas.
-5. Apply any separately justified inferential statistical procedure only after checking its assumptions.
+5. If an inferential claim is required, apply `exact_paired_sign_flip_test` to one metric's paired deltas only after checking the experimental assumptions and analysis plan.
+
+## Exact paired sign-flip test
+
+`exact_paired_sign_flip_test` is a separate, dependency-free inferential primitive for a single metric. It enumerates every sign assignment of the non-zero paired seed differences and computes a two-sided exact p-value using the absolute mean delta as the test statistic. Zero differences contribute no sign choice. The implementation is bounded to 20 non-zero pairs so an accidental large production run cannot trigger unbounded exponential work.
+
+The test is deliberately not embedded in `compare_benchmark_reports`: descriptive effect sizes and inferential testing remain separate concerns. The framework also does not perform multiple-comparison correction, power analysis, equivalence testing, or causal identification. Those require an experiment-specific statistical plan.
 
 Reports without configuration metadata remain supported for backward compatibility, but the comparison cannot distinguish configuration drift when both sides omit metadata. New benchmark execution should preserve configuration metadata at the report boundary.
