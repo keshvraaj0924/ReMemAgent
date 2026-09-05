@@ -93,6 +93,8 @@ def build_alfworld_text_environment_factory(
     if not isinstance(config_env, Mapping):
         raise TypeError("config['env'] must be a mapping when provided")
 
+    selected_env_type = _resolve_alfworld_environment_type(config_env, env_type)
+
     try:
         from alfworld.agents.environment import get_environment
     except ImportError as exc:
@@ -101,7 +103,6 @@ def build_alfworld_text_environment_factory(
             "install alfworld before creating this factory"
         ) from exc
 
-    selected_env_type = env_type or str(config_env.get("type", "AlfredTWEnv"))
     environment_class = get_environment(selected_env_type)
 
     def create_environment(seed: int) -> Any:
@@ -174,6 +175,22 @@ def build_webshop_text_environment_factory(
         return _SeededWebShopEnvironment(environment, seed)
 
     return create_environment
+
+
+def _resolve_alfworld_environment_type(
+    config_env: Mapping[str, Any],
+    env_type: str | None,
+) -> str:
+    """Resolve and validate the ALFWorld environment type before imports."""
+
+    configured_type = config_env.get("type")
+    if configured_type is not None and (
+        not isinstance(configured_type, str) or not configured_type.strip()
+    ):
+        raise ValueError("config['env']['type'] must be a non-empty string when provided")
+    if env_type is not None:
+        return env_type.strip()
+    return configured_type.strip() if configured_type is not None else "AlfredTWEnv"
 
 
 def _validate_seed(seed: int) -> None:
