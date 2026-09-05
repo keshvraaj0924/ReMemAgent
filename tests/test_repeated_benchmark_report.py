@@ -6,6 +6,7 @@ from dataclasses import replace
 import pytest
 
 from experiments.benchmark_report import save_repeated_benchmark_reports
+from experiments.benchmark_statistics import summarize_benchmark_reports
 from experiments.external_benchmark import ExternalBenchmarkSpec, run_external_benchmark
 
 
@@ -69,3 +70,39 @@ def test_save_repeated_benchmark_reports_rejects_duplicate_seeds(tmp_path) -> No
 
     with pytest.raises(ValueError, match="^benchmark report seeds must be unique$"):
         save_repeated_benchmark_reports([report, report], tmp_path / "repeated.json")
+
+
+def test_save_repeated_benchmark_reports_rejects_stale_statistics(tmp_path) -> None:
+    """Persisted aggregates must correspond exactly to the serialized reports."""
+
+    reports = (
+        run_external_benchmark(_smoke_spec("alfworld-smoke", 0)),
+        run_external_benchmark(_smoke_spec("alfworld-smoke", 10)),
+    )
+    statistics = summarize_benchmark_reports(reports).to_dict()
+    statistics["success_rate"]["mean"] += 0.1
+
+    with pytest.raises(ValueError, match="^statistics must exactly match the supplied benchmark reports$"):
+        save_repeated_benchmark_reports(
+            reports,
+            tmp_path / "repeated.json",
+            statistics=statistics,
+        )
+
+
+def test_save_repeated_benchmark_reports_accepts_matching_statistics(tmp_path) -> None:
+    """The CLI-produced deterministic summary remains a valid artifact field."""
+
+    reports = (
+        run_external_benchmark(_smoke_spec("alfworld-smoke", 0)),
+        run_external_benchmark(_smoke_spec("alfworld-smoke", 10)),
+    )
+    statistics = summarize_benchmark_reports(reports).to_dict()
+    output_path = save_repeated_benchmark_reports(
+        reports,
+        tmp_path / "repeated.json",
+        statistics=statistics,
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["statistics"] == statistics

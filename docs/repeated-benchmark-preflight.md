@@ -30,6 +30,12 @@ order, so callers that provide the same runs in different iteration orders
 produce byte-identical JSON artifacts. This makes artifact digests stable and
 prevents ordering differences from creating false reproducibility failures.
 
+When a caller supplies the optional `statistics` field to
+`save_repeated_benchmark_reports`, the serializer recomputes the seed-level
+descriptive summary from the exact reports being persisted and requires an exact
+match. Aggregate values therefore cannot silently become stale after a report
+changes or be copied from another run.
+
 ## CLI entry points
 
 A preflight-only command is available without importing experiment modules:

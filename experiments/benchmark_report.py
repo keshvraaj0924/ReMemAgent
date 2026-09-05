@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__
 
 import hashlib
 import json
@@ -33,12 +33,7 @@ def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
 
 
 def benchmark_configuration_fingerprint(configuration: BenchmarkRunConfiguration) -> str:
-    """Return a deterministic fingerprint for configuration independent of seed.
-
-    The seed identifies an independent stochastic run and therefore is excluded
-    from this fingerprint. All other declared configuration fields participate
-    in the digest, making the value useful for grouping comparable runs.
-    """
+    """Return a deterministic fingerprint for configuration independent of seed."""
 
     canonical_configuration = asdict(replace(configuration, seed=None))
     canonical_payload = json.dumps(
@@ -76,8 +71,9 @@ def save_repeated_benchmark_reports(
     """Persist independent seed reports and optional descriptive statistics.
 
     Repeated reports must describe the same experimental configuration apart
-    from their independent seed. Reports are serialized in ascending seed order
-    so artifact bytes do not depend on caller iteration order.
+    from their independent seed. If statistics are supplied, they must be the
+    deterministic seed-level summary of these exact reports; callers cannot
+    attach stale or unrelated aggregate values to the artifact.
     """
 
     selected_reports = tuple(reports)
@@ -99,6 +95,8 @@ def save_repeated_benchmark_reports(
 
     _validate_repeated_configuration(selected_reports)
     ordered_reports = tuple(sorted(selected_reports, key=_seed_sort_key))
+    if statistics is not None:
+        _validate_repeated_statistics(ordered_reports, statistics)
 
     payload: dict[str, Any] = {
         "schema_version": BENCHMARK_REPORT_SCHEMA_VERSION,
@@ -127,13 +125,7 @@ def save_paired_benchmark_result(
     *,
     runtime_provenance: Mapping[str, str] | None = None,
 ) -> Path:
-    """Persist paired condition reports and their descriptive comparison.
-
-    Both condition report sets are validated independently and then checked
-    against the comparison seed set and labels. The artifact contains the raw
-    per-seed reports plus the precomputed paired deltas, making later analysis
-    reproducible without rerunning the external benchmark.
-    """
+    """Persist paired condition reports and their descriptive comparison."""
 
     baseline = _validate_paired_report_collection(baseline_reports, "baseline")
     treatment = _validate_paired_report_collection(treatment_reports, "treatment")
@@ -219,6 +211,22 @@ def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str:
     return benchmark_configuration_fingerprint(
         replace(configuration, seed=None, policy_factory=None)
     )
+
+
+def _validate_repeated_statistics(
+    reports: tuple[BenchmarkRunReport, ...],
+    statistics: Mapping[str, Any],
+) -> None:
+    """Reject aggregate statistics that do not describe the supplied reports."""
+
+    if not isinstance(statistics, Mapping):
+        raise TypeError("statistics must be a mapping")
+    from experiments.benchmark_statistics import summarize_benchmark_reports
+
+    expected = summarize_benchmark_reports(reports).to_dict()
+    actual = dict(statistics)
+    if actual != expected:
+        raise ValueError("statistics must exactly match the supplied benchmark reports")
 
 
 def _normalize_runtime_provenance(runtime_provenance: Mapping[str, str]) -> dict[str, str]:
