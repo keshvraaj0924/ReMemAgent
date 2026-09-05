@@ -139,6 +139,16 @@ def test_adapt_agent_loop_output_rejects_non_finite_reward() -> None:
         )
 
 
+def test_adapt_agent_loop_output_rejects_boolean_reward() -> None:
+    """Booleans must not cross the reward boundary as implicit numeric values."""
+
+    with pytest.raises(TypeError, match="reward must be a real number"):
+        adapt_agent_loop_output(
+            {"prompt_ids": (), "response_ids": (1,), "response_mask": (1,)},
+            reward=True,
+        )
+
+
 def test_run_agent_loop_forwards_sampling_params_and_dataset_fields() -> None:
     """The async bridge matches the external AgentLoopBase invocation boundary."""
 
@@ -253,3 +263,10 @@ def test_agent_loop_request_rejects_non_finite_reward() -> None:
 
     with pytest.raises(ValueError, match="reward must be finite"):
         AgentLoopRequest(sampling_params={}, reward=float("inf"))
+
+
+def test_agent_loop_request_rejects_boolean_reward() -> None:
+    """Boolean rewards must not be accepted through Python's numeric subtype rules."""
+
+    with pytest.raises(TypeError, match="reward must be a real number"):
+        AgentLoopRequest(sampling_params={}, reward=True)

@@ -68,7 +68,9 @@ class AgentLoopRequest:
 
         if not isinstance(self.sampling_params, Mapping):
             raise TypeError("sampling_params must be a mapping")
-        if not isfinite(self.reward):
+        if isinstance(self.reward, bool) or not isinstance(self.reward, (int, float)):
+            raise TypeError("reward must be a real number")
+        if not isfinite(float(self.reward)):
             raise ValueError("reward must be finite")
         if not isinstance(self.metadata, Mapping):
             raise TypeError("metadata must be a mapping")
@@ -125,7 +127,9 @@ def adapt_agent_loop_output(
     rather than silently discarded.
     """
 
-    if not isfinite(reward):
+    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
+        raise TypeError("reward must be a real number")
+    if not isfinite(float(reward)):
         raise ValueError("reward must be finite")
 
     normalized_output = _normalize_agent_loop_output(output)
