@@ -3,6 +3,7 @@ from __future__ import annotations
 from experiments.benchmark_statistics import (
     compare_benchmark_reports,
     exact_paired_sign_flip_test,
+    holm_bonferroni_adjust,
     summarize_benchmark_reports,
 )
 from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunConfiguration, BenchmarkRunReport
@@ -289,3 +290,35 @@ def test_exact_paired_sign_flip_test_rejects_empty_input() -> None:
         assert "at least one" in str(exc)
     else:
         raise AssertionError("empty paired observations must be rejected")
+
+
+def test_holm_bonferroni_adjust_controls_ordered_family() -> None:
+    adjusted = holm_bonferroni_adjust(
+        {"success": 0.01, "reward": 0.04, "transfer": 0.20}
+    )
+
+    assert adjusted == {"success": 0.03, "reward": 0.08, "transfer": 0.20}
+
+
+def test_holm_bonferroni_adjust_preserves_original_key_order() -> None:
+    adjusted = holm_bonferroni_adjust({"reward": 0.04, "success": 0.01})
+
+    assert list(adjusted) == ["reward", "success"]
+
+
+def test_holm_bonferroni_adjust_rejects_invalid_probabilities() -> None:
+    try:
+        holm_bonferroni_adjust({"success": 1.1})
+    except ValueError as exc:
+        assert "[0, 1]" in str(exc)
+    else:
+        raise AssertionError("invalid p-values must be rejected")
+
+
+def test_holm_bonferroni_adjust_rejects_empty_input() -> None:
+    try:
+        holm_bonferroni_adjust({})
+    except ValueError as exc:
+        assert "at least one" in str(exc)
+    else:
+        raise AssertionError("empty hypothesis families must be rejected")

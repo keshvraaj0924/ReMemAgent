@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from itertools import product
 from math import isfinite, sqrt
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from experiments.benchmark_report import benchmark_configuration_fingerprint
 from remem.benchmark import BenchmarkRunReport
@@ -214,6 +214,42 @@ def exact_paired_sign_flip_test(
     )
 
 
+def holm_bonferroni_adjust(p_values: Mapping[str, float]) -> dict[str, float]:
+    """Return Holm-Bonferroni adjusted p-values in the original key order.
+
+    The correction controls the family-wise error rate for a finite family of
+    hypotheses. Input values must be finite probabilities in ``[0, 1]``. The
+    returned values are monotone with respect to the ordered raw p-values and
+    are capped at one. This utility does not choose an alpha threshold or claim
+    that any hypothesis is significant.
+    """
+
+    if not p_values:
+        raise ValueError("p_values must contain at least one hypothesis")
+
+    normalized: list[tuple[str, float]] = []
+    for name, value in p_values.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("p_value hypothesis names must be non-empty strings")
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise TypeError("p_values must contain real numeric values")
+        numeric_value = float(value)
+        if not isfinite(numeric_value) or not 0.0 <= numeric_value <= 1.0:
+            raise ValueError("p_values must contain finite values in [0, 1]")
+        normalized.append((name, numeric_value))
+
+    ordered = sorted(normalized, key=lambda item: (item[1], item[0]))
+    hypothesis_count = len(ordered)
+    adjusted: dict[str, float] = {}
+    running_max = 0.0
+    for rank, (name, p_value) in enumerate(ordered):
+        corrected_value = min(1.0, (hypothesis_count - rank) * p_value)
+        running_max = max(running_max, corrected_value)
+        adjusted[name] = running_max
+
+    return {name: adjusted[name] for name, _ in normalized}
+
+
 def _validate_report_collection(reports: tuple[BenchmarkRunReport, ...]) -> None:
     """Validate report structure before deriving any aggregate statistics."""
 
@@ -317,5 +353,6 @@ __all__ = [
     "PairedSignFlipResult",
     "compare_benchmark_reports",
     "exact_paired_sign_flip_test",
+    "holm_bonferroni_adjust",
     "summarize_benchmark_reports",
 ]
