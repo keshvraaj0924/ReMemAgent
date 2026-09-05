@@ -47,6 +47,9 @@ class VerlTrajectory:
             raise TypeError("response_mask must contain only integer values")
         if any(value not in (0, 1) for value in normalized_mask):
             raise ValueError("response_mask values must be either 0 or 1")
+        if not any(normalized_mask):
+            raise ValueError("response_mask must contain at least one active response token")
+        object.__setattr__(self, "response_mask", normalized_mask)
 
         if self.response_logprobs is not None:
             normalized_logprobs = tuple(self.response_logprobs)

@@ -114,6 +114,24 @@ def test_adapt_agent_loop_output_accepts_model_dump_objects() -> None:
     assert trajectory.response_mask == (1, 0)
 
 
+def test_adapt_agent_loop_output_preserves_response_logprobs() -> None:
+    """Rollout likelihoods remain aligned with the external response tokens."""
+
+    trajectory = adapt_agent_loop_output(
+        {
+            "prompt_ids": (1,),
+            "response_ids": (2, 3),
+            "response_mask": (1, 0),
+            "response_logprobs": (-0.25, -1.5),
+        },
+        reward=0.5,
+    )
+
+    assert trajectory.response_logprobs == (-0.25, -1.5)
+    assert trajectory.to_agent_loop_output()["response_logprobs"] == [-0.25, -1.5]
+    assert trajectory.to_dict()["response_logprobs"] == [-0.25, -1.5]
+
+
 def test_adapt_agent_loop_output_copies_metadata() -> None:
     """Mutating caller-owned metadata does not mutate the trajectory record."""
 
@@ -270,3 +288,18 @@ def test_agent_loop_request_rejects_boolean_reward() -> None:
 
     with pytest.raises(TypeError, match="reward must be a real number"):
         AgentLoopRequest(sampling_params={}, reward=True)
+
+
+def test_verl_trajectory_rejects_response_mask_without_active_tokens() -> None:
+    """Training trajectories cannot enter the trainer with no learnable response tokens."""
+
+    from remem.integrations.verl import VerlTrajectory
+
+    with pytest.raises(ValueError, match="at least one active response token"):
+        VerlTrajectory(
+            prompt_ids=(1,),
+            response_ids=(2, 3),
+            response_mask=(0, 0),
+            reward=0.0,
+            metadata={},
+        )
