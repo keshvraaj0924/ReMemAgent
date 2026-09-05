@@ -115,28 +115,31 @@ def validate_external_benchmark_runtime(
     """Probe the real configured environment and policy before execution.
 
     The framework creates a temporary environment for contract validation and
-    closes it as part of the environment probe. Policy validation only consumes
-    the captured initial observation, so it does not need the environment to
-    remain alive. Probe output is never benchmark data.
+    closes it after every probe attempt. Policy validation only consumes the
+    captured initial observation, so it does not need the environment to remain
+    alive. Probe output is never benchmark data.
     """
 
     validate_external_benchmark(spec)
     environment_factory = load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
     probe_seed = 0 if spec.seed is None else spec.seed
     environment = environment_factory(probe_seed)
-    environment_report = validate_environment_contract(
-        environment,
-        probe_action=probe_action,
-        close_environment=True,
-    )
-    policy_factory = _resolve_policy_factory(spec)
-    validate_policy_contract(
-        policy_factory,
-        seed=probe_seed,
-        observation=environment_report.initial_observation,
-        store=MemoryStore(),
-    )
-    return environment_report
+    try:
+        environment_report = validate_environment_contract(
+            environment,
+            probe_action=probe_action,
+            close_environment=False,
+        )
+        policy_factory = _resolve_policy_factory(spec)
+        validate_policy_contract(
+            policy_factory,
+            seed=probe_seed,
+            observation=environment_report.initial_observation,
+            store=MemoryStore(),
+        )
+        return environment_report
+    finally:
+        _close_environment_after_failure(environment)
 
 
 def run_external_benchmark(
