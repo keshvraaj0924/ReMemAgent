@@ -1,5 +1,3 @@
-"""Serialize measured benchmark reports without coupling to benchmark SDKs."""
-
 from __future__ import annotations
 
 import hashlib
@@ -141,6 +139,7 @@ def save_paired_benchmark_result(
     treatment = _validate_paired_report_collection(treatment_reports, "treatment")
     if baseline[0].benchmark_name != treatment[0].benchmark_name:
         raise ValueError("paired benchmark reports must use one benchmark name")
+    _validate_paired_configuration(baseline, treatment)
 
     baseline_seeds = tuple(report.seed for report in baseline)
     treatment_seeds = tuple(report.seed for report in treatment)
@@ -192,6 +191,34 @@ def _validate_paired_report_collection(
     if len(benchmark_names) != 1:
         raise ValueError(f"{condition_label} reports must use one benchmark name")
     return tuple(sorted(selected_reports, key=_seed_sort_key))
+
+
+def _validate_paired_configuration(
+    baseline: tuple[BenchmarkRunReport, ...],
+    treatment: tuple[BenchmarkRunReport, ...],
+) -> None:
+    """Ensure paired conditions share protocol configuration apart from policy."""
+
+    if any(report.configuration is None for report in baseline + treatment):
+        raise ValueError("paired benchmark reports must include explicit configuration")
+
+    baseline_fingerprints = {_paired_configuration_fingerprint(report) for report in baseline}
+    treatment_fingerprints = {_paired_configuration_fingerprint(report) for report in treatment}
+    if baseline_fingerprints != treatment_fingerprints:
+        raise ValueError(
+            "baseline and treatment reports must share configuration apart from the seed and policy"
+        )
+
+
+def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str:
+    """Fingerprint paired protocol metadata while excluding seed and policy identity."""
+
+    configuration = report.configuration
+    if configuration is None:
+        raise ValueError("paired benchmark reports must include explicit configuration")
+    return benchmark_configuration_fingerprint(
+        replace(configuration, seed=None, policy_factory=None)
+    )
 
 
 def _normalize_runtime_provenance(runtime_provenance: Mapping[str, str]) -> dict[str, str]:

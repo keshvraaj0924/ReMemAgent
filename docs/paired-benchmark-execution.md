@@ -50,8 +50,10 @@ The CLI is a production execution surface, not a benchmark result generator: the
 - baseline and treatment labels;
 - every measured report for both conditions;
 - seed-aligned success-rate, reward, and transfer-success deltas;
-- the shared configuration fingerprint when configuration metadata is available;
+- the shared configuration fingerprint;
 - optional runtime provenance.
+
+Paired artifact persistence now requires explicit configuration metadata for every report and verifies that baseline and treatment share the same evaluation protocol after excluding only the independent seed and policy identity. This prevents a forged or manually assembled comparison artifact from combining different episode counts, step limits, environment factories, evaluators, or trust thresholds under one paired result.
 
 Input reports are validated and sorted by seed before serialization, so caller iteration order does not change artifact bytes. The persistence layer does not calculate or claim statistical significance; the stored comparison remains descriptive.
 
@@ -79,6 +81,6 @@ The paired runner also does not load models, tokenize prompts, or own third-part
 - preflight completing before measured execution;
 - rejection of benchmark-family mismatches.
 
-`tests/test_paired_benchmark_cli.py` covers condition-specific policy factory wiring, strict seed parsing, required policy selection, rejection of conflicting policy factory forms, and protection against accidental artifact overwrite. `tests/test_benchmark_report.py` additionally covers paired artifact ordering, deterministic bytes, and comparison-seed validation.
+`tests/test_paired_benchmark_cli.py` covers condition-specific policy factory wiring, strict seed parsing, required policy selection, rejection of conflicting policy factory forms, and protection against accidental artifact overwrite. `tests/test_benchmark_report.py` additionally covers paired artifact ordering, deterministic bytes, comparison-seed validation, explicit configuration requirements, and protocol-drift rejection.
 
 The repository quality workflow remains the authoritative execution gate for these tests.

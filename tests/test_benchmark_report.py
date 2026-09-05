@@ -331,3 +331,37 @@ def test_save_paired_benchmark_result_rejects_mismatched_comparison_seeds(tmp_pa
             _build_comparison(seeds=(3, 19)),
             tmp_path / "paired.json",
         )
+
+
+def test_save_paired_benchmark_result_rejects_protocol_drift(tmp_path) -> None:
+    baseline = (_build_report(seed=3, max_steps=1), _build_report(seed=17, max_steps=1))
+    treatment = (_build_report(seed=3, max_steps=2), _build_report(seed=17, max_steps=2))
+
+    with pytest.raises(ValueError, match="configuration apart from the seed and policy"):
+        save_paired_benchmark_result(
+            baseline,
+            treatment,
+            _build_comparison(),
+            tmp_path / "paired.json",
+        )
+
+
+def test_save_paired_benchmark_result_requires_explicit_configuration(tmp_path) -> None:
+    baseline_report = _build_report(seed=3)
+    treatment_report = _build_report(seed=3)
+    baseline = (baseline_report,)
+    treatment = (BenchmarkRunReport(
+        benchmark_name=treatment_report.benchmark_name,
+        episodes=treatment_report.episodes,
+        final_memory_count=treatment_report.final_memory_count,
+        seed=treatment_report.seed,
+        configuration=None,
+    ),)
+
+    with pytest.raises(ValueError, match="include explicit configuration"):
+        save_paired_benchmark_result(
+            baseline,
+            treatment,
+            _build_comparison(seeds=(3,)),
+            tmp_path / "paired.json",
+        )
