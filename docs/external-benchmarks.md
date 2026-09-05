@@ -43,6 +43,8 @@ A successful preflight verifies import paths and callable types only. It does no
 
 The stronger `--runtime-preflight` path constructs the real environment and probes its reset contract. When a probe action is supplied, it also validates one real normalized step and constructs the configured policy against the observed reset text. The probe is closed before the command returns and is never included in benchmark measurements.
 
+Runtime preflight closes its temporary environment in a `finally` cleanup path, so environment validation failures and policy validation failures cannot leave a partially constructed external environment alive. Cleanup errors are intentionally suppressed during preflight failure handling so the original contract exception remains the actionable error.
+
 For repeated experiments, `--repeated-runtime-preflight --seeds 11,22,33` runs that runtime probe independently for every requested seed. `--preflight-before-run` provides the corresponding fail-fast measured mode: every requested seed is runtime-preflighted before the first measured run starts. A failed probe prevents the measured repeated run from starting.
 
 ## Command-line execution
