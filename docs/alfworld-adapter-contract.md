@@ -5,6 +5,8 @@ The ALFWorld adapter is intentionally strict at the boundary between the upstrea
 ## Normalization rules
 
 - A singleton batch dimension is removed from observations, rewards, and terminal flags.
+- Singleton unwrapping accepts ordinary Python sequences and array-like objects that expose `len()` plus integer indexing; the core package does not require NumPy.
+- Mapping values in `info` are unwrapped per field while the mapping itself remains metadata.
 - Rewards must already be numeric and finite. Booleans and numeric strings are rejected instead of being coerced.
 - `terminated` and `truncated` must be actual booleans after singleton unwrapping. Truthiness conversion is not performed.
 - Four-value legacy step results are accepted as `(observation, reward, done, info)` and normalized to `terminated=done`, `truncated=False`.
@@ -15,6 +17,6 @@ This fail-closed behavior is an integration invariant, not a benchmark result. I
 
 ## Verification
 
-The adapter regression suite covers valid five-value normalization, legacy four-value normalization, malformed terminal flags, boolean rewards, and non-finite rewards.
+The adapter regression suite covers valid five-value normalization, legacy four-value normalization, array-like singleton batches, malformed terminal flags, boolean rewards, and non-finite rewards.
 
 Real ALFWorld execution still requires the optional upstream installation and a caller-owned environment/model configuration; this repository does not claim that external execution has been run merely because the adapter contract is tested.

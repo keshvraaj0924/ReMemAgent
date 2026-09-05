@@ -27,6 +27,21 @@ class FakeEnvironment:
         self.closed = True
 
 
+class SingletonBatch:
+    """Array-like batch double that is not a ``collections.abc.Sequence``."""
+
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    def __len__(self) -> int:
+        return 1
+
+    def __getitem__(self, index: int) -> object:
+        if index != 0:
+            raise IndexError(index)
+        return self.value
+
+
 def test_alfworld_adapter_normalizes_gymnasium_step() -> None:
     environment = FakeEnvironment(
         ("look around", {"episode": 1}),
@@ -61,6 +76,29 @@ def test_alfworld_adapter_unwraps_upstream_single_item_batches() -> None:
         terminated=True,
         truncated=False,
         info={"score": 1, "won": True},
+    )
+
+
+def test_alfworld_adapter_unwraps_array_like_singleton_batches() -> None:
+    environment = FakeEnvironment(
+        SingletonBatch("look around"),
+        (
+            SingletonBatch("found object"),
+            SingletonBatch(1.0),
+            SingletonBatch(True),
+            SingletonBatch(False),
+            {"score": SingletonBatch(1)},
+        ),
+    )
+    adapter = AlfWorldAdapter(environment)
+
+    assert adapter.reset() == "look around"
+    assert adapter.step("take object") == StepResult(
+        observation="found object",
+        reward=1.0,
+        terminated=True,
+        truncated=False,
+        info={"score": 1},
     )
 
 

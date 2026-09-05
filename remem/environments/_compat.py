@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from remem.environments.base import StepResult
@@ -38,6 +38,30 @@ def normalize_step(result: Iterable[Any] | StepResult) -> tuple[str, float, bool
         observation, reward, done, info = values
         return str(observation), float(reward), bool(done), False, dict(info)
     raise ValueError("environment step() must return four or five values")
+
+
+def unwrap_singleton(value: Any) -> Any:
+    """Remove one singleton batch dimension from sequence-like benchmark values.
+
+    Some external environments expose observations and scalar metadata as NumPy
+    arrays rather than Python ``Sequence`` instances. This helper intentionally
+    avoids importing NumPy: any object with a safe ``len``/index operation is
+    treated as batch-like when it contains exactly one item. Strings and bytes
+    remain scalar values.
+    """
+
+    if isinstance(value, (str, bytes, Mapping)):
+        return value
+    try:
+        length = len(value)
+    except TypeError:
+        return value
+    if length != 1:
+        return value
+    try:
+        return value[0]
+    except (IndexError, KeyError, TypeError):
+        return value
 
 
 def require_callable(environment: Any, method_name: str) -> None:

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from math import isfinite
 from typing import Any
 
-from remem.environments._compat import require_callable
+from remem.environments._compat import require_callable, unwrap_singleton
 from remem.environments.base import StepResult
 
 
@@ -31,8 +31,8 @@ class AlfWorldAdapter:
         result = self._environment.reset(**kwargs)
         if isinstance(result, tuple) and len(result) == 2:
             observation, _info = result
-            return str(_unwrap_batch_value(observation))
-        return str(_unwrap_batch_value(result))
+            return str(unwrap_singleton(observation))
+        return str(unwrap_singleton(result))
 
     def step(self, action: str) -> StepResult:
         """Execute one textual ALFWorld action and normalize its result."""
@@ -50,7 +50,7 @@ class AlfWorldAdapter:
             raise ValueError("ALFWorld step() must return four or five values")
 
         return StepResult(
-            observation=str(_unwrap_batch_value(observation)),
+            observation=str(unwrap_singleton(observation)),
             reward=_normalize_reward(reward),
             terminated=_normalize_terminal_flag(terminated, "terminated"),
             truncated=_normalize_terminal_flag(truncated, "truncated"),
@@ -65,18 +65,10 @@ class AlfWorldAdapter:
             close()
 
 
-def _unwrap_batch_value(value: Any) -> Any:
-    """Remove one singleton sequence dimension while preserving scalar lists."""
-
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) == 1:
-        return value[0]
-    return value
-
-
 def _normalize_reward(value: Any) -> float:
     """Normalize an ALFWorld reward while rejecting ambiguous values."""
 
-    unwrapped = _unwrap_batch_value(value)
+    unwrapped = unwrap_singleton(value)
     if isinstance(unwrapped, bool) or not isinstance(unwrapped, (int, float)):
         raise TypeError("ALFWorld reward must be a finite numeric value")
     reward = float(unwrapped)
@@ -88,7 +80,7 @@ def _normalize_reward(value: Any) -> float:
 def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
     """Normalize a scalar ALFWorld terminal flag without truthiness coercion."""
 
-    unwrapped = _unwrap_batch_value(value)
+    unwrapped = unwrap_singleton(value)
     if not isinstance(unwrapped, bool):
         raise TypeError(f"ALFWorld {field_name} flag must be a boolean")
     return unwrapped
@@ -99,4 +91,4 @@ def _unwrap_info(info: Any) -> dict[str, Any]:
 
     if not isinstance(info, Mapping):
         return {}
-    return {key: _unwrap_batch_value(value) for key, value in info.items()}
+    return {key: unwrap_singleton(value) for key, value in info.items()}
