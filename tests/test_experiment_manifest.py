@@ -37,3 +37,42 @@ def test_manifest_rejects_unsupported_values() -> None:
 def test_manifest_rejects_empty_keys() -> None:
     with pytest.raises(ValueError, match="non-empty strings"):
         ExperimentManifest({"": 1})
+
+
+def test_manifest_from_json_normalizes_non_canonical_formatting() -> None:
+    manifest = ExperimentManifest.from_json('{ "b": 2, "a": [1, true] }')
+
+    assert manifest.values == {"a": [1, True], "b": 2}
+    assert manifest.to_json() == '{"a":[1,true],"b":2}'
+
+
+def test_manifest_from_json_rejects_invalid_or_non_object_payloads() -> None:
+    with pytest.raises(ValueError, match="invalid"):
+        ExperimentManifest.from_json("{not-json}")
+    with pytest.raises(ValueError, match="object"):
+        ExperimentManifest.from_json("[1, 2, 3]")
+
+
+def test_manifest_from_json_rejects_non_string_payload() -> None:
+    with pytest.raises(TypeError, match="must be a string"):
+        ExperimentManifest.from_json(123)  # type: ignore[arg-type]
+
+
+def test_manifest_verify_sha256_accepts_matching_digest() -> None:
+    manifest = ExperimentManifest({"seed": 11})
+
+    manifest.verify_sha256(manifest.sha256)
+
+
+def test_manifest_verify_sha256_rejects_mismatched_digest() -> None:
+    manifest = ExperimentManifest({"seed": 11})
+
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        manifest.verify_sha256("0" * 64)
+
+
+def test_manifest_verify_sha256_rejects_empty_digest() -> None:
+    manifest = ExperimentManifest({"seed": 11})
+
+    with pytest.raises(ValueError, match="non-empty string"):
+        manifest.verify_sha256("")
