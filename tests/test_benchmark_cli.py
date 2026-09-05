@@ -3,6 +3,8 @@ from __future__ import annotations
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 import experiments.benchmark_cli as benchmark_cli
 from experiments.external_benchmark import ExternalBenchmarkSpec
 from remem.environments import EnvironmentContractReport
@@ -22,6 +24,7 @@ def _base_arguments(tmp_path: Path) -> Namespace:
         transfer_success_evaluator="example:is_transfer_success",
         output=tmp_path / "report.json",
         manifest=None,
+        overwrite=False,
         preflight=False,
         runtime_preflight=False,
         probe_action=None,
@@ -128,8 +131,6 @@ def test_main_rejects_probe_action_without_runtime_preflight(monkeypatch) -> Non
     arguments.probe_action = "look"
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
-    import pytest
-
     with pytest.raises(ValueError, match="--probe-action requires a runtime preflight"):
         benchmark_cli.main()
 
@@ -165,7 +166,47 @@ def test_main_rejects_manifest_during_preflight(monkeypatch) -> None:
     arguments.manifest = Path("manifest.json")
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
-    import pytest
-
     with pytest.raises(ValueError, match="--manifest requires a measured benchmark run"):
+        benchmark_cli.main()
+
+
+def test_main_rejects_existing_output_without_overwrite(monkeypatch, tmp_path: Path) -> None:
+    arguments = _base_arguments(tmp_path)
+    arguments.output.write_text("existing", encoding="utf-8")
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+
+    with pytest.raises(FileExistsError, match="pass --overwrite"):
+        benchmark_cli.main()
+
+
+def test_main_allows_existing_output_with_overwrite(monkeypatch, tmp_path: Path) -> None:
+    arguments = _base_arguments(tmp_path)
+    arguments.overwrite = True
+    arguments.output.write_text("existing", encoding="utf-8")
+    report = object()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", lambda spec: report)
+    monkeypatch.setattr(
+        benchmark_cli,
+        "save_benchmark_report",
+        lambda value, path, **_: captured.setdefault("output", path) or path,
+    )
+
+    assert benchmark_cli.main() == 0
+    assert captured["output"] == arguments.output
+
+
+def test_main_rejects_existing_manifest_without_overwrite(monkeypatch, tmp_path: Path) -> None:
+    arguments = _base_arguments(tmp_path)
+    arguments.manifest = tmp_path / "report.manifest.json"
+    arguments.manifest.write_text("existing", encoding="utf-8")
+    report = object()
+
+    monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", lambda spec: report)
+    monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
+
+    with pytest.raises(FileExistsError, match="pass --overwrite"):
         benchmark_cli.main()
