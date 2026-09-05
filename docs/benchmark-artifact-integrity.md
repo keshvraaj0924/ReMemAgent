@@ -29,6 +29,8 @@ The external benchmark CLI accepts `--manifest` on measured runs. For example, a
 python -m experiments.benchmark_cli ... --output artifacts/alfworld.json --manifest artifacts/alfworld.json.manifest.json
 ```
 
+Before measured execution begins, the CLI validates both destinations. Existing report or manifest files require explicit `--overwrite`. The CLI also rejects a manifest path that resolves to the same file as the report path, preventing a successful report from being replaced by its own integrity sidecar. These checks happen before environment construction or measured execution so a failed artifact precondition cannot consume benchmark episodes first.
+
 The manifest option is rejected during callable or runtime preflight because those modes do not produce benchmark artifacts.
 
 The verification helper is intended for archive and analysis tooling:
