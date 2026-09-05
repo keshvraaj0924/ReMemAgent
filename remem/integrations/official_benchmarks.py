@@ -8,6 +8,7 @@ first-class, documented path to the real upstream environments.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import copy
 import random
 import threading
 from typing import Any
@@ -94,6 +95,8 @@ def build_alfworld_text_environment_factory(
         raise TypeError("config['env'] must be a mapping when provided")
 
     selected_env_type = _resolve_alfworld_environment_type(config_env, env_type)
+    config_snapshot = _copy_alfworld_config(config)
+    normalized_train_eval = train_eval.strip()
 
     try:
         from alfworld.agents.environment import get_environment
@@ -114,7 +117,7 @@ def build_alfworld_text_environment_factory(
             random.seed(seed)
             environment: Any | None = None
             try:
-                environment = environment_class(config, train_eval=train_eval)
+                environment = environment_class(config_snapshot, train_eval=normalized_train_eval)
                 initialized_environment = environment.init_env(batch_size=1)
             except Exception:
                 if environment is not None:
@@ -145,6 +148,9 @@ def build_webshop_text_environment_factory(
         if num_products <= 0:
             raise ValueError("num_products must be positive when provided")
 
+    normalized_observation_mode = observation_mode.strip()
+    normalized_environment_id = environment_id.strip()
+
     try:
         import gym
     except ImportError as exc:
@@ -161,10 +167,10 @@ def build_webshop_text_environment_factory(
             previous_state = random.getstate()
             random.seed(seed)
             try:
-                kwargs: dict[str, Any] = {"observation_mode": observation_mode}
+                kwargs: dict[str, Any] = {"observation_mode": normalized_observation_mode}
                 if num_products is not None:
                     kwargs["num_products"] = num_products
-                environment = gym.make(environment_id, **kwargs)
+                environment = gym.make(normalized_environment_id, **kwargs)
             finally:
                 random.setstate(previous_state)
 
@@ -191,6 +197,15 @@ def _resolve_alfworld_environment_type(
     if env_type is not None:
         return env_type.strip()
     return configured_type.strip() if configured_type is not None else "AlfredTWEnv"
+
+
+def _copy_alfworld_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Detach caller-owned ALFWorld configuration from later mutations."""
+
+    try:
+        return copy.deepcopy(dict(config))
+    except (TypeError, ValueError) as exc:
+        raise TypeError("config must be deep-copyable for reproducible ALFWorld runs") from exc
 
 
 def _validate_seed(seed: int) -> None:
