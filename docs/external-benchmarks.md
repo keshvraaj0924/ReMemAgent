@@ -72,6 +72,8 @@ The concrete ALFWorld factory validates the configured environment type and copi
 
 The concrete WebShop factory normalizes the observation mode and Gym environment identifier once at factory creation. Both concrete factories scope Python's module-level RNG to the requested episode seed during environment construction and reset, then restore the caller's previous RNG state. The seeded wrappers reject an explicit `seed` argument on reset because ReMemAgent owns that seed contract.
 
+The WebShop bridge also fails fast on Gym 0.24.x. That release is known to invoke `reset`/`step` during `gym.make`, which can violate WebShop's expected environment lifecycle. The factory rejects it before environment construction and reports an actionable compatibility error rather than allowing a misleading runtime failure. Other Gym versions are not declared universally compatible; the actual WebShop installation remains responsible for selecting a supported dependency set.
+
 When an environment cannot satisfy the required adapter contract, `BenchmarkEnvironmentFactory` closes the caller-created environment when a `close()` method is available before propagating the validation error. This prevents partially constructed external environments from leaking resources during preflight or measured setup.
 
 The core integration intentionally does not infer or mutate third-party benchmark state beyond this explicit seed boundary. Deterministic seed plumbing therefore remains distinct from a claim that ALFWorld, WebShop, Gym, or a model implementation is itself deterministic.
