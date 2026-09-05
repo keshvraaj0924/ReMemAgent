@@ -38,6 +38,8 @@ remem-paired-benchmark \
 
 Baseline and treatment may instead use the lower-level `--*-action-policy-factory` form when the caller wants ReMemAgent to own memory-guided policy composition while the caller owns model inference. The CLI enforces exactly one policy factory form for each condition at argument parsing time, requires explicit independent seeds, and always runs the paired runtime preflight before measured execution. Configuration and execution errors are surfaced as concise process errors rather than Python tracebacks. The resulting artifact includes runtime provenance and can be protected by the exact-byte integrity manifest.
 
+The CLI refuses to replace an existing paired report or manifest unless `--overwrite` is explicitly supplied. This keeps reruns from silently destroying measured evidence. Both the report and manifest paths are checked before any benchmark environment or policy is constructed, so a failed overwrite guard cannot leave a partially executed experiment.
+
 The CLI is a production execution surface, not a benchmark result generator: the configured factories and evaluator remain caller-owned, and no model checkpoint is loaded by the framework itself.
 
 ## Artifact persistence
@@ -77,6 +79,6 @@ The paired runner also does not load models, tokenize prompts, or own third-part
 - preflight completing before measured execution;
 - rejection of benchmark-family mismatches.
 
-`tests/test_paired_benchmark_cli.py` covers condition-specific policy factory wiring, strict seed parsing, required policy selection, and rejection of conflicting policy factory forms. `tests/test_benchmark_report.py` additionally covers paired artifact ordering, deterministic bytes, and comparison-seed validation.
+`tests/test_paired_benchmark_cli.py` covers condition-specific policy factory wiring, strict seed parsing, required policy selection, rejection of conflicting policy factory forms, and protection against accidental artifact overwrite. `tests/test_benchmark_report.py` additionally covers paired artifact ordering, deterministic bytes, and comparison-seed validation.
 
 The repository quality workflow remains the authoritative execution gate for these tests.
