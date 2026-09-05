@@ -124,7 +124,9 @@ def adapt_agent_loop_output(
     the external loop owns environment execution while ReMemAgent owns the
     research record that links the outcome to memory and episode context.
     verl's dynamic ``extra_fields`` are preserved under a reserved metadata key
-    rather than silently discarded.
+    rather than silently discarded. Optional response log probabilities are
+    retained alongside response tokens for loss/replay consumers that need
+    rollout likelihoods.
     """
 
     if isinstance(reward, bool) or not isinstance(reward, (int, float)):
@@ -144,6 +146,7 @@ def adapt_agent_loop_output(
         response_mask=validated.response_mask,
         reward=reward,
         metadata=trajectory_metadata,
+        response_logprobs=validated.response_logprobs,
     )
 
 
