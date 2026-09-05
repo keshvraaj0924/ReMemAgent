@@ -129,13 +129,19 @@ def main() -> int:
     if probe_action is not None and not getattr(arguments, "preflight_before_run", False):
         raise ValueError("--probe-action requires a runtime preflight or --preflight-before-run")
 
+    output_path = _prepare_output_path(
+        arguments.output,
+        overwrite=getattr(arguments, "overwrite", False),
+    )
+    manifest_path = getattr(arguments, "manifest", None)
+    selected_manifest_path = _prepare_manifest_path(
+        output_path,
+        manifest_path,
+        overwrite=getattr(arguments, "overwrite", False),
+    )
     runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
     if seeds is None:
-        output_path = _prepare_output_path(
-            arguments.output,
-            overwrite=getattr(arguments, "overwrite", False),
-        )
         if getattr(arguments, "preflight_before_run", False):
             raise ValueError("--preflight-before-run requires --seeds")
         report = run_external_benchmark(spec)
@@ -145,10 +151,6 @@ def main() -> int:
             runtime_provenance=runtime_provenance,
         )
     else:
-        output_path = _prepare_output_path(
-            arguments.output,
-            overwrite=getattr(arguments, "overwrite", False),
-        )
         if getattr(arguments, "preflight_before_run", False):
             reports = run_repeated_external_benchmarks_with_preflight(
                 spec,
@@ -165,12 +167,7 @@ def main() -> int:
             statistics=statistics,
         )
 
-    manifest_path = getattr(arguments, "manifest", None)
-    if manifest_path is not None:
-        selected_manifest_path = _prepare_output_path(
-            manifest_path,
-            overwrite=getattr(arguments, "overwrite", False),
-        )
+    if selected_manifest_path is not None:
         manifest_output = save_benchmark_artifact_manifest(output_path, selected_manifest_path)
         print(f"saved benchmark artifact manifest: {manifest_output}")
     print(f"saved benchmark report: {output_path}")
@@ -185,6 +182,21 @@ def _prepare_output_path(path: Path, *, overwrite: bool) -> Path:
             f"benchmark artifact already exists: {path}; pass --overwrite to replace it"
         )
     return path
+
+
+def _prepare_manifest_path(
+    output_path: Path,
+    manifest_path: Path | None,
+    *,
+    overwrite: bool,
+) -> Path | None:
+    """Validate the optional manifest destination before measured execution."""
+
+    if manifest_path is None:
+        return None
+    if manifest_path.resolve() == output_path.resolve():
+        raise ValueError("--manifest must use a different path from --output")
+    return _prepare_output_path(manifest_path, overwrite=overwrite)
 
 
 def _reject_preflight_only_conflicts(
