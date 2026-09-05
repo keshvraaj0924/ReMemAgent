@@ -33,6 +33,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--treatment-label", default="treatment")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow replacing an existing paired benchmark report or integrity manifest",
+    )
     parser.add_argument("--probe-action")
     return parser.parse_args()
 
@@ -53,6 +58,12 @@ def main() -> int:
             policy_factory=arguments.treatment_policy_factory,
             action_policy_factory=arguments.treatment_action_policy_factory,
         )
+        output_path = _prepare_output_path(arguments.output, overwrite=arguments.overwrite)
+        manifest_path = (
+            _prepare_output_path(arguments.manifest, overwrite=arguments.overwrite)
+            if arguments.manifest is not None
+            else None
+        )
         result = run_paired_external_benchmarks_with_preflight(
             baseline_spec,
             treatment_spec,
@@ -66,15 +77,15 @@ def main() -> int:
             result.baseline_reports,
             result.treatment_reports,
             result.comparison,
-            arguments.output,
+            output_path,
             runtime_provenance=runtime_provenance,
         )
-        if arguments.manifest is not None:
-            manifest_path = save_benchmark_artifact_manifest(output_path, arguments.manifest)
-            print(f"saved paired benchmark artifact manifest: {manifest_path}")
+        if manifest_path is not None:
+            manifest_output = save_benchmark_artifact_manifest(output_path, manifest_path)
+            print(f"saved paired benchmark artifact manifest: {manifest_output}")
         print(f"saved paired benchmark report: {output_path}")
         return 0
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, FileExistsError) as exc:
         raise SystemExit(f"error: {exc}") from exc
 
 
@@ -122,6 +133,16 @@ def _parse_seeds(value: str) -> tuple[int, ...]:
     except ValueError as exc:
         raise ValueError("--seeds must contain comma-separated integers") from exc
     return validate_seed_sequence(seeds)
+
+
+def _prepare_output_path(path: Path, *, overwrite: bool) -> Path:
+    """Reject accidental artifact replacement unless explicitly requested."""
+
+    if path.exists() and not overwrite:
+        raise FileExistsError(
+            f"benchmark artifact already exists: {path}; pass --overwrite to replace it"
+        )
+    return path
 
 
 if __name__ == "__main__":
