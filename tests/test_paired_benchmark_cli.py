@@ -7,7 +7,7 @@ import pytest
 
 from experiments.benchmark_cli import _parse_seeds
 from experiments.paired_benchmark_cli import _build_spec, _parse_seeds as parse_paired_seeds
-from experiments.paired_benchmark_cli import parse_args
+from experiments.paired_benchmark_cli import _prepare_output_path, parse_args
 
 
 def _arguments(**overrides) -> Namespace:
@@ -121,3 +121,48 @@ def test_parse_args_rejects_both_policy_factory_forms_for_one_condition(
 
     with pytest.raises(SystemExit):
         parse_args()
+
+
+def test_prepare_output_path_rejects_existing_file_without_overwrite(tmp_path: Path) -> None:
+    output_path = tmp_path / "paired.json"
+    output_path.write_text("existing", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="--overwrite"):
+        _prepare_output_path(output_path, overwrite=False)
+
+
+def test_prepare_output_path_allows_existing_file_with_overwrite(tmp_path: Path) -> None:
+    output_path = tmp_path / "paired.json"
+    output_path.write_text("existing", encoding="utf-8")
+
+    assert _prepare_output_path(output_path, overwrite=True) == output_path
+
+
+def test_parse_args_exposes_overwrite_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "remem-paired-benchmark",
+            "--benchmark",
+            "synthetic-eval",
+            "--episodes",
+            "2",
+            "--max-steps",
+            "4",
+            "--seeds",
+            "11,17",
+            "--environment-factory",
+            "tests.test_external_benchmark:make_environment",
+            "--success-evaluator",
+            "tests.test_external_benchmark:evaluate_success",
+            "--baseline-policy-factory",
+            "tests.test_external_benchmark:make_policy",
+            "--treatment-policy-factory",
+            "tests.test_external_benchmark:make_memory_policy",
+            "--overwrite",
+        ],
+    )
+
+    arguments = parse_args()
+
+    assert arguments.overwrite is True
