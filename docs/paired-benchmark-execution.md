@@ -18,6 +18,28 @@ The policy specification is intentionally allowed to differ. This is the expecte
 
 Each condition is executed independently for every requested seed through the existing repeated external benchmark runner. The resulting reports are passed to `compare_benchmark_reports`, which aligns the conditions by explicit seed and computes descriptive treatment-minus-baseline deltas.
 
+## CLI execution
+
+The `remem-paired-benchmark` command exposes the same paired contract for real experiments without embedding model or benchmark SDK dependencies in ReMemAgent. A typical run supplies one policy factory per condition:
+
+```text
+remem-paired-benchmark \
+  --benchmark alfworld-text \
+  --episodes 100 \
+  --max-steps 30 \
+  --seeds 11,17,29 \
+  --environment-factory your_module:make_environment \
+  --success-evaluator your_module:evaluate_success \
+  --baseline-policy-factory your_module:make_baseline_policy \
+  --treatment-policy-factory your_module:make_memory_policy \
+  --output artifacts/alfworld-paired.json \
+  --manifest artifacts/alfworld-paired.json.manifest
+```
+
+Baseline and treatment may instead use the lower-level `--*-action-policy-factory` form when the caller wants ReMemAgent to own memory-guided policy composition while the caller owns model inference. The command requires explicit independent seeds and always runs the paired runtime preflight before measured execution. The resulting artifact includes runtime provenance and can be protected by the exact-byte integrity manifest.
+
+The CLI is a production execution surface, not a benchmark result generator: the configured factories and evaluator remain caller-owned, and no model checkpoint is loaded by the framework itself.
+
 ## Artifact persistence
 
 `save_paired_benchmark_result` persists both ordered per-seed condition reports and the paired descriptive comparison in one deterministic JSON artifact. The artifact records:
@@ -55,6 +77,6 @@ The paired runner also does not load models, tokenize prompts, or own third-part
 - preflight completing before measured execution;
 - rejection of benchmark-family mismatches.
 
-`tests/test_benchmark_report.py` additionally covers paired artifact ordering, deterministic bytes, and comparison-seed validation.
+`tests/test_paired_benchmark_cli.py` covers condition-specific policy factory wiring and strict seed parsing. `tests/test_benchmark_report.py` additionally covers paired artifact ordering, deterministic bytes, and comparison-seed validation.
 
 The repository quality workflow remains the authoritative execution gate for these tests.
