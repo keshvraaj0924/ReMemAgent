@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from experiments.benchmark_statistics import (
     compare_benchmark_reports,
+    exact_paired_sign_flip_test,
     summarize_benchmark_reports,
 )
 from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunConfiguration, BenchmarkRunReport
@@ -243,3 +244,48 @@ def test_compare_benchmark_reports_rejects_non_string_labels() -> None:
         assert "baseline_label" in str(exc)
     else:
         raise AssertionError("non-string condition labels must be rejected")
+
+
+def test_exact_paired_sign_flip_test_matches_enumerated_two_sided_probability() -> None:
+    result = exact_paired_sign_flip_test((1.0, 1.0, 1.0))
+
+    assert result.observed_mean_delta == 1.0
+    assert result.p_value == 0.25
+    assert result.sample_size == 3
+    assert result.nonzero_delta_count == 3
+    assert result.evaluated_permutations == 8
+
+
+def test_exact_paired_sign_flip_test_ignores_zero_differences() -> None:
+    result = exact_paired_sign_flip_test((1.0, 0.0, -1.0, 0.0))
+
+    assert result.observed_mean_delta == 0.0
+    assert result.p_value == 1.0
+    assert result.sample_size == 4
+    assert result.nonzero_delta_count == 2
+    assert result.evaluated_permutations == 4
+
+
+def test_exact_paired_sign_flip_test_returns_one_for_all_zero_deltas() -> None:
+    result = exact_paired_sign_flip_test((0.0, 0.0))
+
+    assert result.p_value == 1.0
+    assert result.evaluated_permutations == 1
+
+
+def test_exact_paired_sign_flip_test_rejects_non_finite_values() -> None:
+    try:
+        exact_paired_sign_flip_test((1.0, float("nan")))
+    except ValueError as exc:
+        assert "finite" in str(exc)
+    else:
+        raise AssertionError("non-finite deltas must be rejected")
+
+
+def test_exact_paired_sign_flip_test_rejects_empty_input() -> None:
+    try:
+        exact_paired_sign_flip_test(())
+    except ValueError as exc:
+        assert "at least one" in str(exc)
+    else:
+        raise AssertionError("empty paired observations must be rejected")
