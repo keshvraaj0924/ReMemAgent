@@ -66,9 +66,15 @@ Benchmark artifacts are protected against accidental replacement. If the report 
 
 The CLI does not install benchmark packages or create model checkpoints. Those dependencies remain owned by the experiment environment.
 
-## Factory lifecycle guarantees
+## Factory lifecycle and reproducibility guarantees
 
-The concrete WebShop factory validates and seeds the environment immediately after `gym.make`. If reset fails, the newly created environment is closed before the original reset exception is re-raised. If an older Gym-compatible environment exposes `reset()` without a `seed` keyword, the factory detects that signature and calls the legacy reset form rather than catching and masking arbitrary `TypeError` exceptions raised from inside reset.
+The concrete ALFWorld factory validates the configured environment type and copies the supplied configuration before resolving the optional ALFWorld dependency. The copied configuration is passed to every environment construction, so later mutation of the caller's nested mapping cannot silently change an already-created benchmark factory. The `train_eval` selector is normalized once at factory creation.
+
+The concrete WebShop factory normalizes the observation mode and Gym environment identifier once at factory creation. Both concrete factories scope Python's module-level RNG to the requested episode seed during environment construction and reset, then restore the caller's previous RNG state. The seeded wrappers reject an explicit `seed` argument on reset because ReMemAgent owns that seed contract.
+
+When an environment cannot satisfy the required adapter contract, `BenchmarkEnvironmentFactory` closes the caller-created environment when a `close()` method is available before propagating the validation error. This prevents partially constructed external environments from leaking resources during preflight or measured setup.
+
+The core integration intentionally does not infer or mutate third-party benchmark state beyond this explicit seed boundary. Deterministic seed plumbing therefore remains distinct from a claim that ALFWorld, WebShop, Gym, or a model implementation is itself deterministic.
 
 ## Current boundary
 
