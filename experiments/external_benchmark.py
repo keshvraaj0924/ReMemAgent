@@ -138,8 +138,11 @@ def validate_external_benchmark_runtime(
             store=MemoryStore(),
         )
         return environment_report
-    finally:
-        _close_environment_after_failure(environment)
+    except BaseException:
+        _close_environment_safely(environment)
+        raise
+    else:
+        _close_environment(environment)
 
 
 def run_external_benchmark(
@@ -241,8 +244,8 @@ def _validate_positive_integer(field_name: str, value: object) -> None:
         raise ValueError(f"{field_name} must be positive")
 
 
-def _close_environment_after_failure(environment: object) -> None:
-    """Attempt cleanup without replacing the active preflight exception."""
+def _close_environment_safely(environment: object) -> None:
+    """Attempt cleanup without replacing an active validation exception."""
 
     try:
         _close_environment(environment)
