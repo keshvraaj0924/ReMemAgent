@@ -144,6 +144,38 @@ def test_webshop_factory_creates_seeded_environment(monkeypatch: pytest.MonkeyPa
     assert environment.close_calls == 0
 
 
+def test_webshop_factory_rejects_gym_024_before_environment_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    environment_created = False
+
+    def make(_environment_id: str, **_kwargs: Any) -> FakeWebShopEnvironment:
+        nonlocal environment_created
+        environment_created = True
+        return FakeWebShopEnvironment()
+
+    gym_module = types.ModuleType("gym")
+    gym_module.__version__ = "0.24.0"
+    gym_module.make = make  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "gym", gym_module)
+
+    with pytest.raises(RuntimeError, match="Gym 0.24.x"):
+        build_webshop_text_environment_factory()
+
+    assert environment_created is False
+
+
+def test_webshop_factory_accepts_supported_gym_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    environment = FakeWebShopEnvironment()
+    gym_module = types.ModuleType("gym")
+    gym_module.__version__ = "0.23.1"
+    gym_module.make = lambda _environment_id, **_kwargs: environment  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "gym", gym_module)
+
+    factory = build_webshop_text_environment_factory()
+    assert factory(23) is not environment
+
+
 def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.MonkeyPatch) -> None:
     environment = LegacyWebShopEnvironment()
     gym_module = types.ModuleType("gym")
