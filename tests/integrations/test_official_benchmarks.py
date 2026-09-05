@@ -213,6 +213,22 @@ def test_alfworld_factory_rejects_non_mapping_environment_config() -> None:
         build_alfworld_text_environment_factory({"env": "invalid"})
 
 
+def test_alfworld_factory_rejects_invalid_configured_environment_type() -> None:
+    with pytest.raises(ValueError, match=r"config\['env'\]\['type'\] must be a non-empty string"):
+        build_alfworld_text_environment_factory({"env": {"type": 123}})  # type: ignore[dict-item]
+    with pytest.raises(ValueError, match=r"config\['env'\]\['type'\] must be a non-empty string"):
+        build_alfworld_text_environment_factory({"env": {"type": "   "}})
+
+
+def test_alfworld_factory_rejects_invalid_configuration_before_import(monkeypatch: Any) -> None:
+    def fail_import(_name: str) -> types.ModuleType:
+        raise AssertionError("ALFWorld import should not be reached")
+
+    monkeypatch.setattr("builtins.__import__", fail_import)
+    with pytest.raises(ValueError, match=r"config\['env'\]\['type'\] must be a non-empty string"):
+        build_alfworld_text_environment_factory({"env": {"type": False}})  # type: ignore[dict-item]
+
+
 def test_webshop_factory_rejects_invalid_configuration() -> None:
     with pytest.raises(ValueError, match="observation_mode must be a non-empty string"):
         build_webshop_text_environment_factory(observation_mode="   ")
