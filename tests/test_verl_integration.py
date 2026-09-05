@@ -5,7 +5,8 @@ import pytest
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
 from remem.integrations.grpo import GrpoBatch, GrpoSample
-from remem.integrations.verl import encode_episode_for_verl, encode_grpo_batch_for_verl
+from remem.integrations.verl import VerlTrajectory, encode_episode_for_verl, encode_grpo_batch_for_verl
+from remem.integrations.verl_adapter import adapt_agent_loop_output
 
 
 def _episode() -> EpisodeResult:
@@ -55,6 +56,54 @@ def test_encode_episode_serializes_offline_training_metadata() -> None:
             "truncated": False,
         },
     }
+
+
+def test_verl_trajectory_preserves_response_logprobs() -> None:
+    trajectory = VerlTrajectory(
+        prompt_ids=(1,),
+        response_ids=(2, 3),
+        response_mask=(1, 1),
+        reward=0.5,
+        metadata={},
+        response_logprobs=(-0.25, -1.5),
+    )
+
+    assert trajectory.response_logprobs == (-0.25, -1.5)
+    assert trajectory.to_agent_loop_output()["response_logprobs"] == [-0.25, -1.5]
+    assert trajectory.to_dict()["response_logprobs"] == [-0.25, -1.5]
+
+
+def test_verl_adapter_preserves_external_response_logprobs_and_extra_fields() -> None:
+    trajectory = adapt_agent_loop_output(
+        {
+            "prompt_ids": [1, 2],
+            "response_ids": [3, 4],
+            "response_mask": [1, 0],
+            "response_logprobs": [-0.1, -0.2],
+            "extra_fields": {"turn_scores": [1.0], "tool_rewards": [0.25]},
+        },
+        reward=1.0,
+        metadata={"memory_ids": ["memory-a"]},
+    )
+
+    assert trajectory.response_logprobs == (-0.1, -0.2)
+    assert trajectory.metadata == {
+        "memory_ids": ["memory-a"],
+        "verl_extra_fields": {"turn_scores": [1.0], "tool_rewards": [0.25]},
+    }
+
+
+def test_verl_adapter_rejects_misaligned_response_logprobs() -> None:
+    with pytest.raises(ValueError, match="one entry per response token"):
+        adapt_agent_loop_output(
+            {
+                "prompt_ids": [1],
+                "response_ids": [2, 3],
+                "response_mask": [1, 1],
+                "response_logprobs": [-0.5],
+            },
+            reward=1.0,
+        )
 
 
 def test_encode_episode_rejects_empty_completion_tokens() -> None:
