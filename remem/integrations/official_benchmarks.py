@@ -158,6 +158,7 @@ def build_webshop_text_environment_factory(
             "Gym is required for the concrete WebShop integration; "
             "install WebShop's runtime dependencies before creating this factory"
         ) from exc
+    _validate_webshop_gym_version(gym)
 
     def create_environment(seed: int) -> Any:
         """Create one upstream WebShop text environment with isolated construction RNG."""
@@ -206,6 +207,22 @@ def _copy_alfworld_config(config: Mapping[str, Any]) -> dict[str, Any]:
         return copy.deepcopy(dict(config))
     except (TypeError, ValueError) as exc:
         raise TypeError("config must be deep-copyable for reproducible ALFWorld runs") from exc
+
+
+def _validate_webshop_gym_version(gym_module: Any) -> None:
+    """Reject Gym 0.24, which is known to break WebShop environment creation."""
+
+    version = getattr(gym_module, "__version__", None)
+    if not isinstance(version, str):
+        return
+    components = version.split(".")
+    if len(components) < 2 or components[0] != "0" or components[1] != "24":
+        return
+    raise RuntimeError(
+        "WebShop is incompatible with Gym 0.24.x because gym.make may invoke "
+        "reset/step during environment construction; use a WebShop-supported "
+        "Gym release such as 0.23.1 instead"
+    )
 
 
 def _validate_seed(seed: int) -> None:
