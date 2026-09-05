@@ -140,6 +140,17 @@ def verify_benchmark_artifact(
         )
 
 
+def verify_benchmark_artifact_manifest(
+    report_path: Path,
+    manifest_path: Path,
+) -> BenchmarkArtifactManifest:
+    """Load a manifest, verify its report, and return the verified metadata."""
+
+    manifest = load_benchmark_artifact_manifest(manifest_path)
+    verify_benchmark_artifact(report_path, manifest)
+    return manifest
+
+
 def _load_json_document(report_path: Path, payload: bytes) -> dict[str, Any]:
     """Parse a benchmark artifact and require a JSON object at its root."""
 
@@ -184,4 +195,5 @@ __all__ = [
     "load_benchmark_artifact_manifest",
     "save_benchmark_artifact_manifest",
     "verify_benchmark_artifact",
+    "verify_benchmark_artifact_manifest",
 ]
