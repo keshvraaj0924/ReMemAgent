@@ -232,6 +232,18 @@ def test_validate_external_benchmark_runtime_preserves_probe_failure_when_close_
     assert CLOSED_SEEDS == [7]
 
 
+def test_validate_external_benchmark_runtime_surfaces_close_failure_after_success() -> None:
+    CLOSED_SEEDS.clear()
+    spec = _build_spec(
+        environment_factory="tests.test_external_benchmark:make_broken_close_environment"
+    )
+
+    with pytest.raises(RuntimeError, match="close failed"):
+        validate_external_benchmark_runtime(spec)
+
+    assert CLOSED_SEEDS == [7]
+
+
 def test_validate_external_benchmark_runtime_rejects_invalid_policy_action() -> None:
     spec = _build_spec(policy_factory="tests.test_external_benchmark:make_invalid_policy")
 
