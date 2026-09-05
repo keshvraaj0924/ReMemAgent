@@ -3,8 +3,11 @@ from __future__ import annotations
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 from experiments.benchmark_cli import _parse_seeds
 from experiments.paired_benchmark_cli import _build_spec, _parse_seeds as parse_paired_seeds
+from experiments.paired_benchmark_cli import parse_args
 
 
 def _arguments(**overrides) -> Namespace:
@@ -60,3 +63,61 @@ def test_paired_seed_parser_preserves_requested_order() -> None:
 
 def test_existing_seed_parser_remains_unchanged() -> None:
     assert _parse_seeds("17,11") == (17, 11)
+
+
+def test_parse_args_requires_one_baseline_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "remem-paired-benchmark",
+            "--benchmark",
+            "synthetic-eval",
+            "--episodes",
+            "2",
+            "--max-steps",
+            "4",
+            "--seeds",
+            "11,17",
+            "--environment-factory",
+            "tests.test_external_benchmark:make_environment",
+            "--success-evaluator",
+            "tests.test_external_benchmark:evaluate_success",
+            "--treatment-policy-factory",
+            "tests.test_external_benchmark:make_memory_policy",
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        parse_args()
+
+
+def test_parse_args_rejects_both_policy_factory_forms_for_one_condition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "remem-paired-benchmark",
+            "--benchmark",
+            "synthetic-eval",
+            "--episodes",
+            "2",
+            "--max-steps",
+            "4",
+            "--seeds",
+            "11,17",
+            "--environment-factory",
+            "tests.test_external_benchmark:make_environment",
+            "--success-evaluator",
+            "tests.test_external_benchmark:evaluate_success",
+            "--baseline-policy-factory",
+            "tests.test_external_benchmark:make_policy",
+            "--baseline-action-policy-factory",
+            "tests.test_external_benchmark:make_policy",
+            "--treatment-policy-factory",
+            "tests.test_external_benchmark:make_memory_policy",
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        parse_args()
