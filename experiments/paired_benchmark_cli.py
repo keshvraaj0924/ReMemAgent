@@ -26,10 +26,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--environment-factory", required=True)
     parser.add_argument("--success-evaluator", required=True)
     parser.add_argument("--transfer-success-evaluator")
-    parser.add_argument("--baseline-policy-factory")
-    parser.add_argument("--baseline-action-policy-factory")
-    parser.add_argument("--treatment-policy-factory")
-    parser.add_argument("--treatment-action-policy-factory")
+    _add_policy_arguments(parser, "baseline")
+    _add_policy_arguments(parser, "treatment")
     parser.add_argument("--minimum-trust", type=float, default=0.0)
     parser.add_argument("--baseline-label", default="baseline")
     parser.add_argument("--treatment-label", default="treatment")
@@ -43,38 +41,52 @@ def main() -> int:
     """Execute a paired experiment and persist its measured reports."""
 
     arguments = parse_args()
-    seeds = _parse_seeds(arguments.seeds)
-    baseline_spec = _build_spec(
-        arguments,
-        policy_factory=arguments.baseline_policy_factory,
-        action_policy_factory=arguments.baseline_action_policy_factory,
+    try:
+        seeds = _parse_seeds(arguments.seeds)
+        baseline_spec = _build_spec(
+            arguments,
+            policy_factory=arguments.baseline_policy_factory,
+            action_policy_factory=arguments.baseline_action_policy_factory,
+        )
+        treatment_spec = _build_spec(
+            arguments,
+            policy_factory=arguments.treatment_policy_factory,
+            action_policy_factory=arguments.treatment_action_policy_factory,
+        )
+        result = run_paired_external_benchmarks_with_preflight(
+            baseline_spec,
+            treatment_spec,
+            seeds,
+            baseline_label=arguments.baseline_label,
+            treatment_label=arguments.treatment_label,
+            probe_action=arguments.probe_action,
+        )
+        runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
+        output_path = save_paired_benchmark_result(
+            result.baseline_reports,
+            result.treatment_reports,
+            result.comparison,
+            arguments.output,
+            runtime_provenance=runtime_provenance,
+        )
+        if arguments.manifest is not None:
+            manifest_path = save_benchmark_artifact_manifest(output_path, arguments.manifest)
+            print(f"saved paired benchmark artifact manifest: {manifest_path}")
+        print(f"saved paired benchmark report: {output_path}")
+        return 0
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"error: {exc}") from exc
+
+
+def _add_policy_arguments(parser: argparse.ArgumentParser, condition: str) -> None:
+    """Add exactly-one policy factory arguments for a benchmark condition."""
+
+    policy_group = parser.add_mutually_exclusive_group(required=True)
+    policy_group.add_argument(f"--{condition}-policy-factory", dest=f"{condition}_policy_factory")
+    policy_group.add_argument(
+        f"--{condition}-action-policy-factory",
+        dest=f"{condition}_action_policy_factory",
     )
-    treatment_spec = _build_spec(
-        arguments,
-        policy_factory=arguments.treatment_policy_factory,
-        action_policy_factory=arguments.treatment_action_policy_factory,
-    )
-    result = run_paired_external_benchmarks_with_preflight(
-        baseline_spec,
-        treatment_spec,
-        seeds,
-        baseline_label=arguments.baseline_label,
-        treatment_label=arguments.treatment_label,
-        probe_action=arguments.probe_action,
-    )
-    runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
-    output_path = save_paired_benchmark_result(
-        result.baseline_reports,
-        result.treatment_reports,
-        result.comparison,
-        arguments.output,
-        runtime_provenance=runtime_provenance,
-    )
-    if arguments.manifest is not None:
-        manifest_path = save_benchmark_artifact_manifest(output_path, arguments.manifest)
-        print(f"saved paired benchmark artifact manifest: {manifest_path}")
-    print(f"saved paired benchmark report: {output_path}")
-    return 0
 
 
 def _build_spec(
