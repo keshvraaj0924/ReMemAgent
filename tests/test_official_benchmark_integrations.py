@@ -30,31 +30,40 @@ class FakeAlfWorldEnvironment:
         return "observation"
 
 
-class FakeWebShopEnvironment:
-    def __init__(self, *, reset_error: BaseException | None = None) -> None:
-        self.reset_error = reset_error
-        self.reset_seeds: list[int | None] = []
-        self.close_calls = 0
+def test_alfworld_factory_isolates_mutation_between_environment_instances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: list[FakeAlfWorldEnvironment] = []
 
-    def reset(self, *, seed: int | None = None) -> None:
-        self.reset_seeds.append(seed)
-        if self.reset_error is not None:
-            raise self.reset_error
+    def get_environment(_env_type: str):
+        def constructor(config: dict[str, Any], train_eval: str) -> FakeAlfWorldEnvironment:
+            environment = FakeAlfWorldEnvironment(config, train_eval)
+            # Simulate an upstream constructor normalizing/mutating its config in place.
+            config["env"]["constructor_seed_marker"] = len(created)
+            created.append(environment)
+            return environment
 
-    def close(self) -> None:
-        self.close_calls += 1
+        return constructor
 
+    environment_module = types.ModuleType("alfworld.agents.environment")
+    environment_module.get_environment = get_environment  # type: ignore[attr-defined]
+    agents_module = types.ModuleType("alfworld.agents")
+    alfworld_module = types.ModuleType("alfworld")
+    monkeypatch.setitem(sys.modules, "alfworld", alfworld_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents", agents_module)
+    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", environment_module)
 
-class LegacyWebShopEnvironment:
-    def __init__(self) -> None:
-        self.reset_calls = 0
-        self.close_calls = 0
+    source_config = {"env": {"type": "AlfredTWEnv", "nested": {"enabled": True}}}
+    factory = build_alfworld_text_environment_factory(source_config)
 
-    def reset(self) -> None:
-        self.reset_calls += 1
+    first = factory(1)
+    second = factory(2)
 
-    def close(self) -> None:
-        self.close_calls += 1
+    assert first.config["env"]["constructor_seed_marker"] == 0
+    assert second.config["env"]["constructor_seed_marker"] == 1
+    assert source_config == {"env": {"type": "AlfredTWEnv", "nested": {"enabled": True}}
+    assert created[0].config is not created[1].config
+    assert created[0].config["env"] is not created[1].config["env"]
 
 
 def test_alfworld_factory_uses_upstream_environment_constructor(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,7 +139,7 @@ def test_alfworld_factory_rejects_non_singleton_batch() -> None:
 def test_webshop_factory_creates_seeded_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     environment = FakeWebShopEnvironment()
     gym_module = types.ModuleType("gym")
-    gym_module.make = lambda environment_id, **kwargs: (  # type: ignore[attr-defined]
+    gym_module.make = lambda environment_id, **kwargs: (
         _assert_webshop_make(environment_id, kwargs, environment)
     )
     monkeypatch.setitem(sys.modules, "gym", gym_module)
@@ -169,7 +178,7 @@ def test_webshop_factory_accepts_supported_gym_version(monkeypatch: pytest.Monke
     environment = FakeWebShopEnvironment()
     gym_module = types.ModuleType("gym")
     gym_module.__version__ = "0.23.1"
-    gym_module.make = lambda _environment_id, **_kwargs: environment  # type: ignore[attr-defined]
+    gym_module.make = lambda _environment_id, **_kwargs: environment
     monkeypatch.setitem(sys.modules, "gym", gym_module)
 
     factory = build_webshop_text_environment_factory()
@@ -179,7 +188,7 @@ def test_webshop_factory_accepts_supported_gym_version(monkeypatch: pytest.Monke
 def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.MonkeyPatch) -> None:
     environment = LegacyWebShopEnvironment()
     gym_module = types.ModuleType("gym")
-    gym_module.make = lambda _environment_id, **_kwargs: environment  # type: ignore[attr-defined]
+    gym_module.make = lambda _environment_id, **_kwargs: environment
     monkeypatch.setitem(sys.modules, "gym", gym_module)
 
     factory = build_webshop_text_environment_factory()
@@ -194,7 +203,7 @@ def test_webshop_factory_preserves_reset_failure_for_caller(monkeypatch: pytest.
     failure = RuntimeError("reset failed")
     environment = FakeWebShopEnvironment(reset_error=failure)
     gym_module = types.ModuleType("gym")
-    gym_module.make = lambda _environment_id, **_kwargs: environment  # type: ignore[attr-defined]
+    gym_module.make = lambda _environment_id, **_kwargs: environment
     monkeypatch.setitem(sys.modules, "gym", gym_module)
 
     factory = build_webshop_text_environment_factory()
@@ -219,7 +228,7 @@ def test_webshop_factory_closes_environment_when_reset_is_missing(monkeypatch: p
 
     environment = MissingResetEnvironment()
     gym_module = types.ModuleType("gym")
-    gym_module.make = lambda _environment_id, **_kwargs: environment  # type: ignore[attr-defined]
+    gym_module.make = lambda _environment_id, **_kwargs: environment
     monkeypatch.setitem(sys.modules, "gym", gym_module)
 
     factory = build_webshop_text_environment_factory()
@@ -243,3 +252,30 @@ def _assert_webshop_make(
     assert environment_id == "WebAgentTextEnv-v0"
     assert kwargs == {"observation_mode": "text", "num_products": 1000}
     return environment
+
+
+class FakeWebShopEnvironment:
+    def __init__(self, *, reset_error: BaseException | None = None) -> None:
+        self.reset_error = reset_error
+        self.reset_seeds: list[int | None] = []
+        self.close_calls = 0
+
+    def reset(self, *, seed: int | None = None) -> None:
+        self.reset_seeds.append(seed)
+        if self.reset_error is not None:
+            raise self.reset_error
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+class LegacyWebShopEnvironment:
+    def __init__(self) -> None:
+        self.reset_calls = 0
+        self.close_calls = 0
+
+    def reset(self) -> None:
+        self.reset_calls += 1
+
+    def close(self) -> None:
+        self.close_calls += 1
