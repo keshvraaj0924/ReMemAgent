@@ -7,7 +7,7 @@ import pytest
 
 from experiments.benchmark_cli import _parse_seeds
 from experiments.paired_benchmark_cli import _build_spec, _parse_seeds as parse_paired_seeds
-from experiments.paired_benchmark_cli import _prepare_output_path, parse_args
+from experiments.paired_benchmark_cli import _prepare_output_path, _validate_artifact_destinations, parse_args
 
 
 def _arguments(**overrides) -> Namespace:
@@ -136,6 +136,21 @@ def test_prepare_output_path_allows_existing_file_with_overwrite(tmp_path: Path)
     output_path.write_text("existing", encoding="utf-8")
 
     assert _prepare_output_path(output_path, overwrite=True) == output_path
+
+
+def test_validate_artifact_destinations_rejects_same_path(tmp_path: Path) -> None:
+    output_path = tmp_path / "paired.json"
+    manifest_path = tmp_path / "nested" / ".." / "paired.json"
+
+    with pytest.raises(ValueError, match="different path"):
+        _validate_artifact_destinations(output_path, manifest_path)
+
+
+def test_validate_artifact_destinations_allows_distinct_paths(tmp_path: Path) -> None:
+    output_path = tmp_path / "paired.json"
+    manifest_path = tmp_path / "paired.json.manifest.json"
+
+    _validate_artifact_destinations(output_path, manifest_path)
 
 
 def test_parse_args_exposes_overwrite_flag(monkeypatch: pytest.MonkeyPatch) -> None:

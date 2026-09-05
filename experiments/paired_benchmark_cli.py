@@ -58,6 +58,7 @@ def main() -> int:
             policy_factory=arguments.treatment_policy_factory,
             action_policy_factory=arguments.treatment_action_policy_factory,
         )
+        _validate_artifact_destinations(arguments.output, arguments.manifest)
         output_path = _prepare_output_path(arguments.output, overwrite=arguments.overwrite)
         manifest_path = (
             _prepare_output_path(arguments.manifest, overwrite=arguments.overwrite)
@@ -143,6 +144,15 @@ def _prepare_output_path(path: Path, *, overwrite: bool) -> Path:
             f"benchmark artifact already exists: {path}; pass --overwrite to replace it"
         )
     return path
+
+
+def _validate_artifact_destinations(output_path: Path, manifest_path: Path | None) -> None:
+    """Reject report and manifest paths that resolve to the same artifact."""
+
+    if manifest_path is None:
+        return
+    if output_path.resolve(strict=False) == manifest_path.resolve(strict=False):
+        raise ValueError("--manifest must resolve to a different path than --output")
 
 
 if __name__ == "__main__":
