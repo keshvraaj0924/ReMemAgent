@@ -10,8 +10,10 @@ from experiments.benchmark_report import (
     benchmark_configuration_fingerprint,
     benchmark_report_to_dict,
     save_benchmark_report,
+    save_paired_benchmark_result,
     save_repeated_benchmark_reports,
 )
+from experiments.benchmark_statistics import BenchmarkConditionComparison, MetricSummary
 from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
@@ -66,6 +68,23 @@ def _build_report(
             success_evaluator="tests.test_benchmark_report:evaluate_success",
             minimum_trust=minimum_trust,
         ),
+    )
+
+
+def _build_comparison(seeds: tuple[int, ...] = (3, 17)) -> BenchmarkConditionComparison:
+    summary = MetricSummary(
+        mean=0.5,
+        sample_stddev=0.1,
+        standard_error=0.05,
+        confidence_interval_95=(0.402, 0.598),
+    )
+    return BenchmarkConditionComparison(
+        baseline_label="baseline",
+        treatment_label="memory",
+        seeds=seeds,
+        success_rate_delta=summary,
+        mean_reward_delta=summary,
+        transfer_success_rate_delta=summary,
     )
 
 
@@ -262,3 +281,53 @@ def test_save_repeated_reports_allows_seed_only_configuration_difference(tmp_pat
     assert persisted["configuration_fingerprint"] == benchmark_configuration_fingerprint(
         first.configuration
     )
+
+
+def test_save_paired_benchmark_result_serializes_ordered_conditions(tmp_path) -> None:
+    baseline = (_build_report(seed=17), _build_report(seed=3))
+    treatment = (_build_report(seed=17), _build_report(seed=3))
+
+    output_path = save_paired_benchmark_result(
+        baseline,
+        treatment,
+        _build_comparison(),
+        tmp_path / "paired.json",
+        runtime_provenance={"code_revision": "abc123"},
+    )
+
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["seeds"] == [3, 17]
+    assert [report["seed"] for report in persisted["baseline"]["reports"]] == [3, 17]
+    assert [report["seed"] for report in persisted["treatment"]["reports"]] == [3, 17]
+    assert persisted["baseline"]["label"] == "baseline"
+    assert persisted["treatment"]["label"] == "memory"
+    assert persisted["comparison"]["success_rate_delta"]["mean"] == 0.5
+    assert persisted["runtime_provenance"]["code_revision"] == "abc123"
+
+
+def test_save_paired_benchmark_result_is_byte_deterministic_for_input_order(tmp_path) -> None:
+    comparison = _build_comparison()
+    first_path = save_paired_benchmark_result(
+        (_build_report(seed=17), _build_report(seed=3)),
+        (_build_report(seed=17), _build_report(seed=3)),
+        comparison,
+        tmp_path / "first.json",
+    )
+    second_path = save_paired_benchmark_result(
+        (_build_report(seed=3), _build_report(seed=17)),
+        (_build_report(seed=3), _build_report(seed=17)),
+        comparison,
+        tmp_path / "second.json",
+    )
+
+    assert first_path.read_bytes() == second_path.read_bytes()
+
+
+def test_save_paired_benchmark_result_rejects_mismatched_comparison_seeds(tmp_path) -> None:
+    with pytest.raises(ValueError, match="comparison seeds"):
+        save_paired_benchmark_result(
+            (_build_report(seed=3), _build_report(seed=17)),
+            (_build_report(seed=3), _build_report(seed=17)),
+            _build_comparison(seeds=(3, 19)),
+            tmp_path / "paired.json",
+        )
