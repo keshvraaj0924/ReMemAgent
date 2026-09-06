@@ -16,6 +16,28 @@ from remem.integrations.policies import ActionPolicyFactory
 
 
 _ALFWORLD_ACTION_PREFIX = "Action:"
+_ALFWORLD_ACTION_VERBS = frozenset(
+    {
+        "pass",
+        "go",
+        "goto",
+        "move",
+        "take",
+        "pick",
+        "put",
+        "open",
+        "close",
+        "toggle",
+        "heat",
+        "clean",
+        "cool",
+        "slice",
+        "inventory",
+        "examine",
+        "look",
+        "use",
+    }
+)
 _WEBSHOP_ACTION_PREFIX = "Action:"
 _WEBSHOP_ACTION_PATTERN = re.compile(r"\b(?:search|click)\[[^\]\n]+\]", re.IGNORECASE)
 
@@ -32,7 +54,13 @@ def build_alfworld_prompt(observation: str) -> str:
 
 
 def parse_alfworld_action(generated_text: str) -> str:
-    """Extract one unambiguous ALFWorld action from model-generated text."""
+    """Extract one unambiguous ALFWorld action from model-generated text.
+
+    The first token is checked against the known ALFWorld command vocabulary.
+    This prevents explanatory prose such as ``I should open the cabinet`` from
+    being passed to the environment as though it were an executable action,
+    while preserving arbitrary object and receptacle arguments.
+    """
 
     _validate_generated_text(generated_text)
     lines = [line.strip("` ") for line in generated_text.splitlines() if line.strip()]
@@ -42,11 +70,11 @@ def parse_alfworld_action(generated_text: str) -> str:
         if line.lower().startswith(_ALFWORLD_ACTION_PREFIX.lower())
     ]
     if len(action_lines) == 1 and action_lines[0]:
-        return action_lines[0]
+        return _validate_alfworld_action(action_lines[0])
     if len(action_lines) > 1:
         raise ValueError("generated text contains multiple ALFWorld actions")
     if len(lines) == 1:
-        return lines[0]
+        return _validate_alfworld_action(lines[0])
     raise ValueError("generated text contains no unambiguous ALFWorld action")
 
 
@@ -127,6 +155,18 @@ def _extract_single_webshop_action(text: str) -> str:
     if len(matches) != 1:
         raise ValueError("WebShop Action: line must contain exactly one canonical action")
     return matches[0].strip()
+
+
+def _validate_alfworld_action(action: str) -> str:
+    """Require a recognized ALFWorld command verb before execution."""
+
+    normalized_action = action.strip()
+    first_token = normalized_action.split(maxsplit=1)[0].lower()
+    if first_token not in _ALFWORLD_ACTION_VERBS:
+        raise ValueError(
+            f"generated ALFWorld action starts with unsupported command verb: {first_token}"
+        )
+    return normalized_action
 
 
 def _validate_observation(observation: object) -> None:
