@@ -13,6 +13,8 @@ The bridge maps:
 - optional response log probabilities → `response_logprobs`
 - ReMemAgent trajectory metadata → `extra_fields["remem_metadata"]`
 
+`VerlTrajectory` detaches the top-level metadata mapping when it is constructed. This prevents later replacement of keys in a caller-owned metadata dictionary from changing an already-created trajectory or its serialized training artifact. Nested metadata values remain caller-owned objects and should be treated as immutable after construction.
+
 The bridge does not tokenize text, run a model, manage an environment, or own distributed execution. Those responsibilities remain with the caller and the installed verl runtime.
 
 The import is lazy and targets the current upstream `verl.experimental.agent_loop.agent_loop.AgentLoopOutput` location. Tests inject a compatible factory so CI does not need the heavy verl dependency.
