@@ -16,6 +16,7 @@ from remem.integrations.policies import ActionPolicyFactory
 
 
 _ALFWORLD_ACTION_PREFIX = "Action:"
+_WEBSHOP_ACTION_PREFIX = "Action:"
 _WEBSHOP_ACTION_PATTERN = re.compile(r"\b(?:search|click)\[[^\]\n]+\]", re.IGNORECASE)
 
 
@@ -31,17 +32,22 @@ def build_alfworld_prompt(observation: str) -> str:
 
 
 def parse_alfworld_action(generated_text: str) -> str:
-    """Extract one ALFWorld action from model-generated text."""
+    """Extract one unambiguous ALFWorld action from model-generated text."""
 
     _validate_generated_text(generated_text)
-    lines = [line.strip() for line in generated_text.splitlines() if line.strip()]
-    for line in reversed(lines):
-        normalized = line.strip("` ")
-        if normalized.lower().startswith(_ALFWORLD_ACTION_PREFIX.lower()):
-            normalized = normalized[len(_ALFWORLD_ACTION_PREFIX) :].strip()
-        if normalized:
-            return normalized
-    raise ValueError("generated text contains no usable ALFWorld action")
+    lines = [line.strip("` ") for line in generated_text.splitlines() if line.strip()]
+    action_lines = [
+        line[len(_ALFWORLD_ACTION_PREFIX) :].strip()
+        for line in lines
+        if line.lower().startswith(_ALFWORLD_ACTION_PREFIX.lower())
+    ]
+    if len(action_lines) == 1 and action_lines[0]:
+        return action_lines[0]
+    if len(action_lines) > 1:
+        raise ValueError("generated text contains multiple ALFWorld actions")
+    if len(lines) == 1:
+        return lines[0]
+    raise ValueError("generated text contains no unambiguous ALFWorld action")
 
 
 def build_webshop_prompt(observation: str) -> str:
@@ -56,13 +62,24 @@ def build_webshop_prompt(observation: str) -> str:
 
 
 def parse_webshop_action(generated_text: str) -> str:
-    """Extract the first canonical WebShop search/click action from model output."""
+    """Extract one unambiguous canonical WebShop action from model output."""
 
     _validate_generated_text(generated_text)
-    match = _WEBSHOP_ACTION_PATTERN.search(generated_text)
-    if match is None:
-        raise ValueError("generated text contains no canonical WebShop action")
-    return match.group(0).strip()
+    lines = [line.strip("` ") for line in generated_text.splitlines() if line.strip()]
+    prefixed_lines = [
+        line[len(_WEBSHOP_ACTION_PREFIX) :].strip()
+        for line in lines
+        if line.lower().startswith(_WEBSHOP_ACTION_PREFIX.lower())
+    ]
+    if len(prefixed_lines) == 1:
+        return _extract_single_webshop_action(prefixed_lines[0])
+    if len(prefixed_lines) > 1:
+        raise ValueError("generated text contains multiple WebShop action lines")
+
+    matches = _WEBSHOP_ACTION_PATTERN.findall(generated_text)
+    if len(matches) != 1:
+        raise ValueError("generated text must contain exactly one canonical WebShop action")
+    return matches[0].strip()
 
 
 def build_alfworld_huggingface_policy_factory(
@@ -101,6 +118,15 @@ def build_webshop_huggingface_policy_factory(
         pipeline_kwargs=pipeline_kwargs,
         generation_kwargs=generation_kwargs,
     )
+
+
+def _extract_single_webshop_action(text: str) -> str:
+    """Extract exactly one canonical action from an explicit WebShop action line."""
+
+    matches = _WEBSHOP_ACTION_PATTERN.findall(text)
+    if len(matches) != 1:
+        raise ValueError("WebShop Action: line must contain exactly one canonical action")
+    return matches[0].strip()
 
 
 def _validate_observation(observation: object) -> None:
