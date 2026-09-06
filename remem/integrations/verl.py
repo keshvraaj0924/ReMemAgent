@@ -30,7 +30,7 @@ class VerlTrajectory:
     response_logprobs: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
-        """Validate the token-level contract for directly constructed records."""
+        """Validate and detach the token-level contract for direct construction."""
 
         _validate_token_ids(self.prompt_ids, "prompt")
         _validate_token_ids(self.response_ids, "response")
@@ -62,6 +62,8 @@ class VerlTrajectory:
                 if not isfinite(logprob):
                     raise ValueError("response_logprobs must be finite")
             object.__setattr__(self, "response_logprobs", normalized_logprobs)
+
+        object.__setattr__(self, "metadata", dict(self.metadata))
 
     def to_agent_loop_output(self) -> dict[str, list[int] | list[float]]:
         """Return fields required by verl plus optional rollout log probabilities."""
