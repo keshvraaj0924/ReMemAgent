@@ -22,10 +22,24 @@ def test_alfworld_prompt_preserves_observation_and_action_boundary() -> None:
     assert prompt.endswith("Action:")
 
 
-def test_parse_alfworld_action_prefers_final_action_line() -> None:
+def test_parse_alfworld_action_prefers_explicit_action_line() -> None:
     generated = "I should inspect the room.\nAction: take cup from table"
 
     assert parse_alfworld_action(generated) == "take cup from table"
+
+
+def test_parse_alfworld_action_accepts_single_action_line() -> None:
+    assert parse_alfworld_action("take cup from table") == "take cup from table"
+
+
+def test_parse_alfworld_action_rejects_ambiguous_multi_line_output() -> None:
+    with pytest.raises(ValueError, match="unambiguous ALFWorld action"):
+        parse_alfworld_action("inspect the table\nthen take the cup")
+
+
+def test_parse_alfworld_action_rejects_multiple_explicit_actions() -> None:
+    with pytest.raises(ValueError, match="multiple ALFWorld actions"):
+        parse_alfworld_action("Action: open cabinet\nAction: take cup")
 
 
 def test_parse_alfworld_action_rejects_empty_output() -> None:
@@ -47,6 +61,20 @@ def test_parse_webshop_action_extracts_search_action() -> None:
 
 def test_parse_webshop_action_extracts_click_action() -> None:
     assert parse_webshop_action("click[buy now]") == "click[buy now]"
+
+
+def test_parse_webshop_action_accepts_explicit_action_line() -> None:
+    assert parse_webshop_action("Action: search[running shoes]") == "search[running shoes]"
+
+
+def test_parse_webshop_action_rejects_multiple_actions() -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        parse_webshop_action("search[running shoes]\nclick[buy now]")
+
+
+def test_parse_webshop_action_rejects_ambiguous_action_line() -> None:
+    with pytest.raises(ValueError, match="exactly one canonical action"):
+        parse_webshop_action("Action: search[shoes] and click[buy now]")
 
 
 def test_parse_webshop_action_rejects_non_action_text() -> None:
