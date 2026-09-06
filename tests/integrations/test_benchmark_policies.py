@@ -1,4 +1,4 @@
-"""Tests for benchmark-specific learned policy adapters."""
+"""Tests for benchmark-specific learned-policy adapters."""
 
 from __future__ import annotations
 
@@ -14,99 +14,98 @@ from remem.integrations.benchmark_policies import (
 )
 
 
-def test_alfworld_prompt_preserves_observation_and_action_boundary() -> None:
-    prompt = build_alfworld_prompt("You are in the kitchen. There is a cup.")
+def test_alfworld_prompt_contains_observation_and_action_boundary() -> None:
+    prompt = build_alfworld_prompt("You are in a kitchen.")
 
-    assert "Observation:" in prompt
-    assert "You are in the kitchen. There is a cup." in prompt
+    assert "Observation:\nYou are in a kitchen." in prompt
     assert prompt.endswith("Action:")
 
 
-def test_parse_alfworld_action_prefers_explicit_action_line() -> None:
-    generated = "I should inspect the room.\nAction: take cup from table"
+def test_webshop_prompt_contains_observation_and_action_boundary() -> None:
+    prompt = build_webshop_prompt("Search results are visible.")
 
-    assert parse_alfworld_action(generated) == "take cup from table"
-
-
-def test_parse_alfworld_action_accepts_single_action_line() -> None:
-    assert parse_alfworld_action("take cup from table") == "take cup from table"
+    assert "Observation:\nSearch results are visible." in prompt
+    assert prompt.endswith("Action:")
 
 
-def test_parse_alfworld_action_rejects_ambiguous_multi_line_output() -> None:
-    with pytest.raises(ValueError, match="unambiguous ALFWorld action"):
-        parse_alfworld_action("inspect the table\nthen take the cup")
+def test_alfworld_parser_accepts_explicit_action() -> None:
+    assert parse_alfworld_action("Action: open cabinet 1") == "open cabinet 1"
 
 
-def test_parse_alfworld_action_rejects_multiple_explicit_actions() -> None:
+def test_alfworld_parser_accepts_current_move_verb() -> None:
+    assert parse_alfworld_action("move apple 1 to table 1") == "move apple 1 to table 1"
+
+
+def test_alfworld_parser_rejects_explanatory_prose() -> None:
+    with pytest.raises(ValueError, match="unsupported command verb"):
+        parse_alfworld_action("I should open the cabinet")
+
+
+def test_alfworld_parser_rejects_unknown_command() -> None:
+    with pytest.raises(ValueError, match="unsupported command verb"):
+        parse_alfworld_action("teleport to the kitchen")
+
+
+def test_alfworld_parser_rejects_multiple_actions() -> None:
     with pytest.raises(ValueError, match="multiple ALFWorld actions"):
-        parse_alfworld_action("Action: open cabinet\nAction: take cup")
+        parse_alfworld_action("Action: open cabinet 1\nAction: close cabinet 1")
 
 
-def test_parse_alfworld_action_rejects_empty_output() -> None:
-    with pytest.raises(ValueError, match="generated_text"):
-        parse_alfworld_action("  \n")
+def test_webshop_parser_accepts_search_action() -> None:
+    assert parse_webshop_action("Action: search[wireless keyboard]") == "search[wireless keyboard]"
 
 
-def test_webshop_prompt_requires_canonical_action_syntax() -> None:
-    prompt = build_webshop_prompt("Search results for running shoes")
-
-    assert "search[query]" in prompt
-    assert "click[target]" in prompt
-    assert "Search results for running shoes" in prompt
+def test_webshop_parser_accepts_click_action() -> None:
+    assert parse_webshop_action("click[< Back to Search]") == "click[< Back to Search]"
 
 
-def test_parse_webshop_action_extracts_search_action() -> None:
-    assert parse_webshop_action("Reasoning...\nsearch[running shoes]") == "search[running shoes]"
+def test_webshop_parser_rejects_multiple_actions() -> None:
+    with pytest.raises(ValueError, match="exactly one canonical WebShop action"):
+        parse_webshop_action("search[keyboard] then click[Buy]")
 
 
-def test_parse_webshop_action_extracts_click_action() -> None:
-    assert parse_webshop_action("click[buy now]") == "click[buy now]"
+def test_webshop_parser_rejects_missing_action() -> None:
+    with pytest.raises(ValueError, match="exactly one canonical WebShop action"):
+        parse_webshop_action("I will search for a keyboard")
 
 
-def test_parse_webshop_action_accepts_explicit_action_line() -> None:
-    assert parse_webshop_action("Action: search[running shoes]") == "search[running shoes]"
+def test_alfworld_huggingface_factory_uses_injected_pipeline() -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
 
+    def pipeline_loader(task: str, **kwargs: object):
+        calls.append((task, kwargs))
 
-def test_parse_webshop_action_rejects_multiple_actions() -> None:
-    with pytest.raises(ValueError, match="exactly one"):
-        parse_webshop_action("search[running shoes]\nclick[buy now]")
+        def generate(prompt: str, **generation_kwargs: object):
+            assert prompt.endswith("Action:")
+            assert generation_kwargs["do_sample"] is False
+            return [{"generated_text": "Action: look"}]
 
+        return generate
 
-def test_parse_webshop_action_rejects_ambiguous_action_line() -> None:
-    with pytest.raises(ValueError, match="exactly one canonical action"):
-        parse_webshop_action("Action: search[shoes] and click[buy now]")
-
-
-def test_parse_webshop_action_rejects_non_action_text() -> None:
-    with pytest.raises(ValueError, match="canonical WebShop action"):
-        parse_webshop_action("I will buy the product.")
-
-
-def test_alfworld_factory_binds_benchmark_prompt_and_parser() -> None:
-    calls: list[tuple[object, str, dict[str, object]]] = []
-
-    def loader(*args: object, **kwargs: object) -> object:
-        def generator(prompt: str, **generation_kwargs: object) -> list[dict[str, str]]:
-            calls.append((args, prompt, generation_kwargs))
-            return [{"generated_text": "Action: open cabinet"}]
-
-        return generator
-
-    factory = build_alfworld_huggingface_policy_factory("test-model", pipeline_loader=loader)
+    factory = build_alfworld_huggingface_policy_factory(
+        "test-model",
+        pipeline_loader=pipeline_loader,
+    )
     policy = factory(7)
 
-    assert policy("The kitchen is visible.") == "open cabinet"
-    assert calls[0][0] == ("text-generation",)
+    assert policy("You are in a kitchen.") == "look"
+    assert calls == [("text-generation", {"model": "test-model"})]
 
 
-def test_webshop_factory_binds_benchmark_prompt_and_parser() -> None:
-    def loader(*args: object, **kwargs: object) -> object:
-        def generator(prompt: str, **generation_kwargs: object) -> list[dict[str, str]]:
-            return [{"generated_text": "click[buy now]"}]
+def test_webshop_huggingface_factory_uses_injected_pipeline() -> None:
+    def pipeline_loader(task: str, **kwargs: object):
+        assert task == "text-generation"
+        assert kwargs["model"] == "test-model"
 
-        return generator
+        def generate(_prompt: str, **_generation_kwargs: object):
+            return [{"generated_text": "Action: search[shoes]"}]
 
-    factory = build_webshop_huggingface_policy_factory("test-model", pipeline_loader=loader)
+        return generate
+
+    factory = build_webshop_huggingface_policy_factory(
+        "test-model",
+        pipeline_loader=pipeline_loader,
+    )
     policy = factory(11)
 
-    assert policy("A product page is open.") == "click[buy now]"
+    assert policy("Find running shoes.") == "search[shoes]"
