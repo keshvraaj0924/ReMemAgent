@@ -8,10 +8,11 @@ first-class, documented path to the real upstream environments.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 import copy
 import random
 import threading
-from typing import Any
+from typing import Any, Iterator
 
 
 RawEnvironmentFactory = Callable[[int], Any]
@@ -32,13 +33,8 @@ class _SeededAlfWorldEnvironment:
 
         if "seed" in kwargs:
             raise TypeError("ALFWorld adapter owns the reset seed; do not pass seed explicitly")
-        with _ALFWORLD_RANDOM_LOCK:
-            previous_state = random.getstate()
-            random.seed(self._seed)
-            try:
-                return self._environment.reset(*args, **kwargs)
-            finally:
-                random.setstate(previous_state)
+        with _ALFWORLD_RANDOM_LOCK, _scoped_random_seed(self._seed):
+            return self._environment.reset(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
         """Delegate non-reset operations to the upstream environment."""
@@ -47,7 +43,7 @@ class _SeededAlfWorldEnvironment:
 
 
 class _SeededWebShopEnvironment:
-    """Scope WebShop's module-level Python RNG to each benchmark reset."""
+    """Scope WebShop's module-level RNGs to each benchmark reset."""
 
     def __init__(self, environment: Any, seed: int) -> None:
         _validate_seed(seed)
@@ -59,13 +55,8 @@ class _SeededWebShopEnvironment:
 
         if "seed" in kwargs:
             raise TypeError("WebShop adapter owns the reset seed; do not pass seed explicitly")
-        with _WEBSHOP_RANDOM_LOCK:
-            previous_state = random.getstate()
-            random.seed(self._seed)
-            try:
-                return self._environment.reset(*args, **kwargs)
-            finally:
-                random.setstate(previous_state)
+        with _WEBSHOP_RANDOM_LOCK, _scoped_random_seed(self._seed):
+            return self._environment.reset(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
         """Delegate non-reset operations to the upstream environment."""
@@ -113,9 +104,7 @@ def build_alfworld_text_environment_factory(
 
         _validate_seed(seed)
         environment: Any | None = None
-        with _ALFWORLD_RANDOM_LOCK:
-            previous_state = random.getstate()
-            random.seed(seed)
+        with _ALFWORLD_RANDOM_LOCK, _scoped_random_seed(seed):
             try:
                 environment_config = _copy_alfworld_config(config_snapshot)
                 environment = environment_class(
@@ -127,8 +116,6 @@ def build_alfworld_text_environment_factory(
                 if environment is not None:
                     _close_if_supported(environment)
                 raise
-            finally:
-                random.setstate(previous_state)
         return _SeededAlfWorldEnvironment(initialized_environment, seed)
 
     return create_environment
@@ -168,16 +155,11 @@ def build_webshop_text_environment_factory(
         """Create one upstream WebShop text environment with isolated construction RNG."""
 
         _validate_seed(seed)
-        with _WEBSHOP_RANDOM_LOCK:
-            previous_state = random.getstate()
-            random.seed(seed)
-            try:
-                kwargs: dict[str, Any] = {"observation_mode": normalized_observation_mode}
-                if num_products is not None:
-                    kwargs["num_products"] = num_products
-                environment = gym.make(normalized_environment_id, **kwargs)
-            finally:
-                random.setstate(previous_state)
+        with _WEBSHOP_RANDOM_LOCK, _scoped_random_seed(seed):
+            kwargs: dict[str, Any] = {"observation_mode": normalized_observation_mode}
+            if num_products is not None:
+                kwargs["num_products"] = num_products
+            environment = gym.make(normalized_environment_id, **kwargs)
 
         reset = getattr(environment, "reset", None)
         if not callable(reset):
@@ -211,6 +193,42 @@ def _copy_alfworld_config(config: Mapping[str, Any]) -> dict[str, Any]:
         return copy.deepcopy(dict(config))
     except (TypeError, ValueError) as exc:
         raise TypeError("config must be deep-copyable for reproducible ALFWorld runs") from exc
+
+
+@contextmanager
+def _scoped_random_seed(seed: int) -> Iterator[None]:
+    """Scope Python and NumPy RNG state to one external benchmark operation.
+
+    ALFWorld and WebShop are legacy integrations whose randomness is not
+    consistently exposed through a modern ``reset(seed=...)`` API. The bridge
+    therefore scopes the legacy global RNGs and restores their exact caller
+    state afterward. NumPy remains optional so the ReMemAgent core does not
+    acquire a runtime dependency merely by importing this module.
+    """
+
+    _validate_seed(seed)
+    previous_python_state = random.getstate()
+    numpy_module = _load_numpy_if_available()
+    previous_numpy_state = numpy_module.random.get_state() if numpy_module is not None else None
+    random.seed(seed)
+    if numpy_module is not None:
+        numpy_module.random.seed(seed)
+    try:
+        yield
+    finally:
+        random.setstate(previous_python_state)
+        if numpy_module is not None and previous_numpy_state is not None:
+            numpy_module.random.set_state(previous_numpy_state)
+
+
+def _load_numpy_if_available() -> Any | None:
+    """Return NumPy when installed without making it a core package dependency."""
+
+    try:
+        import numpy
+    except ImportError:
+        return None
+    return numpy
 
 
 def _validate_webshop_gym_version(gym_module: Any) -> None:
