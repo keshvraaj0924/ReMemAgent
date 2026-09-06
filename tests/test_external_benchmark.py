@@ -29,13 +29,8 @@ class FakeEnvironment:
     def reset(self, **kwargs: object) -> str:
         return f"seed-{self.seed}"
 
-    def step(self, action: str) -> StepResult:
-        return StepResult(
-            observation="done",
-            reward=1.0,
-            terminated=True,
-            truncated=False,
-        )
+    def step(self, action: str) -> tuple[str, float, bool, bool, dict[str, object]]:
+        return ("done", 1.0, True, False, {"action": action})
 
     def close(self) -> None:
         self.closed = True
