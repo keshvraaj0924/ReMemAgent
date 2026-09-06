@@ -45,6 +45,8 @@ The checkpoint, tokenizer behavior, and model quality remain experiment-specific
 
 The Hugging Face adapter defaults to greedy generation (`do_sample=False`). If sampling is enabled, the experiment must explicitly own the model's RNG and generation configuration. Benchmark execution must still use the repository's seed-aware environment factories and persisted artifacts.
 
+For chat-style generation output, the adapter prefers the latest textual message whose role is `assistant`. This prevents earlier user/prompt content from being mistaken for the model action. If no role-tagged assistant message is available, it falls back to the latest textual message for compatibility with alternative pipeline wrappers.
+
 ## Current limitation
 
 These adapters establish a real model-to-environment action path, but no benchmark score is claimed until an actual ALFWorld/WebShop installation, concrete checkpoint, multi-seed run, and persisted evidence artifact have all been executed successfully.
