@@ -73,10 +73,10 @@ def _build_report(
 
 def _build_comparison(seeds: tuple[int, ...] = (3, 17)) -> BenchmarkConditionComparison:
     summary = MetricSummary(
-        mean=0.5,
-        sample_stddev=0.1,
-        standard_error=0.05,
-        confidence_interval_95=(0.402, 0.598),
+        mean=0.0,
+        sample_stddev=0.0,
+        standard_error=0.0,
+        confidence_interval_95=(0.0, 0.0),
     )
     return BenchmarkConditionComparison(
         baseline_label="baseline",
@@ -301,7 +301,7 @@ def test_save_paired_benchmark_result_serializes_ordered_conditions(tmp_path) ->
     assert [report["seed"] for report in persisted["treatment"]["reports"]] == [3, 17]
     assert persisted["baseline"]["label"] == "baseline"
     assert persisted["treatment"]["label"] == "memory"
-    assert persisted["comparison"]["success_rate_delta"]["mean"] == 0.5
+    assert persisted["comparison"]["success_rate_delta"]["mean"] == 0.0
     assert persisted["runtime_provenance"]["code_revision"] == "abc123"
 
 
@@ -321,6 +321,31 @@ def test_save_paired_benchmark_result_is_byte_deterministic_for_input_order(tmp_
     )
 
     assert first_path.read_bytes() == second_path.read_bytes()
+
+
+def test_save_paired_benchmark_result_rejects_stale_comparison(tmp_path) -> None:
+    stale_summary = MetricSummary(
+        mean=0.5,
+        sample_stddev=0.1,
+        standard_error=0.05,
+        confidence_interval_95=(0.402, 0.598),
+    )
+    stale_comparison = BenchmarkConditionComparison(
+        baseline_label="baseline",
+        treatment_label="memory",
+        seeds=(3, 17),
+        success_rate_delta=stale_summary,
+        mean_reward_delta=stale_summary,
+        transfer_success_rate_delta=stale_summary,
+    )
+
+    with pytest.raises(ValueError, match="exactly match"):
+        save_paired_benchmark_result(
+            (_build_report(seed=3), _build_report(seed=17)),
+            (_build_report(seed=3), _build_report(seed=17)),
+            stale_comparison,
+            tmp_path / "paired.json",
+        )
 
 
 def test_save_paired_benchmark_result_rejects_mismatched_comparison_seeds(tmp_path) -> None:
