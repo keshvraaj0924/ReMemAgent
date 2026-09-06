@@ -75,6 +75,9 @@ def build_huggingface_text_action_policy_factory(
                     **selected_pipeline_kwargs,
                 ),
             )
+        selected_generator = generator
+        if selected_generator is None:
+            raise RuntimeError("text-generation pipeline failed to initialize")
 
         def select_action(observation: str) -> str:
             """Generate and parse one action from a normalized observation."""
@@ -84,7 +87,7 @@ def build_huggingface_text_action_policy_factory(
             prompt = prompt_builder(observation)
             if not isinstance(prompt, str) or not prompt.strip():
                 raise ValueError("prompt_builder must return a non-empty string")
-            generated_text = _generate_text(generator, prompt, selected_generation_kwargs)
+            generated_text = _generate_text(selected_generator, prompt, selected_generation_kwargs)
             action = selected_parser(generated_text)
             if not isinstance(action, str) or not action.strip():
                 raise ValueError("action_parser must return a non-empty string")
