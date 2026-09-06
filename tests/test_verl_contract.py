@@ -21,6 +21,7 @@ def test_validate_agent_loop_output_preserves_exact_token_fields() -> None:
         "prompt_ids": [11, 12],
         "response_ids": [21, 22, 23],
         "response_mask": [1, 0, 1],
+        "extra_fields": {},
     }
 
 
