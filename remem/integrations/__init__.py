@@ -21,6 +21,12 @@ from .grpo import (
     build_grpo_samples,
     compute_group_relative_advantages,
 )
+from .huggingface import (
+    ActionParser,
+    PipelineLoader,
+    PromptBuilder,
+    build_huggingface_text_action_policy_factory,
+)
 from .official_benchmarks import (
     build_alfworld_text_environment_factory,
     build_webshop_text_environment_factory,
@@ -51,6 +57,7 @@ from .verl_adapter import (
 from .verl_contract import ValidatedAgentLoopOutput, validate_agent_loop_output
 
 __all__ = [
+    "ActionParser",
     "ActionPolicyFactory",
     "AgentLoopRequest",
     "AsyncVerlAgentLoop",
@@ -58,7 +65,9 @@ __all__ = [
     "GrpoBatch",
     "GrpoSample",
     "MemoryGuidedPolicyFactory",
+    "PipelineLoader",
     "PolicyContractReport",
+    "PromptBuilder",
     "RawEnvironmentFactory",
     "TRAINING_ARTIFACT_SCHEMA_VERSION",
     "TrainingArtifactManifest",
@@ -70,6 +79,7 @@ __all__ = [
     "build_alfworld_text_environment_factory",
     "build_grpo_batch",
     "build_grpo_samples",
+    "build_huggingface_text_action_policy_factory",
     "build_memory_guided_policy_factory",
     "build_training_artifact_manifest",
     "build_verl_training_batch",
