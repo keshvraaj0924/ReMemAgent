@@ -68,6 +68,8 @@ def validate_agent_loop_output(
     extra_fields = output.get("extra_fields", {})
     if not isinstance(extra_fields, Mapping):
         raise TypeError("agent-loop output extra_fields must be a mapping")
+    if any(not isinstance(key, str) for key in extra_fields):
+        raise TypeError("agent-loop output extra_fields keys must be strings")
 
     return ValidatedAgentLoopOutput(
         prompt_ids=prompt_ids,
