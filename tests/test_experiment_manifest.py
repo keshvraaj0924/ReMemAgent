@@ -64,6 +64,12 @@ def test_manifest_verify_sha256_accepts_matching_digest() -> None:
     manifest.verify_sha256(manifest.sha256)
 
 
+def test_manifest_verify_sha256_accepts_uppercase_hex_digest() -> None:
+    manifest = ExperimentManifest({"seed": 11})
+
+    manifest.verify_sha256(manifest.sha256.upper())
+
+
 def test_manifest_verify_sha256_rejects_mismatched_digest() -> None:
     manifest = ExperimentManifest({"seed": 11})
 
@@ -71,8 +77,29 @@ def test_manifest_verify_sha256_rejects_mismatched_digest() -> None:
         manifest.verify_sha256("0" * 64)
 
 
+def test_manifest_verify_sha256_rejects_wrong_length() -> None:
+    manifest = ExperimentManifest({"seed": 11})
+
+    with pytest.raises(ValueError, match="exactly 64 hexadecimal"):
+        manifest.verify_sha256("abc")
+
+
+def test_manifest_verify_sha256_rejects_non_hex_digest() -> None:
+    manifest = ExperimentManifest({"seed": 11})
+
+    with pytest.raises(ValueError, match="only hexadecimal"):
+        manifest.verify_sha256("z" * 64)
+
+
+def test_manifest_verify_sha256_requires_string_input() -> None:
+    manifest = ExperimentManifest({"seed": 11})
+
+    with pytest.raises(TypeError, match="must be a string"):
+        manifest.verify_sha256(123)  # type: ignore[arg-type]
+
+
 def test_manifest_verify_sha256_rejects_empty_digest() -> None:
     manifest = ExperimentManifest({"seed": 11})
 
-    with pytest.raises(ValueError, match="non-empty string"):
+    with pytest.raises(ValueError, match="exactly 64 hexadecimal"):
         manifest.verify_sha256("")
