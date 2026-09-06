@@ -125,7 +125,13 @@ def save_paired_benchmark_result(
     *,
     runtime_provenance: Mapping[str, str] | None = None,
 ) -> Path:
-    """Persist paired condition reports and their descriptive comparison."""
+    """Persist paired condition reports and their descriptive comparison.
+
+    The supplied comparison is treated as derived artifact data, not trusted
+    input. It must exactly match a fresh paired comparison of the reports being
+    persisted, preventing stale or unrelated summaries from being attached to
+    measured evidence.
+    """
 
     baseline = _validate_paired_report_collection(baseline_reports, "baseline")
     treatment = _validate_paired_report_collection(treatment_reports, "treatment")
@@ -137,6 +143,7 @@ def save_paired_benchmark_result(
     treatment_seeds = tuple(report.seed for report in treatment)
     if baseline_seeds != tuple(comparison.seeds) or treatment_seeds != tuple(comparison.seeds):
         raise ValueError("comparison seeds must match both paired report seed sets")
+    _validate_paired_comparison(baseline, treatment, comparison)
 
     payload: dict[str, Any] = {
         "schema_version": BENCHMARK_REPORT_SCHEMA_VERSION,
@@ -213,6 +220,25 @@ def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str:
     )
 
 
+def _validate_paired_comparison(
+    baseline: tuple[BenchmarkRunReport, ...],
+    treatment: tuple[BenchmarkRunReport, ...],
+    comparison: BenchmarkConditionComparison,
+) -> None:
+    """Reject a paired comparison that does not describe the supplied reports."""
+
+    from experiments.benchmark_statistics import compare_benchmark_reports
+
+    expected = compare_benchmark_reports(
+        baseline,
+        treatment,
+        baseline_label=comparison.baseline_label,
+        treatment_label=comparison.treatment_label,
+    )
+    if comparison.to_dict() != expected.to_dict():
+        raise ValueError("comparison must exactly match the supplied paired benchmark reports")
+
+
 def _validate_repeated_statistics(
     reports: tuple[BenchmarkRunReport, ...],
     statistics: Mapping[str, Any],
@@ -260,51 +286,50 @@ def _validate_repeated_configuration(reports: tuple[BenchmarkRunReport, ...]) ->
     if all(configuration is None for configuration in configurations):
         return
     if any(configuration is None for configuration in configurations):
-        raise ValueError("repeated benchmark reports must use consistent configuration metadata")
+        raise ValueError("repeated benchmark reports must either all include configuration or all omit it")
 
-    reference = _without_seed(configurations[0])
-    if any(_without_seed(configuration) != reference for configuration in configurations[1:]):
-        raise ValueError(
-            "repeated benchmark reports must share configuration apart from the seed"
-        )
-
-
-def _without_seed(
-    configuration: BenchmarkRunConfiguration,
-) -> BenchmarkRunConfiguration:
-    """Return configuration with the independent-run seed removed."""
-
-    return replace(configuration, seed=None)
+    fingerprints = {
+        benchmark_configuration_fingerprint(replace(configuration, seed=None))
+        for configuration in configurations
+        if configuration is not None
+    }
+    if len(fingerprints) != 1:
+        raise ValueError("repeated benchmark reports must share configuration apart from the seed")
 
 
 def _write_json(payload: Mapping[str, Any], output_path: Path) -> None:
-    """Atomically write deterministic JSON, replacing the destination only on success."""
+    """Write deterministic JSON through an atomic same-directory temporary file."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload_bytes = json.dumps(
+        payload,
+        sort_keys=True,
+        indent=2,
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
     file_descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{output_path.name}.",
         suffix=".tmp",
         dir=output_path.parent,
     )
-    temporary_path = Path(temporary_name)
     try:
-        with os.fdopen(file_descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(payload, indent=2, sort_keys=True, allow_nan=False))
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_path, output_path)
+        with os.fdopen(file_descriptor, "wb") as temporary_file:
+            temporary_file.write(payload_bytes)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_name, output_path)
         _fsync_directory(output_path.parent)
     except BaseException:
         try:
-            temporary_path.unlink()
+            os.unlink(temporary_name)
         except FileNotFoundError:
             pass
         raise
 
 
 def _fsync_directory(directory: Path) -> None:
-    """Flush directory metadata when supported by the current platform."""
+    """Best-effort fsync for the destination directory after atomic replacement."""
 
     try:
         directory_descriptor = os.open(directory, os.O_RDONLY)
@@ -312,5 +337,7 @@ def _fsync_directory(directory: Path) -> None:
         return
     try:
         os.fsync(directory_descriptor)
+    except OSError:
+        return
     finally:
         os.close(directory_descriptor)
