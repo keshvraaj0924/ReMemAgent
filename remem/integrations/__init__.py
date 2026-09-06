@@ -13,6 +13,14 @@ from .benchmarks import (
     load_benchmark_environment_factory,
     resolve_environment_factory,
 )
+from .benchmark_policies import (
+    build_alfworld_huggingface_policy_factory,
+    build_alfworld_prompt,
+    build_webshop_huggingface_policy_factory,
+    build_webshop_prompt,
+    parse_alfworld_action,
+    parse_webshop_action,
+)
 from .datasets import write_grpo_jsonl, write_verl_jsonl
 from .grpo import (
     GrpoBatch,
@@ -76,6 +84,8 @@ __all__ = [
     "VerlTrainingConsumer",
     "VerlTrajectory",
     "adapt_agent_loop_output",
+    "build_alfworld_huggingface_policy_factory",
+    "build_alfworld_prompt",
     "build_alfworld_text_environment_factory",
     "build_grpo_batch",
     "build_grpo_samples",
@@ -83,12 +93,16 @@ __all__ = [
     "build_memory_guided_policy_factory",
     "build_training_artifact_manifest",
     "build_verl_training_batch",
+    "build_webshop_huggingface_policy_factory",
+    "build_webshop_prompt",
     "build_webshop_text_environment_factory",
     "compute_group_relative_advantages",
     "dispatch_verl_training_batch",
     "encode_episode_for_verl",
     "encode_grpo_batch_for_verl",
     "load_benchmark_environment_factory",
+    "parse_alfworld_action",
+    "parse_webshop_action",
     "resolve_environment_factory",
     "run_agent_loop",
     "run_agent_loop_batch",
