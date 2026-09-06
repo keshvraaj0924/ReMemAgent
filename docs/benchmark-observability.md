@@ -1,6 +1,6 @@
 # Benchmark observability
 
-The benchmark runner exposes an optional `ObservationCollector` for low-dependency execution telemetry.
+The benchmark runner exposes an optional `ObservationCollector` for low-dependency execution telemetry. The external benchmark CLI can persist this telemetry as a deterministic JSON snapshot with `--observability-output`.
 
 ## Episode lifecycle
 
@@ -15,6 +15,14 @@ The success counter is an execution-outcome counter, not the benchmark's task-su
 - `benchmark.episodes.failed`: did the framework encounter an exception while executing the episode?
 
 This separation prevents infrastructure failures from being silently mixed with task-level failures in future experiment analysis.
+
+## Persisting CLI telemetry
+
+Measured CLI runs may pass `--observability-output artifacts/benchmark.observability.json`. The destination is validated before any measured environment is constructed, and existing files require `--overwrite`, matching the benchmark report artifact policy.
+
+Single-seed runs use the runner's per-episode telemetry and add `benchmark.runs.completed` after successful measured execution. Repeated runs execute through the existing independent-seed runner path and record aggregate run, completed-episode, task-success, and attributed-transfer counters after all reports have been produced. The observability snapshot is supplementary telemetry; it is never included in benchmark statistics or used to manufacture missing experiment results.
+
+The persisted format is the same deterministic `ObservationSnapshot` JSON used by the core observability module. It contains sorted `counters` and `durations_seconds` mappings and can therefore be archived alongside the measured benchmark report and integrity manifest.
 
 ## Failure semantics
 
