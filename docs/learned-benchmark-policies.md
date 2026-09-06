@@ -15,9 +15,9 @@ This keeps learned inference separate from research heuristics and environment m
 
 `build_alfworld_huggingface_policy_factory()` constructs prompts that request one executable text action and parses an `Action:` response into a scalar action suitable for `AlfWorldAdapter`.
 
-The parser accepts either one explicit `Action:` line or one unambiguous non-empty generated line. Multi-line output without an explicit action boundary, and output containing multiple `Action:` lines, is rejected rather than guessing which text should reach the environment.
+The parser accepts either one explicit `Action:` line or one unambiguous non-empty generated line. Multi-line output without an explicit action boundary, multiple `Action:` lines, explanatory prose, and unknown command verbs are rejected rather than guessing which text should reach the environment.
 
-The adapter deliberately does not invent an ALFWorld action vocabulary. The upstream environment remains authoritative for whether an emitted action is executable.
+The first action token is checked against the supported ALFWorld command vocabulary (`pass`, `go`/`goto`, `move`, `take`/`pick`, `put`, `open`, `close`, `toggle`, `heat`, `clean`, `cool`, `slice`, `inventory`, `examine`, `look`, and `use`). The argument portion remains environment-owned, so the parser does not attempt to validate object names or admissible commands that are only known after the environment reset. The vocabulary includes `move` because current ALFWorld releases use it for placement while older environments expose `put`.
 
 ## WebShop
 
