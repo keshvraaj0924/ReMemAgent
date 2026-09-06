@@ -52,6 +52,20 @@ def test_validate_agent_loop_output_accepts_integer_mask_and_token_ids() -> None
     assert result.response_mask == (1, 0)
 
 
+def test_validate_agent_loop_output_rejects_non_string_extra_field_keys() -> None:
+    """Dynamic metadata keys must match the external string-keyed contract."""
+
+    with pytest.raises(TypeError, match="extra_fields keys must be strings"):
+        validate_agent_loop_output(
+            {
+                "prompt_ids": [1],
+                "response_ids": [2],
+                "response_mask": [1],
+                "extra_fields": {1: "memory-id"},
+            }
+        )
+
+
 def test_verl_trajectory_rejects_boolean_response_mask() -> None:
     """Direct construction cannot bypass strict mask typing."""
 
