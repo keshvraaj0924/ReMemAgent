@@ -71,10 +71,28 @@ def test_build_verl_agent_loop_output_reports_missing_verl(monkeypatch: pytest.M
 
     def fail_verl_import(name: str, *args: object, **kwargs: object):
         if name.startswith("verl"):
-            raise ImportError("verl unavailable")
+            raise ModuleNotFoundError("verl unavailable", name="verl")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fail_verl_import)
 
     with pytest.raises(RuntimeError, match="verl is required"):
+        build_verl_agent_loop_output(_trajectory())
+
+
+def test_build_verl_agent_loop_output_preserves_transitive_import_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fail_transitive_import(name: str, *args: object, **kwargs: object):
+        if name.startswith("verl"):
+            raise ModuleNotFoundError("broken dependency", name="ray")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fail_transitive_import)
+
+    with pytest.raises(ModuleNotFoundError, match="broken dependency"):
         build_verl_agent_loop_output(_trajectory())
