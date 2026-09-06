@@ -17,4 +17,6 @@ The bridge does not tokenize text, run a model, manage an environment, or own di
 
 The import is lazy and targets the current upstream `verl.experimental.agent_loop.agent_loop.AgentLoopOutput` location. Tests inject a compatible factory so CI does not need the heavy verl dependency.
 
+A genuinely missing `verl` installation is converted into a focused `RuntimeError`. If `verl` is installed but one of its transitive dependencies is broken or incompatible, the original import exception is preserved. This distinction keeps environment diagnostics actionable.
+
 This adapter is an execution boundary, not evidence of successful RL training. Full GRPO/verl claims still require a real checkpoint, installed training stack, controlled configuration, and reproducible runs.
