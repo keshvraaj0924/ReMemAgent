@@ -45,7 +45,7 @@ The stronger `--runtime-preflight` path constructs the real environment and prob
 
 Runtime preflight uses exception-aware cleanup: if validation fails, cleanup errors are suppressed so the original contract exception remains actionable; if validation succeeds, a cleanup failure is surfaced rather than silently hiding an environment lifecycle problem. This makes resource cleanup deterministic without masking successful-probe teardown failures.
 
-For repeated experiments, `--repeated-runtime-preflight --seeds 11,22,33` runs that runtime probe independently for every requested seed. `--preflight-before-run` provides the corresponding fail-fast measured mode: every requested seed is runtime-preflighted before the first measured run starts. A failed probe prevents the measured repeated run from starting.
+For repeated experiments, `--repeated-runtime-preflight --seeds 11,22,33` runs that runtime probe independently for every requested seed. `--preflight-before-run` now provides the same fail-fast guarantee for both single-seed and repeated measured runs: the configured environment is runtime-preflighted before the first measured episode starts. With `--seeds`, every requested seed is probed independently; with `--seed`, the configured run seed is probed once. A failed probe prevents measured execution from starting.
 
 ## Command-line execution
 
@@ -60,6 +60,7 @@ remem-benchmark \
   --policy-factory my_policy:build_policy \
   --success-evaluator my_alfworld:evaluate_success \
   --seed 123 \
+  --preflight-before-run \
   --output artifacts/alfworld-test.json \
   --manifest artifacts/alfworld-test.json.manifest.json
 ```

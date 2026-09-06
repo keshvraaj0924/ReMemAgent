@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--preflight-before-run",
         action="store_true",
-        help="For repeated runs, preflight every seed before starting measured execution",
+        help="Runtime-preflight the configured environment before measured execution",
     )
     parser.add_argument(
         "--probe-action",
@@ -143,7 +143,10 @@ def main() -> int:
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
     if seeds is None:
         if getattr(arguments, "preflight_before_run", False):
-            raise ValueError("--preflight-before-run requires --seeds")
+            validate_external_benchmark_runtime(
+                spec,
+                probe_action=probe_action,
+            )
         report = run_external_benchmark(spec)
         output_path = save_benchmark_report(
             report,
@@ -210,7 +213,7 @@ def _reject_preflight_only_conflicts(
     if manifest and getattr(arguments, "manifest", None) is not None:
         raise ValueError("--manifest requires a measured benchmark run")
     if before_run and getattr(arguments, "preflight_before_run", False):
-        raise ValueError("--preflight-before-run requires a measured repeated benchmark run")
+        raise ValueError("--preflight-before-run requires a measured benchmark run")
 
 
 def _parse_seeds(value: str | None) -> tuple[int, ...] | None:
