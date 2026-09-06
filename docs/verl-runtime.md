@@ -31,6 +31,8 @@ No re-tokenization or model-dependent transformation occurs at this boundary. Th
 
 `VerlTrajectory` separately provides a typed representation for episodes and GRPO batches. Its top-level metadata mapping is detached when constructed, preventing later replacement of keys in a caller-owned metadata dictionary from changing an already-created trajectory. Nested metadata values remain caller-owned objects and should be treated as immutable after construction.
 
+The external output validator now also fails closed on malformed containers and metadata keys: the top-level result must be a mapping, `extra_fields` must be a mapping, and every `extra_fields` key must be a string. This catches shape/type errors before they reach the optional external `verl` model rather than relying on downstream validation behavior.
+
 ## Failure semantics
 
 The `verl` import is lazy. A genuinely missing `verl` installation is converted into a focused `RuntimeError`. If `verl` is installed but one of its transitive dependencies is broken or incompatible, the original import exception is preserved. This distinction keeps environment diagnostics actionable.
