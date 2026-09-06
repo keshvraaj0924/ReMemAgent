@@ -62,6 +62,7 @@ from .verl_adapter import (
     run_agent_loop,
     run_agent_loop_batch,
 )
+from .verl_agent_loop import build_verl_agent_loop_class
 from .verl_contract import ValidatedAgentLoopOutput, validate_agent_loop_output
 
 __all__ = [
@@ -92,6 +93,7 @@ __all__ = [
     "build_huggingface_text_action_policy_factory",
     "build_memory_guided_policy_factory",
     "build_training_artifact_manifest",
+    "build_verl_agent_loop_class",
     "build_verl_training_batch",
     "build_webshop_huggingface_policy_factory",
     "build_webshop_prompt",
