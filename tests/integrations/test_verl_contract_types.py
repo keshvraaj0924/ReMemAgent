@@ -52,6 +52,13 @@ def test_validate_agent_loop_output_accepts_integer_mask_and_token_ids() -> None
     assert result.response_mask == (1, 0)
 
 
+def test_validate_agent_loop_output_rejects_non_mapping_output() -> None:
+    """Malformed containers fail at the adapter boundary with a stable error."""
+
+    with pytest.raises(TypeError, match="agent-loop output must be a mapping"):
+        validate_agent_loop_output([("prompt_ids", [1])])  # type: ignore[arg-type]
+
+
 def test_validate_agent_loop_output_rejects_non_string_extra_field_keys() -> None:
     """Dynamic metadata keys must match the external string-keyed contract."""
 
