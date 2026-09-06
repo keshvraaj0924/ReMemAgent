@@ -20,7 +20,9 @@ This separation prevents infrastructure failures from being silently mixed with 
 
 Measured CLI runs may pass `--observability-output artifacts/benchmark.observability.json`. The destination is validated before any measured environment is constructed, and existing files require `--overwrite`, matching the benchmark report artifact policy.
 
-Single-seed runs use the runner's per-episode telemetry and add `benchmark.runs.completed` after successful measured execution. Repeated runs execute through the existing independent-seed runner path and record aggregate run, completed-episode, task-success, and attributed-transfer counters after all reports have been produced. The observability snapshot is supplementary telemetry; it is never included in benchmark statistics or used to manufacture missing experiment results.
+Single-seed runs use the runner's per-episode telemetry and record both `benchmark.runs` and `benchmark.runs.completed` after successful measured execution. Repeated runs execute through the existing independent-seed runner path and record the same aggregate run counters plus completed-episode, task-success, and attributed-transfer counters after all reports have been produced. Keeping `benchmark.runs` consistent between single and repeated modes makes the snapshot composable with worker-level telemetry without changing benchmark statistics.
+
+The observability snapshot is supplementary telemetry; it is never included in benchmark statistics or used to manufacture missing experiment results.
 
 The persisted format is the same deterministic `ObservationSnapshot` JSON used by the core observability module. It contains sorted `counters` and `durations_seconds` mappings and can therefore be archived alongside the measured benchmark report and integrity manifest.
 
