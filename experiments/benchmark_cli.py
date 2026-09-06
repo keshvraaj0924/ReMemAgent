@@ -161,9 +161,11 @@ def main() -> int:
                 spec,
                 probe_action=probe_action,
             )
-        runner = BenchmarkSuiteRunner(observation_collector=observation_collector)
-        report = run_external_benchmark(spec, runner=runner)
-        if observation_collector is not None:
+        if observation_collector is None:
+            report = run_external_benchmark(spec)
+        else:
+            runner = BenchmarkSuiteRunner(observation_collector=observation_collector)
+            report = run_external_benchmark(spec, runner=runner)
             observation_collector.increment("benchmark.runs")
             observation_collector.increment("benchmark.runs.completed")
         output_path = save_benchmark_report(
