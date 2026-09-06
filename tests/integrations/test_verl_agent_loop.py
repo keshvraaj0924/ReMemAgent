@@ -20,14 +20,23 @@ class FakeAgentLoopOutput:
         self.fields = fields
 
 
+class CustomAgentLoopOutput(FakeAgentLoopOutput):
+    """Stand-in output type supplied by a compatible verl fork."""
+
+
+def _fake_verl_types(
+    *,
+    output_factory: verl_agent_loop.AgentLoopOutputFactory | None = None,
+) -> tuple[type[object], verl_agent_loop.AgentLoopOutputFactory]:
+    """Return fake runtime types while honoring the injected factory contract."""
+
+    return FakeAgentLoopBase, output_factory or FakeAgentLoopOutput
+
+
 def test_build_verl_agent_loop_class_runs_injected_runner(monkeypatch: pytest.MonkeyPatch) -> None:
     """The concrete adapter forwards sampling parameters and dataset fields."""
 
-    monkeypatch.setattr(
-        verl_agent_loop,
-        "_load_verl_types",
-        lambda: (FakeAgentLoopBase, FakeAgentLoopOutput),
-    )
+    monkeypatch.setattr(verl_agent_loop, "_load_verl_types", _fake_verl_types)
     calls: list[tuple[dict[str, object], dict[str, object]]] = []
 
     async def runner(
@@ -64,6 +73,28 @@ def test_build_verl_agent_loop_class_runs_injected_runner(monkeypatch: pytest.Mo
     ]
 
 
+def test_build_verl_agent_loop_class_accepts_custom_output_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Compatible forks can inject their concrete AgentLoopOutput model."""
+
+    monkeypatch.setattr(verl_agent_loop, "_load_verl_types", _fake_verl_types)
+
+    async def runner(
+        sampling_params: dict[str, object],
+        kwargs: dict[str, object],
+    ) -> dict[str, object]:
+        return {"prompt_ids": [1], "response_ids": [2], "response_mask": [1]}
+
+    loop_class = verl_agent_loop.build_verl_agent_loop_class(
+        runner,
+        output_factory=CustomAgentLoopOutput,
+    )
+    output = asyncio.run(loop_class().run({}))
+
+    assert isinstance(output, CustomAgentLoopOutput)
+
+
 def test_build_verl_agent_loop_class_rejects_invalid_runner() -> None:
     """The factory fails before importing verl for non-callable runners."""
 
@@ -76,11 +107,7 @@ def test_build_verl_agent_loop_class_rejects_invalid_output(
 ) -> None:
     """Malformed runner output cannot reach the external training framework."""
 
-    monkeypatch.setattr(
-        verl_agent_loop,
-        "_load_verl_types",
-        lambda: (FakeAgentLoopBase, FakeAgentLoopOutput),
-    )
+    monkeypatch.setattr(verl_agent_loop, "_load_verl_types", _fake_verl_types)
 
     async def runner(
         sampling_params: dict[str, object],
@@ -103,11 +130,7 @@ def test_build_verl_agent_loop_class_preserves_extra_fields(
 ) -> None:
     """Dynamic agent-loop fields survive validation and reach AgentLoopOutput."""
 
-    monkeypatch.setattr(
-        verl_agent_loop,
-        "_load_verl_types",
-        lambda: (FakeAgentLoopBase, FakeAgentLoopOutput),
-    )
+    monkeypatch.setattr(verl_agent_loop, "_load_verl_types", _fake_verl_types)
 
     async def runner(
         sampling_params: dict[str, object],
