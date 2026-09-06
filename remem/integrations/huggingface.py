@@ -133,7 +133,21 @@ def _generate_text(
 
 
 def _extract_chat_text(messages: list[object]) -> str:
-    """Extract the latest textual message from a chat-style generation result."""
+    """Extract the latest assistant message from chat-style generation output.
+
+    Transformers chat pipelines return message dictionaries containing roles.
+    Prefer an assistant message so prompt/user content cannot accidentally be
+    handed to the benchmark action parser when the generated conversation also
+    contains earlier messages. For non-role-tagged message dictionaries, fall
+    back to the latest textual message for compatibility with lightweight test
+    doubles and alternative pipeline wrappers.
+    """
+
+    for message in reversed(messages):
+        if isinstance(message, dict) and message.get("role") == "assistant":
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                return content.strip()
 
     for message in reversed(messages):
         if isinstance(message, dict):
