@@ -18,10 +18,13 @@ ExternalAgentRunner = Callable[
     [Mapping[str, Any], Mapping[str, Any]],
     Awaitable[Mapping[str, object]],
 ]
+AgentLoopOutputFactory = Callable[..., object]
 
 
 def build_verl_agent_loop_class(
     runner: ExternalAgentRunner,
+    *,
+    output_factory: AgentLoopOutputFactory | None = None,
 ) -> type[object]:
     """Build an ``AgentLoopBase`` subclass around an injected async runner.
 
@@ -32,13 +35,17 @@ def build_verl_agent_loop_class(
 
     ``verl`` is imported only when this factory is called. A missing installation
     therefore does not affect normal ReMemAgent imports or dependency-free
-    research experiments.
+    research experiments. ``output_factory`` is optional so compatible verl
+    forks can provide their concrete output model without changing the core
+    integration.
     """
 
     if not callable(runner):
         raise TypeError("runner must be callable")
 
-    agent_loop_base, output_factory = _load_verl_types()
+    agent_loop_base, resolved_output_factory = _load_verl_types(
+        output_factory=output_factory,
+    )
 
     class ReMemAgentAgentLoop(agent_loop_base):  # type: ignore[misc,valid-type]
         """verl AgentLoopBase adapter backed by an injected async runner."""
@@ -48,13 +55,16 @@ def build_verl_agent_loop_class(
 
             output = await runner(sampling_params, kwargs)
             validated = validate_agent_loop_output(output)
-            return output_factory(**validated.to_dict())
+            return resolved_output_factory(**validated.to_dict())
 
     return ReMemAgentAgentLoop
 
 
-def _load_verl_types() -> tuple[type[object], Callable[..., object]]:
-    """Load the current upstream AgentLoopBase and AgentLoopOutput lazily."""
+def _load_verl_types(
+    *,
+    output_factory: AgentLoopOutputFactory | None = None,
+) -> tuple[type[object], AgentLoopOutputFactory]:
+    """Load the current upstream AgentLoopBase and output factory lazily."""
 
     try:
         from verl.experimental.agent_loop.agent_loop import AgentLoopBase, AgentLoopOutput
@@ -67,4 +77,4 @@ def _load_verl_types() -> tuple[type[object], Callable[..., object]]:
                 "install a compatible verl release"
             ) from exc
         raise
-    return AgentLoopBase, AgentLoopOutput
+    return AgentLoopBase, output_factory or AgentLoopOutput
