@@ -50,6 +50,9 @@ def validate_agent_loop_output(
     to verl's Pydantic model.
     """
 
+    if not isinstance(output, Mapping):
+        raise TypeError("agent-loop output must be a mapping")
+
     required_fields = ("prompt_ids", "response_ids", "response_mask")
     missing_fields = [field for field in required_fields if field not in output]
     if missing_fields:
