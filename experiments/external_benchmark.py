@@ -137,12 +137,11 @@ def validate_external_benchmark_runtime(
             observation=environment_report.initial_observation,
             store=MemoryStore(),
         )
-        return environment_report
     except BaseException:
         _close_environment_safely(environment)
         raise
-    else:
-        _close_environment(environment)
+    _close_environment(environment)
+    return environment_report
 
 
 def run_external_benchmark(
