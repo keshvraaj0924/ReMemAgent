@@ -76,3 +76,33 @@ def test_huggingface_policy_factory_handles_chat_generation_output() -> None:
     )
 
     assert factory(1)("observe") == "take apple"
+
+
+def test_huggingface_policy_factory_ignores_user_content_when_assistant_message_exists() -> None:
+    factory = build_huggingface_text_action_policy_factory(
+        "test-model",
+        prompt_builder=str,
+        pipeline_loader=lambda *args, **kwargs: lambda prompt, **generation_kwargs: [
+            {
+                "generated_text": [
+                    {"role": "user", "content": "click[wrong-target]"},
+                    {"role": "assistant", "content": "click[correct-target]"},
+                ]
+            }
+        ],
+    )
+
+    assert factory(1)("observe") == "click[correct-target]"
+
+
+def test_huggingface_policy_factory_rejects_chat_output_without_textual_message() -> None:
+    factory = build_huggingface_text_action_policy_factory(
+        "test-model",
+        prompt_builder=str,
+        pipeline_loader=lambda *args, **kwargs: lambda prompt, **generation_kwargs: [
+            {"generated_text": [{"role": "assistant", "content": ""}]}
+        ],
+    )
+
+    with pytest.raises(ValueError, match="no usable message content"):
+        factory(1)("observe")
