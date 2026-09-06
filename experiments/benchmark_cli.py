@@ -22,6 +22,8 @@ from experiments.external_preflight import (
     validate_repeated_external_benchmark_runtime,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
+from remem.benchmark import BenchmarkSuiteRunner, BenchmarkRunReport
+from remem.observability import ObservationCollector, write_observation_snapshot
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
@@ -50,9 +52,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional path for the exact-byte benchmark artifact integrity manifest",
     )
     parser.add_argument(
+        "--observability-output",
+        type=Path,
+        help="Optional path for the deterministic benchmark observability snapshot",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Allow replacing an existing benchmark report or integrity manifest",
+        help="Allow replacing an existing benchmark report, manifest, or observability snapshot",
     )
     preflight_group = parser.add_mutually_exclusive_group()
     preflight_group.add_argument(
@@ -139,15 +146,25 @@ def main() -> int:
         manifest_path,
         overwrite=getattr(arguments, "overwrite", False),
     )
+    observability_path = _prepare_optional_artifact_path(
+        getattr(arguments, "observability_output", None),
+        artifact_name="observability snapshot",
+        overwrite=getattr(arguments, "overwrite", False),
+        reserved_paths=(output_path, selected_manifest_path),
+    )
     runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
+    observation_collector = ObservationCollector() if observability_path is not None else None
     if seeds is None:
         if getattr(arguments, "preflight_before_run", False):
             validate_external_benchmark_runtime(
                 spec,
                 probe_action=probe_action,
             )
-        report = run_external_benchmark(spec)
+        runner = BenchmarkSuiteRunner(observation_collector=observation_collector)
+        report = run_external_benchmark(spec, runner=runner)
+        if observation_collector is not None:
+            observation_collector.increment("benchmark.runs.completed")
         output_path = save_benchmark_report(
             report,
             output_path,
@@ -169,10 +186,15 @@ def main() -> int:
             runtime_provenance=runtime_provenance,
             statistics=statistics,
         )
+        if observation_collector is not None:
+            _record_repeated_run_observability(observation_collector, reports)
 
     if selected_manifest_path is not None:
         manifest_output = save_benchmark_artifact_manifest(output_path, selected_manifest_path)
         print(f"saved benchmark artifact manifest: {manifest_output}")
+    if observation_collector is not None and observability_path is not None:
+        write_observation_snapshot(observability_path, observation_collector.snapshot())
+        print(f"saved benchmark observability snapshot: {observability_path}")
     print(f"saved benchmark report: {output_path}")
     return 0
 
@@ -183,6 +205,28 @@ def _prepare_output_path(path: Path, *, overwrite: bool) -> Path:
     if path.exists() and not overwrite:
         raise FileExistsError(
             f"benchmark artifact already exists: {path}; pass --overwrite to replace it"
+        )
+    return path
+
+
+def _prepare_optional_artifact_path(
+    path: Path | None,
+    *,
+    artifact_name: str,
+    overwrite: bool,
+    reserved_paths: tuple[Path | None, ...] = (),
+) -> Path | None:
+    """Validate an optional artifact destination before measured execution."""
+
+    if path is None:
+        return None
+    resolved_path = path.resolve()
+    for reserved_path in reserved_paths:
+        if reserved_path is not None and resolved_path == reserved_path.resolve():
+            raise ValueError(f"{artifact_name} must use a different path from another artifact")
+    if path.exists() and not overwrite:
+        raise FileExistsError(
+            f"{artifact_name} already exists: {path}; pass --overwrite to replace it"
         )
     return path
 
@@ -212,6 +256,8 @@ def _reject_preflight_only_conflicts(
 
     if manifest and getattr(arguments, "manifest", None) is not None:
         raise ValueError("--manifest requires a measured benchmark run")
+    if getattr(arguments, "observability_output", None) is not None:
+        raise ValueError("--observability-output requires a measured benchmark run")
     if before_run and getattr(arguments, "preflight_before_run", False):
         raise ValueError("--preflight-before-run requires a measured benchmark run")
 
@@ -229,6 +275,28 @@ def _parse_seeds(value: str | None) -> tuple[int, ...] | None:
     except ValueError as exc:
         raise ValueError("--seeds must contain comma-separated integers") from exc
     return validate_seed_sequence(seeds)
+
+
+def _record_repeated_run_observability(
+    collector: ObservationCollector,
+    reports: tuple[BenchmarkRunReport, ...],
+) -> None:
+    """Record aggregate counters for repeated runs executed without runner telemetry."""
+
+    collector.increment("benchmark.runs")
+    collector.increment("benchmark.runs.completed")
+    collector.increment(
+        "benchmark.episodes.completed",
+        float(sum(len(report.episodes) for report in reports)),
+    )
+    collector.increment(
+        "benchmark.episodes.successful",
+        float(sum(report.success_count for report in reports)),
+    )
+    collector.increment(
+        "benchmark.transfers.attributed",
+        float(sum(report.transfer_count for report in reports)),
+    )
 
 
 if __name__ == "__main__":
