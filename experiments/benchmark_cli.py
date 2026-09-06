@@ -22,7 +22,7 @@ from experiments.external_preflight import (
     validate_repeated_external_benchmark_runtime,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
-from remem.benchmark import BenchmarkSuiteRunner, BenchmarkRunReport
+from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner
 from remem.observability import ObservationCollector, write_observation_snapshot
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
