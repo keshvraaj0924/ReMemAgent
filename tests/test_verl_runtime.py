@@ -64,6 +64,21 @@ def test_build_verl_agent_loop_output_omits_absent_logprobs() -> None:
     assert output.response_logprobs is None
 
 
+def test_verl_trajectory_detaches_metadata_mapping() -> None:
+    metadata = {"memory_ids": ["memory-a"]}
+    trajectory = VerlTrajectory(
+        prompt_ids=(1,),
+        response_ids=(2,),
+        response_mask=(1,),
+        reward=1.0,
+        metadata=metadata,
+    )
+
+    metadata["memory_ids"] = ["memory-b"]
+
+    assert trajectory.metadata == {"memory_ids": ["memory-a"]}
+
+
 def test_build_verl_agent_loop_output_reports_missing_verl(monkeypatch: pytest.MonkeyPatch) -> None:
     import builtins
 
