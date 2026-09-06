@@ -137,7 +137,7 @@ def validate_external_benchmark_runtime(
             observation=environment_report.initial_observation,
             store=MemoryStore(),
         )
-    except BaseException:
+    except Exception:
         _close_environment_safely(environment)
         raise
     _close_environment(environment)
@@ -248,7 +248,7 @@ def _close_environment_safely(environment: object) -> None:
 
     try:
         _close_environment(environment)
-    except BaseException:
+    except Exception:
         return
 
 
@@ -258,3 +258,5 @@ def _close_environment(environment: object) -> None:
     close = getattr(environment, "close", None)
     if callable(close):
         close()
+
+
