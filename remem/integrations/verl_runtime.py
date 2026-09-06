@@ -47,13 +47,23 @@ def build_verl_agent_loop_output(
 
 
 def _load_agent_loop_output_factory() -> AgentLoopOutputFactory:
-    """Resolve the current upstream verl AgentLoopOutput class lazily."""
+    """Resolve the current upstream verl AgentLoopOutput class lazily.
+
+    Only a genuinely missing ``verl`` installation is converted into the
+    integration-specific runtime error. Import failures raised by a present
+    but broken/incompatible ``verl`` dependency chain are preserved so the
+    caller receives the original diagnostic rather than a misleading message.
+    """
 
     try:
         from verl.experimental.agent_loop.agent_loop import AgentLoopOutput
-    except ImportError as exc:
-        raise RuntimeError(
-            "verl is required for runtime AgentLoopOutput construction; "
-            "install a compatible verl release or pass output_factory explicitly"
-        ) from exc
+    except ModuleNotFoundError as exc:
+        if exc.name is not None and (
+            exc.name == "verl" or exc.name.startswith("verl.")
+        ):
+            raise RuntimeError(
+                "verl is required for runtime AgentLoopOutput construction; "
+                "install a compatible verl release or pass output_factory explicitly"
+            ) from exc
+        raise
     return AgentLoopOutput
