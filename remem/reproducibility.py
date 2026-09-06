@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -61,11 +62,16 @@ class ExperimentManifest:
         return hashlib.sha256(self.to_json().encode("utf-8")).hexdigest()
 
     def verify_sha256(self, expected_sha256: str) -> None:
-        """Raise when an expected digest does not match the canonical manifest."""
+        """Raise when an expected SHA-256 digest is malformed or does not match."""
 
-        if not isinstance(expected_sha256, str) or not expected_sha256:
-            raise ValueError("expected_sha256 must be a non-empty string")
-        if self.sha256 != expected_sha256:
+        if not isinstance(expected_sha256, str):
+            raise TypeError("expected_sha256 must be a string")
+        normalized_digest = expected_sha256.strip().lower()
+        if len(normalized_digest) != hashlib.sha256().digest_size * 2:
+            raise ValueError("expected_sha256 must contain exactly 64 hexadecimal characters")
+        if any(character not in "0123456789abcdef" for character in normalized_digest):
+            raise ValueError("expected_sha256 must contain only hexadecimal characters")
+        if not hmac.compare_digest(self.sha256, normalized_digest):
             raise ValueError(
                 "manifest SHA-256 mismatch: "
                 f"expected {expected_sha256}, computed {self.sha256}"
