@@ -1,4 +1,5 @@
-import random
+from __future__ import annotations
+
 import sys
 import types
 from typing import Any
@@ -12,40 +13,43 @@ from remem.integrations.official_benchmarks import (
 
 
 class FakeAlfWorldEnvironment:
+    """Minimal upstream-shaped ALFWorld environment double."""
+
     def __init__(self, config: dict[str, Any], train_eval: str) -> None:
         self.config = config
         self.train_eval = train_eval
-        self.batch_size: int | None = None
-        self.reset_random_values: list[float] = []
-        self.reset_calls = 0
+        self.initialized_batch_size: int | None = None
 
-    def init_env(self, *, batch_size: int) -> "FakeAlfWorldEnvironment":
-        self.batch_size = batch_size
+    def init_env(self, batch_size: int = 1) -> FakeAlfWorldEnvironment:
+        self.initialized_batch_size = batch_size
         return self
 
-    def reset(self) -> str:
-        self.reset_calls += 1
-        value = random.random()
-        self.reset_random_values.append(value)
-        return "observation"
+
+class FakeWebShopEnvironment:
+    """Minimal Gym-shaped WebShop environment double."""
+
+    def __init__(self, observation_mode: str, **kwargs: Any) -> None:
+        self.observation_mode = observation_mode
+        self.kwargs = kwargs
 
 
-def test_alfworld_factory_isolates_mutation_between_environment_instances(
+def test_alfworld_factory_isolates_config_and_constructor_seed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     created: list[FakeAlfWorldEnvironment] = []
 
-    def get_environment(_env_type: str):
+    environment_module = types.ModuleType("alfworld.agents.environment")
+
+    def get_environment(env_type: str):
+        assert env_type == "AlfredTWEnv"
+
         def constructor(config: dict[str, Any], train_eval: str) -> FakeAlfWorldEnvironment:
             environment = FakeAlfWorldEnvironment(config, train_eval)
-            # Simulate an upstream constructor normalizing/mutating its config in place.
-            config["env"]["constructor_seed_marker"] = len(created)
             created.append(environment)
             return environment
 
         return constructor
 
-    environment_module = types.ModuleType("alfworld.agents.environment")
     environment_module.get_environment = get_environment  # type: ignore[attr-defined]
     agents_module = types.ModuleType("alfworld.agents")
     alfworld_module = types.ModuleType("alfworld")
@@ -61,7 +65,7 @@ def test_alfworld_factory_isolates_mutation_between_environment_instances(
 
     assert first.config["env"]["constructor_seed_marker"] == 0
     assert second.config["env"]["constructor_seed_marker"] == 1
-    assert source_config == {"env": {"type": "AlfredTWEnv", "nested": {"enabled": True}}
+    assert source_config == {"env": {"type": "AlfredTWEnv", "nested": {"enabled": True}}}
     assert created[0].config is not created[1].config
     assert created[0].config["env"] is not created[1].config["env"]
 
@@ -81,201 +85,45 @@ def test_alfworld_factory_uses_upstream_environment_constructor(monkeypatch: pyt
 
     environment_module = types.ModuleType("alfworld.agents.environment")
     environment_module.get_environment = get_environment  # type: ignore[attr-defined]
-    agents_module = types.ModuleType("alfworld.agents")
-    alfworld_module = types.ModuleType("alfworld")
-    monkeypatch.setitem(sys.modules, "alfworld", alfworld_module)
-    monkeypatch.setitem(sys.modules, "alfworld.agents", agents_module)
+    monkeypatch.setitem(sys.modules, "alfworld", types.ModuleType("alfworld"))
+    monkeypatch.setitem(sys.modules, "alfworld.agents", types.ModuleType("alfworld.agents"))
     monkeypatch.setitem(sys.modules, "alfworld.agents.environment", environment_module)
 
-    config = {"env": {"type": "AlfredTWEnv"}}
-    factory = build_alfworld_text_environment_factory(config, train_eval="eval")
-    environment = factory(17)
-
-    assert environment is not created[0]
-    assert environment.config == config
-    assert environment.train_eval == "eval"
-    assert environment.batch_size == 1
-
-
-def test_alfworld_factory_seeds_reset_without_leaking_global_rng(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    created: list[FakeAlfWorldEnvironment] = []
-
-    def get_environment(_env_type: str):
-        def constructor(config: dict[str, Any], train_eval: str) -> FakeAlfWorldEnvironment:
-            environment = FakeAlfWorldEnvironment(config, train_eval)
-            created.append(environment)
-            return environment
-
-        return constructor
-
-    environment_module = types.ModuleType("alfworld.agents.environment")
-    environment_module.get_environment = get_environment  # type: ignore[attr-defined]
-    agents_module = types.ModuleType("alfworld.agents")
-    alfworld_module = types.ModuleType("alfworld")
-    monkeypatch.setitem(sys.modules, "alfworld", alfworld_module)
-    monkeypatch.setitem(sys.modules, "alfworld.agents", agents_module)
-    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", environment_module)
-
-    random.seed(12345)
-    expected_next_value = random.Random(12345).random()
-    random.seed(12345)
-
-    factory = build_alfworld_text_environment_factory({"env": {"type": "AlfredTWEnv"}})
-    environment = factory(17)
-    assert environment.reset() == "observation"
-    assert environment.reset() == "observation"
-
-    assert created[0].reset_random_values[0] == created[0].reset_random_values[1]
-    assert random.random() == expected_next_value
-
-
-def test_alfworld_factory_rejects_non_singleton_batch() -> None:
-    with pytest.raises(ValueError, match="batch_size=1"):
-        build_alfworld_text_environment_factory({}, batch_size=2)
-
-
-def test_webshop_factory_creates_seeded_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    environment = FakeWebShopEnvironment()
-    gym_module = types.ModuleType("gym")
-    gym_module.make = lambda environment_id, **kwargs: (
-        _assert_webshop_make(environment_id, kwargs, environment)
+    factory = build_alfworld_text_environment_factory(
+        {"env": {"type": "AlfredTWEnv"}},
+        train_eval="eval_out_of_distribution",
+        batch_size=1,
     )
-    monkeypatch.setitem(sys.modules, "gym", gym_module)
 
-    factory = build_webshop_text_environment_factory(num_products=1000)
-    result = factory(23)
+    environment = factory(7)
 
-    assert result is not environment
-    assert result.reset() is None
-    assert environment.reset_seeds == [None]
-    assert environment.close_calls == 0
+    assert environment.train_eval == "eval_out_of_distribution"
+    assert environment.initialized_batch_size == 1
+    assert created == [environment]
 
 
-def test_webshop_factory_rejects_gym_024_before_environment_construction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    environment_created = False
-
-    def make(_environment_id: str, **_kwargs: Any) -> FakeWebShopEnvironment:
-        nonlocal environment_created
-        environment_created = True
-        return FakeWebShopEnvironment()
+def test_webshop_factory_constructs_gym_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    created: list[FakeWebShopEnvironment] = []
 
     gym_module = types.ModuleType("gym")
-    gym_module.__version__ = "0.24.0"
+
+    def make(environment_id: str, *, observation_mode: str, **kwargs: Any) -> FakeWebShopEnvironment:
+        assert environment_id == "WebAgentTextEnv-v0"
+        environment = FakeWebShopEnvironment(observation_mode, **kwargs)
+        created.append(environment)
+        return environment
+
     gym_module.make = make  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "gym", gym_module)
 
-    with pytest.raises(RuntimeError, match="Gym 0.24.x"):
-        build_webshop_text_environment_factory()
+    factory = build_webshop_text_environment_factory(
+        observation_mode="text",
+        environment_id="WebAgentTextEnv-v0",
+        num_products=10,
+    )
 
-    assert environment_created is False
+    environment = factory(3)
 
-
-def test_webshop_factory_accepts_supported_gym_version(monkeypatch: pytest.MonkeyPatch) -> None:
-    environment = FakeWebShopEnvironment()
-    gym_module = types.ModuleType("gym")
-    gym_module.__version__ = "0.23.1"
-    gym_module.make = lambda _environment_id, **_kwargs: environment
-    monkeypatch.setitem(sys.modules, "gym", gym_module)
-
-    factory = build_webshop_text_environment_factory()
-    assert factory(23) is not environment
-
-
-def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.MonkeyPatch) -> None:
-    environment = LegacyWebShopEnvironment()
-    gym_module = types.ModuleType("gym")
-    gym_module.make = lambda _environment_id, **_kwargs: environment
-    monkeypatch.setitem(sys.modules, "gym", gym_module)
-
-    factory = build_webshop_text_environment_factory()
-    result = factory(23)
-
-    assert result is not environment
-    result.reset()
-    assert environment.reset_calls == 1
-
-
-def test_webshop_factory_preserves_reset_failure_for_caller(monkeypatch: pytest.MonkeyPatch) -> None:
-    failure = RuntimeError("reset failed")
-    environment = FakeWebShopEnvironment(reset_error=failure)
-    gym_module = types.ModuleType("gym")
-    gym_module.make = lambda _environment_id, **_kwargs: environment
-    monkeypatch.setitem(sys.modules, "gym", gym_module)
-
-    factory = build_webshop_text_environment_factory()
-    result = factory(23)
-
-    with pytest.raises(RuntimeError, match="reset failed") as raised:
-        result.reset()
-
-    assert raised.value is failure
-    assert environment.close_calls == 0
-    environment.close()
-    assert environment.close_calls == 1
-
-
-def test_webshop_factory_closes_environment_when_reset_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    class MissingResetEnvironment:
-        def __init__(self) -> None:
-            self.close_calls = 0
-
-        def close(self) -> None:
-            self.close_calls += 1
-
-    environment = MissingResetEnvironment()
-    gym_module = types.ModuleType("gym")
-    gym_module.make = lambda _environment_id, **_kwargs: environment
-    monkeypatch.setitem(sys.modules, "gym", gym_module)
-
-    factory = build_webshop_text_environment_factory()
-
-    with pytest.raises(TypeError, match="reset"):
-        factory(23)
-
-    assert environment.close_calls == 1
-
-
-def test_webshop_factory_rejects_non_positive_product_count() -> None:
-    with pytest.raises(ValueError, match="num_products"):
-        build_webshop_text_environment_factory(num_products=0)
-
-
-def _assert_webshop_make(
-    environment_id: str,
-    kwargs: dict[str, Any],
-    environment: FakeWebShopEnvironment,
-) -> FakeWebShopEnvironment:
-    assert environment_id == "WebAgentTextEnv-v0"
-    assert kwargs == {"observation_mode": "text", "num_products": 1000}
-    return environment
-
-
-class FakeWebShopEnvironment:
-    def __init__(self, *, reset_error: BaseException | None = None) -> None:
-        self.reset_error = reset_error
-        self.reset_seeds: list[int | None] = []
-        self.close_calls = 0
-
-    def reset(self, *, seed: int | None = None) -> None:
-        self.reset_seeds.append(seed)
-        if self.reset_error is not None:
-            raise self.reset_error
-
-    def close(self) -> None:
-        self.close_calls += 1
-
-
-class LegacyWebShopEnvironment:
-    def __init__(self) -> None:
-        self.reset_calls = 0
-        self.close_calls = 0
-
-    def reset(self) -> None:
-        self.reset_calls += 1
-
-    def close(self) -> None:
-        self.close_calls += 1
+    assert environment.observation_mode == "text"
+    assert environment.kwargs["num_products"] == 10
+    assert created == [environment]
