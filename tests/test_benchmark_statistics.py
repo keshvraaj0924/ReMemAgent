@@ -15,7 +15,7 @@ def _report(
     reward: float,
     success: bool,
     *,
-    max_steps: int | None = None,
+    max_steps: int | None = 1,
     policy_factory: str = "tests.fixtures:policy_factory",
 ) -> BenchmarkRunReport:
     episode = EpisodeResult(
@@ -53,12 +53,24 @@ def _report(
 
 
 def _unseeded_report(reward: float, success: bool) -> BenchmarkRunReport:
-    report = _report(0, reward, success)
+    configured = _report(0, reward, success)
+    configuration = configured.configuration
+    assert configuration is not None
     return BenchmarkRunReport(
-        benchmark_name=report.benchmark_name,
-        episodes=report.episodes,
-        final_memory_count=report.final_memory_count,
+        benchmark_name=configured.benchmark_name,
+        episodes=configured.episodes,
+        final_memory_count=configured.final_memory_count,
         seed=None,
+        configuration=BenchmarkRunConfiguration(
+            benchmark_name=configuration.benchmark_name,
+            episode_count=configuration.episode_count,
+            max_steps=configuration.max_steps,
+            seed=None,
+            environment_factory=configuration.environment_factory,
+            policy_factory=configuration.policy_factory,
+            success_evaluator=configuration.success_evaluator,
+            minimum_trust=configuration.minimum_trust,
+        ),
     )
 
 
@@ -66,7 +78,6 @@ def test_summarize_benchmark_reports_uses_seed_level_observations() -> None:
     summary = summarize_benchmark_reports(
         (_report(1, 1.0, True), _report(2, 0.0, False), _report(3, 1.0, True))
     )
-
     assert summary.benchmark_name == "synthetic-test"
     assert summary.seeds == (1, 2, 3)
     assert summary.success_rate.mean == 2 / 3
@@ -76,7 +87,6 @@ def test_summarize_benchmark_reports_uses_seed_level_observations() -> None:
 
 def test_single_seed_summary_has_zero_uncertainty() -> None:
     summary = summarize_benchmark_reports((_report(7, 0.5, True),))
-
     assert summary.success_rate.sample_stddev == 0.0
     assert summary.success_rate.standard_error == 0.0
     assert summary.success_rate.confidence_interval_95 == (1.0, 1.0)
@@ -84,7 +94,6 @@ def test_single_seed_summary_has_zero_uncertainty() -> None:
 
 def test_statistics_reject_duplicate_seeds() -> None:
     reports = (_report(1, 1.0, True), _report(1, 0.0, False))
-
     try:
         summarize_benchmark_reports(reports)
     except ValueError as exc:
@@ -101,8 +110,8 @@ def test_statistics_reject_mixed_benchmarks() -> None:
         episodes=second.episodes,
         final_memory_count=second.final_memory_count,
         seed=second.seed,
+        configuration=None,
     )
-
     try:
         summarize_benchmark_reports((first, second))
     except ValueError as exc:
@@ -113,7 +122,6 @@ def test_statistics_reject_mixed_benchmarks() -> None:
 
 def test_statistics_validate_report_structure_before_aggregation() -> None:
     invalid_report = _report(1, float("nan"), True)
-
     try:
         summarize_benchmark_reports((invalid_report,))
     except ValueError as exc:
@@ -125,14 +133,9 @@ def test_statistics_validate_report_structure_before_aggregation() -> None:
 def test_compare_benchmark_reports_pairs_metrics_by_seed() -> None:
     baseline = (_report(1, 0.0, False), _report(2, 0.5, True))
     treatment = (_report(1, 1.0, True), _report(2, 0.5, True))
-
     comparison = compare_benchmark_reports(
-        baseline,
-        treatment,
-        baseline_label="no-memory",
-        treatment_label="memory",
+        baseline, treatment, baseline_label="no-memory", treatment_label="memory"
     )
-
     assert comparison.baseline_label == "no-memory"
     assert comparison.treatment_label == "memory"
     assert comparison.seeds == (1, 2)
@@ -144,9 +147,7 @@ def test_compare_benchmark_reports_pairs_metrics_by_seed() -> None:
 def test_compare_benchmark_reports_canonicalizes_seed_order() -> None:
     baseline = (_report(2, 0.5, True), _report(1, 0.0, False))
     treatment = (_report(1, 1.0, True), _report(2, 0.5, True))
-
     comparison = compare_benchmark_reports(baseline, treatment)
-
     assert comparison.seeds == (1, 2)
     assert comparison.success_rate_delta.mean == 0.5
 
@@ -154,7 +155,6 @@ def test_compare_benchmark_reports_canonicalizes_seed_order() -> None:
 def test_compare_benchmark_reports_rejects_unseeded_runs() -> None:
     baseline = (_unseeded_report(0.0, False),)
     treatment = (_unseeded_report(1.0, True),)
-
     try:
         compare_benchmark_reports(baseline, treatment)
     except ValueError as exc:
@@ -166,7 +166,6 @@ def test_compare_benchmark_reports_rejects_unseeded_runs() -> None:
 def test_compare_benchmark_reports_rejects_mismatched_seed_sets() -> None:
     baseline = (_report(1, 0.0, False), _report(2, 0.5, True))
     treatment = (_report(1, 1.0, True), _report(3, 0.5, True))
-
     try:
         compare_benchmark_reports(baseline, treatment)
     except ValueError as exc:
@@ -178,7 +177,6 @@ def test_compare_benchmark_reports_rejects_mismatched_seed_sets() -> None:
 def test_compare_benchmark_reports_rejects_configuration_drift() -> None:
     baseline = (_report(1, 0.0, False, max_steps=5),)
     treatment = (_report(1, 1.0, True, max_steps=10),)
-
     try:
         compare_benchmark_reports(baseline, treatment)
     except ValueError as exc:
@@ -188,9 +186,8 @@ def test_compare_benchmark_reports_rejects_configuration_drift() -> None:
 
 
 def test_compare_benchmark_reports_rejects_missing_configuration() -> None:
-    baseline = (_report(1, 0.0, False),)
-    treatment = (_report(1, 1.0, True),)
-
+    baseline = (_report(1, 0.0, False, max_steps=None),)
+    treatment = (_report(1, 1.0, True, max_steps=None),)
     try:
         compare_benchmark_reports(baseline, treatment)
     except ValueError as exc:
@@ -208,9 +205,7 @@ def test_compare_benchmark_reports_allows_policy_change() -> None:
         _report(1, 1.0, True, max_steps=5, policy_factory="tests.fixtures:treatment_policy"),
         _report(2, 0.5, True, max_steps=5, policy_factory="tests.fixtures:treatment_policy"),
     )
-
     comparison = compare_benchmark_reports(baseline, treatment)
-
     assert comparison.seeds == (1, 2)
     assert comparison.success_rate_delta.mean == 0.5
 
@@ -218,16 +213,13 @@ def test_compare_benchmark_reports_allows_policy_change() -> None:
 def test_compare_benchmark_reports_accepts_same_configuration_across_conditions() -> None:
     baseline = (_report(1, 0.0, False, max_steps=5), _report(2, 0.5, True, max_steps=5))
     treatment = (_report(1, 1.0, True, max_steps=5), _report(2, 0.5, True, max_steps=5))
-
     comparison = compare_benchmark_reports(baseline, treatment)
-
     assert comparison.seeds == (1, 2)
     assert comparison.success_rate_delta.mean == 0.5
 
 
 def test_compare_benchmark_reports_rejects_empty_labels() -> None:
     reports = (_report(1, 0.0, False),)
-
     try:
         compare_benchmark_reports(reports, reports, baseline_label=" ")
     except ValueError as exc:
@@ -238,7 +230,6 @@ def test_compare_benchmark_reports_rejects_empty_labels() -> None:
 
 def test_compare_benchmark_reports_rejects_non_string_labels() -> None:
     reports = (_report(1, 0.0, False),)
-
     try:
         compare_benchmark_reports(reports, reports, baseline_label=123)  # type: ignore[arg-type]
     except TypeError as exc:
@@ -249,7 +240,6 @@ def test_compare_benchmark_reports_rejects_non_string_labels() -> None:
 
 def test_exact_paired_sign_flip_test_matches_enumerated_two_sided_probability() -> None:
     result = exact_paired_sign_flip_test((1.0, 1.0, 1.0))
-
     assert result.observed_mean_delta == 1.0
     assert result.p_value == 0.25
     assert result.sample_size == 3
@@ -259,7 +249,6 @@ def test_exact_paired_sign_flip_test_matches_enumerated_two_sided_probability() 
 
 def test_exact_paired_sign_flip_test_ignores_zero_differences() -> None:
     result = exact_paired_sign_flip_test((1.0, 0.0, -1.0, 0.0))
-
     assert result.observed_mean_delta == 0.0
     assert result.p_value == 1.0
     assert result.sample_size == 4
@@ -269,7 +258,6 @@ def test_exact_paired_sign_flip_test_ignores_zero_differences() -> None:
 
 def test_exact_paired_sign_flip_test_returns_one_for_all_zero_deltas() -> None:
     result = exact_paired_sign_flip_test((0.0, 0.0))
-
     assert result.p_value == 1.0
     assert result.evaluated_permutations == 1
 
@@ -293,16 +281,12 @@ def test_exact_paired_sign_flip_test_rejects_empty_input() -> None:
 
 
 def test_holm_bonferroni_adjust_controls_ordered_family() -> None:
-    adjusted = holm_bonferroni_adjust(
-        {"success": 0.01, "reward": 0.04, "transfer": 0.20}
-    )
-
+    adjusted = holm_bonferroni_adjust({"success": 0.01, "reward": 0.04, "transfer": 0.20})
     assert adjusted == {"success": 0.03, "reward": 0.08, "transfer": 0.20}
 
 
 def test_holm_bonferroni_adjust_preserves_original_key_order() -> None:
     adjusted = holm_bonferroni_adjust({"reward": 0.04, "success": 0.01})
-
     assert list(adjusted) == ["reward", "success"]
 
 
