@@ -7,6 +7,7 @@ import pytest
 from experiments.runtime_provenance import (
     CLEAN_STATE,
     DIRTY_STATE,
+    RUNTIME_PROVENANCE_SCHEMA_VERSION,
     UNKNOWN_VALUE,
     collect_runtime_provenance,
 )
@@ -18,12 +19,14 @@ def test_collect_runtime_provenance_prefers_explicit_commit_and_state() -> None:
         environment={"REMEM_GIT_COMMIT": "abc123", "REMEM_GIT_STATE": DIRTY_STATE},
     )
 
+    assert provenance.schema_version == RUNTIME_PROVENANCE_SCHEMA_VERSION
     assert provenance.code_revision == "abc123"
     assert provenance.working_tree_state == DIRTY_STATE
     assert provenance.python_version
     assert provenance.platform
     assert provenance.dependency_fingerprint
     assert provenance.dependency_versions
+    assert provenance.to_dict()["schema_version"] == RUNTIME_PROVENANCE_SCHEMA_VERSION
     assert provenance.to_dict()["code_revision"] == "abc123"
     assert provenance.to_dict()["working_tree_state"] == DIRTY_STATE
 
