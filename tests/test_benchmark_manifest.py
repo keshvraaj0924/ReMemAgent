@@ -58,6 +58,22 @@ def test_verify_benchmark_artifact_rejects_mutated_report(tmp_path: Path) -> Non
         verify_benchmark_artifact(report_path, manifest)
 
 
+def test_verify_benchmark_artifact_rejects_wrong_digest_with_matching_shape(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "report.json"
+    _write_valid_report(report_path)
+    manifest = build_benchmark_artifact_manifest(report_path)
+    wrong_manifest = BenchmarkArtifactManifest(
+        schema_version=manifest.schema_version,
+        byte_count=manifest.byte_count,
+        sha256=("0" if manifest.sha256[0] != "0" else "1") + manifest.sha256[1:],
+    )
+
+    with pytest.raises(ValueError, match="integrity verification failed"):
+        verify_benchmark_artifact(report_path, wrong_manifest)
+
+
 def test_build_benchmark_artifact_manifest_rejects_invalid_schema(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
     report_path.write_text(json.dumps({"schema_version": 999}), encoding="utf-8")

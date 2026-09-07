@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import tempfile
@@ -133,7 +134,12 @@ def verify_benchmark_artifact(
     """Fail closed when a benchmark report differs from its integrity manifest."""
 
     current = build_benchmark_artifact_manifest(report_path)
-    if current != manifest:
+    if current.schema_version != manifest.schema_version or current.byte_count != manifest.byte_count:
+        raise ValueError(
+            "benchmark artifact integrity verification failed: "
+            f"expected {manifest.sha256}, found {current.sha256}"
+        )
+    if not hmac.compare_digest(current.sha256, manifest.sha256):
         raise ValueError(
             "benchmark artifact integrity verification failed: "
             f"expected {manifest.sha256}, found {current.sha256}"

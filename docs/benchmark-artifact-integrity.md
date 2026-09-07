@@ -15,7 +15,7 @@ ReMemAgent can produce measured benchmark JSON artifacts, but serialization alon
 
 `load_benchmark_artifact_manifest(path)` validates the manifest schema and required integrity fields before returning the typed manifest.
 
-`verify_benchmark_artifact(path, manifest)` repeats the report hashing process and fails closed if either the bytes or declared schema differs.
+`verify_benchmark_artifact(path, manifest)` repeats the report hashing process and fails closed if either the bytes or declared schema differs. The digest comparison uses a constant-time comparison primitive, while schema and byte-count mismatches are rejected before comparing the digest.
 
 `verify_benchmark_artifact_manifest(report_path, manifest_path)` is the complete load-and-verify operation for archive consumers. It validates the sidecar, verifies the report against it, and returns the verified metadata for downstream logging.
 
