@@ -18,6 +18,8 @@ The schema version is persisted with every record so readers can reject or migra
 
 `RuntimeProvenance` is also a validated domain object. Construction rejects unsupported schema versions, invalid working-tree states, empty textual fields, malformed dependency digests, and non-mapping dependency metadata. The dependency-version mapping is detached and normalized at construction so later mutation of caller-owned metadata cannot alter the provenance record.
 
+`RuntimeProvenance.to_dict()` preserves the typed schema: `schema_version` is an integer, `dependency_versions` is a string-to-string mapping, and the remaining provenance fields are strings. Benchmark report persistence validates those same field types and deep-copies the dependency mapping before serialization.
+
 ## Explicit CI/container inputs
 
 Controlled execution environments can set:
@@ -37,4 +39,4 @@ Benchmark CLI measured runs attach this record to their persisted report. Artifa
 
 ## Verification
 
-The unit tests cover explicit revision/state precedence, unknown Git metadata, deterministic dependency fingerprinting, clean/dirty state detection, invalid explicit states, schema-version serialization, metadata detachment, and malformed provenance field rejection.
+The unit tests cover explicit revision/state precedence, unknown Git metadata, deterministic dependency fingerprinting, clean/dirty state detection, invalid explicit states, schema-version serialization, metadata detachment, malformed provenance field rejection, and persistence of the structured provenance mapping into benchmark artifacts.
