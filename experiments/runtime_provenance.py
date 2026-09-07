@@ -22,7 +22,7 @@ SHA256_HEX_LENGTH = 64
 
 @dataclass(frozen=True, slots=True)
 class RuntimeProvenance:
-    """Immutable, validated environment metadata captured for a measured experiment."""
+    """Immutable, validated environment metadata for a measured experiment."""
 
     schema_version: int
     code_revision: str
@@ -58,12 +58,18 @@ class RuntimeProvenance:
         _validate_sha256("dependency_fingerprint", self.dependency_fingerprint)
         if not isinstance(self.dependency_versions, Mapping):
             raise TypeError("dependency_versions must be a mapping")
+
         detached_versions: dict[str, str] = {}
         for name, dependency_version in self.dependency_versions.items():
             _require_non_empty_string("dependency name", name)
-            _require_non_empty_string(f"dependency version for {name!r}", dependency_version)
+            _require_non_empty_string(
+                f"dependency version for {name!r}", dependency_version
+            )
             detached_versions[name] = dependency_version
-        object.__setattr__(self, "dependency_versions", dict(sorted(detached_versions.items(), key=lambda item: item[0].lower())))
+        normalized_versions = dict(
+            sorted(detached_versions.items(), key=lambda item: item[0].lower())
+        )
+        object.__setattr__(self, "dependency_versions", normalized_versions)
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-compatible representation."""
@@ -202,7 +208,8 @@ def _validate_sha256(field_name: str, value: object) -> None:
     """Validate a canonical lowercase-or-uppercase SHA-256 hexadecimal digest."""
 
     _require_non_empty_string(field_name, value)
-    if len(value) != SHA256_HEX_LENGTH or any(character not in "0123456789abcdefABCDEF" for character in value):
+    is_hex = all(character in "0123456789abcdefABCDEF" for character in value)
+    if len(value) != SHA256_HEX_LENGTH or not is_hex:
         raise ValueError(f"{field_name} must be a 64-character hexadecimal SHA-256 digest")
 
 
