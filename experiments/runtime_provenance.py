@@ -1,4 +1,4 @@
-"""Runtime metadata used to make measured experiments auditable."""
+"""Stable runtime metadata used to make measured experiments auditable."""
 
 from __future__ import annotations
 
@@ -17,11 +17,12 @@ UNKNOWN_VALUE = "unknown"
 CLEAN_STATE = "clean"
 DIRTY_STATE = "dirty"
 VALID_WORKING_TREE_STATES = frozenset({CLEAN_STATE, DIRTY_STATE, UNKNOWN_VALUE})
+SHA256_HEX_LENGTH = 64
 
 
 @dataclass(frozen=True, slots=True)
 class RuntimeProvenance:
-    """Environment metadata captured alongside a measured experiment."""
+    """Immutable, validated environment metadata captured for a measured experiment."""
 
     schema_version: int
     code_revision: str
@@ -31,6 +32,38 @@ class RuntimeProvenance:
     package_version: str
     dependency_fingerprint: str
     dependency_versions: Mapping[str, str]
+
+    def __post_init__(self) -> None:
+        """Validate and detach provenance metadata at the domain boundary."""
+
+        if not isinstance(self.schema_version, int) or isinstance(self.schema_version, bool):
+            raise TypeError("schema_version must be an integer")
+        if self.schema_version != RUNTIME_PROVENANCE_SCHEMA_VERSION:
+            raise ValueError(
+                "unsupported runtime provenance schema version: "
+                f"{self.schema_version}"
+            )
+        _require_non_empty_string("code_revision", self.code_revision)
+        if self.working_tree_state not in VALID_WORKING_TREE_STATES:
+            raise ValueError(
+                "working_tree_state must be one of: "
+                f"{', '.join(sorted(VALID_WORKING_TREE_STATES))}"
+            )
+        for field_name, value in (
+            ("python_version", self.python_version),
+            ("platform", self.platform),
+            ("package_version", self.package_version),
+        ):
+            _require_non_empty_string(field_name, value)
+        _validate_sha256("dependency_fingerprint", self.dependency_fingerprint)
+        if not isinstance(self.dependency_versions, Mapping):
+            raise TypeError("dependency_versions must be a mapping")
+        detached_versions: dict[str, str] = {}
+        for name, dependency_version in self.dependency_versions.items():
+            _require_non_empty_string("dependency name", name)
+            _require_non_empty_string(f"dependency version for {name!r}", dependency_version)
+            detached_versions[name] = dependency_version
+        object.__setattr__(self, "dependency_versions", dict(sorted(detached_versions.items(), key=lambda item: item[0].lower())))
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-compatible representation."""
@@ -154,6 +187,23 @@ def _dependency_fingerprint(dependency_versions: Mapping[str, str]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _require_non_empty_string(field_name: str, value: object) -> None:
+    """Reject values that cannot serve as stable textual provenance fields."""
+
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    if not value:
+        raise ValueError(f"{field_name} must not be empty")
+
+
+def _validate_sha256(field_name: str, value: object) -> None:
+    """Validate a canonical lowercase-or-uppercase SHA-256 hexadecimal digest."""
+
+    _require_non_empty_string(field_name, value)
+    if len(value) != SHA256_HEX_LENGTH or any(character not in "0123456789abcdefABCDEF" for character in value):
+        raise ValueError(f"{field_name} must be a 64-character hexadecimal SHA-256 digest")
 
 
 __all__ = [
