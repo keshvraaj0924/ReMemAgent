@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Mapping
 
 PACKAGE_NAME = "rememagent"
+RUNTIME_PROVENANCE_SCHEMA_VERSION = 1
 UNKNOWN_VALUE = "unknown"
 CLEAN_STATE = "clean"
 DIRTY_STATE = "dirty"
@@ -22,6 +23,7 @@ VALID_WORKING_TREE_STATES = frozenset({CLEAN_STATE, DIRTY_STATE, UNKNOWN_VALUE})
 class RuntimeProvenance:
     """Environment metadata captured alongside a measured experiment."""
 
+    schema_version: int
     code_revision: str
     working_tree_state: str
     python_version: str
@@ -61,6 +63,7 @@ def collect_runtime_provenance(
     working_tree_state = _resolve_working_tree_state(environment_values, repository)
     dependency_versions = _dependency_versions()
     return RuntimeProvenance(
+        schema_version=RUNTIME_PROVENANCE_SCHEMA_VERSION,
         code_revision=code_revision,
         working_tree_state=working_tree_state,
         python_version=platform.python_version(),
@@ -157,6 +160,7 @@ __all__ = [
     "CLEAN_STATE",
     "DIRTY_STATE",
     "RuntimeProvenance",
+    "RUNTIME_PROVENANCE_SCHEMA_VERSION",
     "UNKNOWN_VALUE",
     "VALID_WORKING_TREE_STATES",
     "collect_runtime_provenance",
