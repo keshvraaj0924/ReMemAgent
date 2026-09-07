@@ -9,8 +9,11 @@ from experiments.runtime_provenance import (
     DIRTY_STATE,
     RUNTIME_PROVENANCE_SCHEMA_VERSION,
     UNKNOWN_VALUE,
+    RuntimeProvenance,
     collect_runtime_provenance,
 )
+
+VALID_DEPENDENCY_FINGERPRINT = "a" * 64
 
 
 def test_collect_runtime_provenance_prefers_explicit_commit_and_state() -> None:
@@ -81,3 +84,56 @@ def test_collect_runtime_provenance_accepts_unknown_explicit_state() -> None:
     )
 
     assert provenance.working_tree_state == UNKNOWN_VALUE
+
+
+def test_runtime_provenance_detaches_dependency_versions() -> None:
+    dependencies = {"zeta": "2", "alpha": "1"}
+    provenance = RuntimeProvenance(
+        schema_version=RUNTIME_PROVENANCE_SCHEMA_VERSION,
+        code_revision="abc123",
+        working_tree_state=CLEAN_STATE,
+        python_version="3.12.0",
+        platform="test-platform",
+        package_version="0.1.0",
+        dependency_fingerprint=VALID_DEPENDENCY_FINGERPRINT,
+        dependency_versions=dependencies,
+    )
+
+    dependencies["alpha"] = "changed"
+
+    assert provenance.dependency_versions == {"alpha": "1", "zeta": "2"}
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value", "exception"),
+    [
+        ("schema_version", True, TypeError),
+        ("schema_version", 999, ValueError),
+        ("code_revision", "", ValueError),
+        ("working_tree_state", "modified", ValueError),
+        ("python_version", "", ValueError),
+        ("platform", "", ValueError),
+        ("package_version", "", ValueError),
+        ("dependency_fingerprint", "not-a-digest", ValueError),
+        ("dependency_versions", [], TypeError),
+    ],
+)
+def test_runtime_provenance_rejects_malformed_fields(
+    field_name: str,
+    value: object,
+    exception: type[Exception],
+) -> None:
+    values: dict[str, object] = {
+        "schema_version": RUNTIME_PROVENANCE_SCHEMA_VERSION,
+        "code_revision": "abc123",
+        "working_tree_state": CLEAN_STATE,
+        "python_version": "3.12.0",
+        "platform": "test-platform",
+        "package_version": "0.1.0",
+        "dependency_fingerprint": VALID_DEPENDENCY_FINGERPRINT,
+        "dependency_versions": {"pytest": "8.0"},
+    }
+    values[field_name] = value
+
+    with pytest.raises(exception):
+        RuntimeProvenance(**values)
