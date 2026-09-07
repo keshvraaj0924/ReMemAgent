@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any, Protocol
@@ -23,7 +24,7 @@ class StepResult:
     info: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate values and detach the mutable metadata container."""
+        """Validate values and detach nested mutable metadata."""
 
         if not isinstance(self.observation, str):
             raise TypeError("observation must be a string")
@@ -37,7 +38,7 @@ class StepResult:
             raise TypeError("truncated must be a boolean")
         if not isinstance(self.info, dict):
             raise TypeError("info must be a dictionary")
-        object.__setattr__(self, "info", dict(self.info))
+        object.__setattr__(self, "info", deepcopy(self.info))
 
     @property
     def done(self) -> bool:
