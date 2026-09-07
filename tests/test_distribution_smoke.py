@@ -7,6 +7,14 @@ import sys
 from pathlib import Path
 
 
+CONSOLE_SCRIPTS = (
+    "remem-ablation",
+    "remem-benchmark",
+    "remem-paired-benchmark",
+    "remem-verify-benchmark",
+)
+
+
 def _run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     """Run a subprocess and return captured text output."""
     return subprocess.run(
@@ -26,7 +34,7 @@ def _venv_python(venv_path: Path) -> Path:
 
 
 def test_built_wheel_imports_without_source_checkout(tmp_path: Path) -> None:
-    """Ensure the distribution contains both runtime packages and console entry points."""
+    """Ensure the distribution contains runtime packages and all console entry points."""
     repository_root = Path(__file__).resolve().parents[1]
     distribution_dir = tmp_path / "dist"
     virtual_environment = tmp_path / "venv"
@@ -76,7 +84,7 @@ def test_built_wheel_imports_without_source_checkout(tmp_path: Path) -> None:
     )
     assert smoke.returncode == 0
 
-    for executable in ("remem-ablation", "remem-benchmark", "remem-paired-benchmark"):
+    for executable in CONSOLE_SCRIPTS:
         executable_path = isolated_python.parent / executable
         if sys.platform == "win32":
             executable_path = executable_path.with_suffix(".exe")
