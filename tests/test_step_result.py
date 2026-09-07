@@ -77,6 +77,15 @@ def test_step_result_requires_dictionary_info() -> None:
         )
 
 
+def test_step_result_detaches_info_mapping() -> None:
+    info = {"score": 1}
+    result = StepResult("state", 0.0, False, False, info)
+
+    info["score"] = 2
+
+    assert result.info == {"score": 1}
+
+
 def test_step_result_done_reflects_terminal_or_truncated_state() -> None:
     terminated = StepResult("state", 0.0, True, False)
     truncated = StepResult("state", 0.0, False, True)
