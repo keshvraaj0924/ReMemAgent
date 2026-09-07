@@ -1,4 +1,4 @@
-"""Integration coverage for the installable wheel artifact."""
+"""Integration coverage for installable distribution artifacts."""
 
 from __future__ import annotations
 
@@ -44,13 +44,57 @@ def _declared_console_scripts(pyproject_path: Path) -> tuple[str, ...]:
     return tuple(sorted(scripts))
 
 
+def _assert_installed_distribution_smoke(
+    distribution: Path,
+    *,
+    repository_root: Path,
+    working_directory: Path,
+    virtual_environment: Path,
+    console_scripts: tuple[str, ...],
+) -> None:
+    """Install one distribution artifact into isolation and exercise its public package surface."""
+    _run([sys.executable, "-m", "venv", str(virtual_environment)], cwd=repository_root)
+    isolated_python = _venv_python(virtual_environment)
+    _run(
+        [
+            str(isolated_python),
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--disable-pip-version-check",
+            str(distribution),
+        ],
+        cwd=repository_root,
+    )
+
+    smoke = _run(
+        [
+            str(isolated_python),
+            "-c",
+            (
+                "import remem, experiments; "
+                "assert remem.__name__ == 'remem'; "
+                "assert experiments.__name__ == 'experiments'"
+            ),
+        ],
+        cwd=working_directory,
+    )
+    assert smoke.returncode == 0
+
+    for executable in console_scripts:
+        executable_path = isolated_python.parent / executable
+        if sys.platform == "win32":
+            executable_path = executable_path.with_suffix(".exe")
+        _run([str(executable_path), "--help"], cwd=working_directory)
+
+
 def test_built_wheel_imports_without_source_checkout(tmp_path: Path) -> None:
-    """Ensure the distribution contains runtime packages and all declared console entry points."""
+    """Ensure the wheel contains runtime packages and all declared console entry points."""
     repository_root = Path(__file__).resolve().parents[1]
     distribution_dir = tmp_path / "dist"
-    virtual_environment = tmp_path / "venv"
+    virtual_environment = tmp_path / "wheel-venv"
     distribution_dir.mkdir()
-
     console_scripts = _declared_console_scripts(repository_root / "pyproject.toml")
 
     _run(
@@ -67,38 +111,41 @@ def test_built_wheel_imports_without_source_checkout(tmp_path: Path) -> None:
 
     wheels = sorted(distribution_dir.glob("*.whl"))
     assert len(wheels) == 1
+    _assert_installed_distribution_smoke(
+        wheels[0],
+        repository_root=repository_root,
+        working_directory=tmp_path,
+        virtual_environment=virtual_environment,
+        console_scripts=console_scripts,
+    )
 
-    _run([sys.executable, "-m", "venv", str(virtual_environment)], cwd=repository_root)
-    isolated_python = _venv_python(virtual_environment)
+
+def test_built_source_distribution_imports_without_source_checkout(tmp_path: Path) -> None:
+    """Ensure the source distribution can be installed without relying on the checkout."""
+    repository_root = Path(__file__).resolve().parents[1]
+    distribution_dir = tmp_path / "dist"
+    virtual_environment = tmp_path / "sdist-venv"
+    distribution_dir.mkdir()
+    console_scripts = _declared_console_scripts(repository_root / "pyproject.toml")
+
     _run(
         [
-            str(isolated_python),
+            sys.executable,
             "-m",
-            "pip",
-            "install",
-            "--no-deps",
-            "--disable-pip-version-check",
-            str(wheels[0]),
+            "build",
+            "--sdist",
+            "--outdir",
+            str(distribution_dir),
         ],
         cwd=repository_root,
     )
 
-    smoke = _run(
-        [
-            str(isolated_python),
-            "-c",
-            (
-                "import remem, experiments; "
-                "assert remem.__name__ == 'remem'; "
-                "assert experiments.__name__ == 'experiments'"
-            ),
-        ],
-        cwd=tmp_path,
+    source_distributions = sorted(distribution_dir.glob("*.tar.gz"))
+    assert len(source_distributions) == 1
+    _assert_installed_distribution_smoke(
+        source_distributions[0],
+        repository_root=repository_root,
+        working_directory=tmp_path,
+        virtual_environment=virtual_environment,
+        console_scripts=console_scripts,
     )
-    assert smoke.returncode == 0
-
-    for executable in console_scripts:
-        executable_path = isolated_python.parent / executable
-        if sys.platform == "win32":
-            executable_path = executable_path.with_suffix(".exe")
-        _run([str(executable_path), "--help"], cwd=tmp_path)
