@@ -111,7 +111,7 @@ ReMemAgent/
 
 **Active research prototype.**
 
-The deterministic research core and its integration contracts are implemented and covered by the repository quality suite. The latest verified GitHub `Quality` run is green at commit `e9f02fc` (run 305).
+The deterministic research core and integration contracts are implemented and covered by the repository quality suite. A historical GitHub `Quality` run at commit `e9f02fc` (run 305) provides the last explicitly verified engineering baseline. Later commits have changed the quality, packaging, runtime-contract, and experiment-integrity surfaces, so the current branch head requires a fresh successful workflow before it can be described as green.
 
 This is an engineering verification statement, not a scientific result. The repository does **not** claim benchmark improvements or production readiness until the corresponding real-world experiments have been executed, repeated, and reproduced.
 
