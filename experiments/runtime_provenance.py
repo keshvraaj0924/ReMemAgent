@@ -72,9 +72,11 @@ class RuntimeProvenance:
         object.__setattr__(self, "dependency_versions", normalized_versions)
 
     def to_dict(self) -> dict[str, object]:
-        """Return a JSON-compatible representation."""
+        """Return a JSON-compatible representation preserving dependency metadata."""
 
-        return asdict(self)
+        payload = asdict(self)
+        payload["dependency_versions"] = dict(self.dependency_versions)
+        return payload
 
 
 def collect_runtime_provenance(
@@ -82,19 +84,7 @@ def collect_runtime_provenance(
     repository_path: Path | None = None,
     environment: Mapping[str, str] | None = None,
 ) -> RuntimeProvenance:
-    """Collect code and runtime metadata without requiring benchmark packages.
-
-    ``REMEM_GIT_COMMIT`` can be supplied by CI or a container build. When it is
-    absent, a repository checkout is inspected with ``git rev-parse``. Failure
-    to resolve a revision is represented explicitly as ``"unknown"`` rather
-    than inventing a revision.
-
-    ``REMEM_GIT_STATE`` may be supplied by a controlled execution environment.
-    Otherwise the checkout is inspected with ``git status --porcelain``. An
-    unknown state is retained explicitly when the repository cannot be probed.
-    Invalid explicit states are rejected rather than being persisted as if they
-    were authoritative provenance.
-    """
+    """Collect code and runtime metadata without requiring benchmark packages."""
 
     environment_values = environment or {}
     repository = repository_path or Path.cwd()
@@ -114,8 +104,7 @@ def collect_runtime_provenance(
 
 
 def _resolve_working_tree_state(
-    environment: Mapping[str, str],
-    repository_path: Path,
+    environment: Mapping[str, str], repository_path: Path
 ) -> str:
     """Resolve an explicit or checkout-derived working-tree state."""
 
