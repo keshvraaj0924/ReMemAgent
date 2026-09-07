@@ -35,7 +35,6 @@ def test_save_repeated_benchmark_reports_preserves_seed_order(tmp_path) -> None:
     output_path = save_repeated_benchmark_reports(reports, tmp_path / "repeated.json")
 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
-
     assert payload["benchmark_name"] == "alfworld-smoke"
     assert payload["seeds"] == [0, 10]
     assert payload["reports"][0]["seed"] == 0
@@ -56,7 +55,12 @@ def test_save_repeated_benchmark_reports_rejects_mixed_benchmarks(tmp_path) -> N
     second = replace(
         first,
         benchmark_name="webshop-smoke",
-        configuration=replace(first.configuration, benchmark_name="webshop-smoke"),
+        seed=10,
+        configuration=replace(
+            first.configuration,
+            benchmark_name="webshop-smoke",
+            seed=10,
+        ),
     )
 
     with pytest.raises(ValueError, match="^repeated benchmark reports must use one benchmark name$"):
@@ -105,4 +109,4 @@ def test_save_repeated_benchmark_reports_accepts_matching_statistics(tmp_path) -
     )
 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
-    assert payload["statistics"] == statistics
+    assert payload["statistics"] == json.loads(json.dumps(statistics))
