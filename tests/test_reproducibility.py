@@ -1,5 +1,9 @@
 """Tests for reproducible experiment fingerprints."""
 
+import math
+
+import pytest
+
 from experiments.reproducibility import fingerprint_cases, fingerprint_experiment_inputs
 from experiments.synthetic_negative_transfer import BenchmarkCase
 
@@ -69,3 +73,34 @@ def test_experiment_fingerprint_changes_when_cases_change() -> None:
     assert fingerprint_experiment_inputs(original, configuration) != fingerprint_experiment_inputs(
         changed, configuration
     )
+
+
+def test_experiment_fingerprint_normalizes_nested_mapping_order() -> None:
+    cases = [BenchmarkCase("a", 0.8, 0.4)]
+    first = {"policy": {"temperature": 0.2, "top_k": 5}}
+    second = {"policy": {"top_k": 5, "temperature": 0.2}}
+
+    assert fingerprint_experiment_inputs(cases, first) == fingerprint_experiment_inputs(
+        cases, second
+    )
+
+
+def test_experiment_fingerprint_rejects_non_string_configuration_keys() -> None:
+    cases = [BenchmarkCase("a", 0.8, 0.4)]
+
+    with pytest.raises(TypeError, match="keys must be strings"):
+        fingerprint_experiment_inputs(cases, {1: "invalid"})  # type: ignore[dict-item]
+
+
+def test_experiment_fingerprint_rejects_non_finite_configuration_values() -> None:
+    cases = [BenchmarkCase("a", 0.8, 0.4)]
+
+    with pytest.raises(ValueError, match="finite floats"):
+        fingerprint_experiment_inputs(cases, {"temperature": math.inf})
+
+
+def test_experiment_fingerprint_rejects_unsupported_nested_values() -> None:
+    cases = [BenchmarkCase("a", 0.8, 0.4)]
+
+    with pytest.raises(TypeError, match="unsupported JSON value"):
+        fingerprint_experiment_inputs(cases, {"scheduler": {"steps": (1, 2)}})  # type: ignore[dict-item]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
 from typing import TypeAlias
@@ -36,13 +37,13 @@ def fingerprint_experiment_inputs(
 ) -> str:
     """Return a stable fingerprint for cases, configuration, and protocol versions.
 
-    Configuration is canonicalized with sorted mapping keys while benchmark
-    case order remains significant. Protocol and heuristic versions are part
-    of the identity so changes to experiment semantics cannot silently reuse
-    an old fingerprint.
+    Configuration is recursively validated into the JSON subset used for the
+    fingerprint. This prevents unsupported mapping keys, non-finite floats, or
+    nested non-JSON values from producing ambiguous or runtime-dependent
+    experiment identities.
     """
 
-    normalized_configuration = dict(configuration)
+    normalized_configuration = _normalize_json_object(configuration, "configuration")
     payload: dict[str, JsonValue] = {
         "schema_version": EXPERIMENT_SCHEMA_VERSION,
         "protocol_version": EXPERIMENT_PROTOCOL_VERSION,
@@ -63,6 +64,39 @@ def _case_to_json(case: BenchmarkCase) -> dict[str, JsonValue]:
         "memory_id": case.memory_id,
         "transfer_success": case.transfer_success,
     }
+
+
+def _normalize_json_object(
+    value: Mapping[str, JsonValue],
+    path: str,
+) -> dict[str, JsonValue]:
+    """Validate and recursively normalize a JSON object for hashing."""
+
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{path} must be a mapping")
+
+    normalized: dict[str, JsonValue] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise TypeError(f"{path} keys must be strings")
+        normalized[key] = _normalize_json_value(item, f"{path}.{key}")
+    return normalized
+
+
+def _normalize_json_value(value: JsonValue, path: str) -> JsonValue:
+    """Validate one JSON-compatible value and recursively normalize children."""
+
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{path} must contain finite floats")
+        return value
+    if isinstance(value, Mapping):
+        return _normalize_json_object(value, path)
+    if isinstance(value, list):
+        return [_normalize_json_value(item, f"{path}[{index}]") for index, item in enumerate(value)]
+    raise TypeError(f"{path} contains unsupported JSON value: {type(value).__name__}")
 
 
 def _fingerprint(payload: JsonObject) -> str:
