@@ -4,15 +4,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
-
-
-CONSOLE_SCRIPTS = (
-    "remem-ablation",
-    "remem-benchmark",
-    "remem-paired-benchmark",
-    "remem-verify-benchmark",
-)
 
 
 def _run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -33,12 +26,27 @@ def _venv_python(venv_path: Path) -> Path:
     return venv_path / executable_dir / executable_name
 
 
+def _declared_console_scripts(pyproject_path: Path) -> tuple[str, ...]:
+    """Read the shipped console-script names from the packaging contract."""
+    with pyproject_path.open("rb") as pyproject_file:
+        metadata = tomllib.load(pyproject_file)
+
+    scripts = metadata["project"]["scripts"]
+    if not isinstance(scripts, dict) or not scripts:
+        raise AssertionError("pyproject.toml must declare at least one console script")
+    if not all(isinstance(name, str) and name for name in scripts):
+        raise AssertionError("console-script names must be non-empty strings")
+    return tuple(sorted(scripts))
+
+
 def test_built_wheel_imports_without_source_checkout(tmp_path: Path) -> None:
-    """Ensure the distribution contains runtime packages and all console entry points."""
+    """Ensure the distribution contains runtime packages and all declared console entry points."""
     repository_root = Path(__file__).resolve().parents[1]
     distribution_dir = tmp_path / "dist"
     virtual_environment = tmp_path / "venv"
     distribution_dir.mkdir()
+
+    console_scripts = _declared_console_scripts(repository_root / "pyproject.toml")
 
     _run(
         [
@@ -84,7 +92,7 @@ def test_built_wheel_imports_without_source_checkout(tmp_path: Path) -> None:
     )
     assert smoke.returncode == 0
 
-    for executable in CONSOLE_SCRIPTS:
+    for executable in console_scripts:
         executable_path = isolated_python.parent / executable
         if sys.platform == "win32":
             executable_path = executable_path.with_suffix(".exe")
