@@ -36,6 +36,11 @@ def _declared_console_scripts(pyproject_path: Path) -> tuple[str, ...]:
         raise AssertionError("pyproject.toml must declare at least one console script")
     if not all(isinstance(name, str) and name for name in scripts):
         raise AssertionError("console-script names must be non-empty strings")
+    if not all(
+        isinstance(target, str) and target.count(":") == 1 and all(target.split(":"))
+        for target in scripts.values()
+    ):
+        raise AssertionError("console-script targets must use a non-empty module:attribute form")
     return tuple(sorted(scripts))
 
 
