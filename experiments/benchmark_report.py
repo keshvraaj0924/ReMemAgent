@@ -50,7 +50,7 @@ def save_benchmark_report(
     report: BenchmarkRunReport,
     output_path: Path,
     *,
-    runtime_provenance: Mapping[str, str] | None = None,
+    runtime_provenance: Mapping[str, object] | None = None,
 ) -> Path:
     """Persist a structurally valid benchmark report with optional provenance."""
 
@@ -65,16 +65,10 @@ def save_repeated_benchmark_reports(
     reports: tuple[BenchmarkRunReport, ...] | list[BenchmarkRunReport],
     output_path: Path,
     *,
-    runtime_provenance: Mapping[str, str] | None = None,
+    runtime_provenance: Mapping[str, object] | None = None,
     statistics: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Persist independent seed reports and optional descriptive statistics.
-
-    Repeated reports must describe the same experimental configuration apart
-    from their independent seed. If statistics are supplied, they must be the
-    deterministic seed-level summary of these exact reports; callers cannot
-    attach stale or unrelated aggregate values to the artifact.
-    """
+    """Persist independent seed reports and optional descriptive statistics."""
 
     selected_reports = tuple(reports)
     if not selected_reports:
@@ -123,15 +117,9 @@ def save_paired_benchmark_result(
     comparison: BenchmarkConditionComparison,
     output_path: Path,
     *,
-    runtime_provenance: Mapping[str, str] | None = None,
+    runtime_provenance: Mapping[str, object] | None = None,
 ) -> Path:
-    """Persist paired condition reports and their descriptive comparison.
-
-    The supplied comparison is treated as derived artifact data, not trusted
-    input. It must exactly match a fresh paired comparison of the reports being
-    persisted, preventing stale or unrelated summaries from being attached to
-    measured evidence.
-    """
+    """Persist paired condition reports and their descriptive comparison."""
 
     baseline = _validate_paired_report_collection(baseline_reports, "baseline")
     treatment = _validate_paired_report_collection(treatment_reports, "treatment")
@@ -255,20 +243,50 @@ def _validate_repeated_statistics(
         raise ValueError("statistics must exactly match the supplied benchmark reports")
 
 
-def _normalize_runtime_provenance(runtime_provenance: Mapping[str, str]) -> dict[str, str]:
-    """Validate and detach string runtime provenance before artifact persistence."""
+def _normalize_runtime_provenance(
+    runtime_provenance: Mapping[str, object],
+) -> dict[str, object]:
+    """Validate and detach structured runtime provenance before persistence."""
 
     if not isinstance(runtime_provenance, Mapping):
-        raise TypeError("runtime_provenance must be a mapping of strings")
+        raise TypeError("runtime_provenance must be a mapping")
 
-    normalized: dict[str, str] = {}
+    normalized: dict[str, object] = {}
     for key, value in runtime_provenance.items():
         if not isinstance(key, str) or not key.strip():
             raise ValueError("runtime_provenance keys must be non-empty strings")
-        if not isinstance(value, str):
-            raise TypeError("runtime_provenance values must be strings")
-        normalized[key] = value
+        normalized[key] = _normalize_provenance_value(value, key)
     return normalized
+
+
+def _normalize_provenance_value(value: object, field_name: str) -> object:
+    """Validate JSON-compatible provenance values and detach mappings/lists."""
+
+    if isinstance(value, str) or value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not __import__("math").isfinite(value):
+            raise ValueError(f"runtime_provenance field {field_name!r} must be finite")
+        return value
+    if isinstance(value, Mapping):
+        normalized_mapping: dict[str, object] = {}
+        for key, nested_value in value.items():
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError(
+                    f"runtime_provenance field {field_name!r} contains a non-string mapping key"
+                )
+            normalized_mapping[key] = _normalize_provenance_value(
+                nested_value, f"{field_name}.{key}"
+            )
+        return dict(sorted(normalized_mapping.items(), key=lambda item: item[0].lower()))
+    if isinstance(value, (list, tuple)):
+        return [_normalize_provenance_value(item, field_name) for item in value]
+    raise TypeError(
+        f"runtime_provenance field {field_name!r} contains unsupported value type "
+        f"{type(value).__name__}"
+    )
 
 
 def _seed_sort_key(report: BenchmarkRunReport) -> int:
