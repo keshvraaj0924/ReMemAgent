@@ -82,14 +82,38 @@ def test_build_benchmark_artifact_manifest_rejects_invalid_schema(tmp_path: Path
         build_benchmark_artifact_manifest(report_path)
 
 
+def test_benchmark_artifact_manifest_rejects_invalid_byte_count() -> None:
+    with pytest.raises(ValueError, match="byte count"):
+        BenchmarkArtifactManifest(schema_version=1, byte_count=-1, sha256="0" * 64)
+
+
+def test_benchmark_artifact_manifest_rejects_noncanonical_digest() -> None:
+    with pytest.raises(ValueError, match="sha256"):
+        BenchmarkArtifactManifest(schema_version=1, byte_count=1, sha256="A" * 64)
+
+
+def test_benchmark_artifact_manifest_rejects_boolean_schema() -> None:
+    with pytest.raises(ValueError, match="schema version"):
+        BenchmarkArtifactManifest(schema_version=True, byte_count=1, sha256="0" * 64)
+
+
+def test_benchmark_artifact_manifest_rejects_unsupported_schema() -> None:
+    with pytest.raises(ValueError, match="unsupported benchmark artifact report schema version"):
+        BenchmarkArtifactManifest(schema_version=999, byte_count=1, sha256="0" * 64)
+
+
 def test_verify_benchmark_artifact_rejects_wrong_manifest(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
     _write_valid_report(report_path)
-    manifest = BenchmarkArtifactManifest(schema_version=1, byte_count=0, sha256="0" * 64)
+    manifest = build_benchmark_artifact_manifest(report_path)
+    wrong_manifest = BenchmarkArtifactManifest(
+        schema_version=manifest.schema_version,
+        byte_count=manifest.byte_count,
+        sha256="0" * 64,
+    )
 
-    verify_error = pytest.raises(ValueError, match="integrity verification failed")
-    with verify_error:
-        verify_benchmark_artifact(report_path, manifest)
+    with pytest.raises(ValueError, match="integrity verification failed"):
+        verify_benchmark_artifact(report_path, wrong_manifest)
 
 
 def test_save_and_load_benchmark_artifact_manifest_round_trip(tmp_path: Path) -> None:
