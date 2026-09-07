@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import tempfile
 from dataclasses import asdict, replace
@@ -246,7 +247,7 @@ def _validate_repeated_statistics(
 def _normalize_runtime_provenance(
     runtime_provenance: Mapping[str, object],
 ) -> dict[str, object]:
-    """Validate and detach structured runtime provenance before persistence."""
+    """Validate and detach the structured runtime provenance schema."""
 
     if not isinstance(runtime_provenance, Mapping):
         raise TypeError("runtime_provenance must be a mapping")
@@ -255,38 +256,33 @@ def _normalize_runtime_provenance(
     for key, value in runtime_provenance.items():
         if not isinstance(key, str) or not key.strip():
             raise ValueError("runtime_provenance keys must be non-empty strings")
-        normalized[key] = _normalize_provenance_value(value, key)
+        if key == "schema_version":
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise TypeError("runtime_provenance schema_version must be an integer")
+            normalized[key] = value
+        elif key == "dependency_versions":
+            normalized[key] = _normalize_dependency_versions(value)
+        else:
+            if not isinstance(value, str):
+                raise TypeError("runtime_provenance values must be strings")
+            normalized[key] = value
     return normalized
 
 
-def _normalize_provenance_value(value: object, field_name: str) -> object:
-    """Validate JSON-compatible provenance values and detach mappings/lists."""
+def _normalize_dependency_versions(value: object) -> dict[str, str]:
+    """Validate and detach installed dependency version metadata."""
 
-    if isinstance(value, str) or value is None or isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        if not __import__("math").isfinite(value):
-            raise ValueError(f"runtime_provenance field {field_name!r} must be finite")
-        return value
-    if isinstance(value, Mapping):
-        normalized_mapping: dict[str, object] = {}
-        for key, nested_value in value.items():
-            if not isinstance(key, str) or not key.strip():
-                raise ValueError(
-                    f"runtime_provenance field {field_name!r} contains a non-string mapping key"
-                )
-            normalized_mapping[key] = _normalize_provenance_value(
-                nested_value, f"{field_name}.{key}"
-            )
-        return dict(sorted(normalized_mapping.items(), key=lambda item: item[0].lower()))
-    if isinstance(value, (list, tuple)):
-        return [_normalize_provenance_value(item, field_name) for item in value]
-    raise TypeError(
-        f"runtime_provenance field {field_name!r} contains unsupported value type "
-        f"{type(value).__name__}"
-    )
+    if not isinstance(value, Mapping):
+        raise TypeError("runtime_provenance dependency_versions must be a mapping")
+
+    normalized: dict[str, str] = {}
+    for name, dependency_version in value.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("runtime dependency names must be non-empty strings")
+        if not isinstance(dependency_version, str) or not dependency_version:
+            raise TypeError("runtime dependency versions must be strings")
+        normalized[name] = dependency_version
+    return dict(sorted(normalized.items(), key=lambda item: item[0].lower()))
 
 
 def _seed_sort_key(report: BenchmarkRunReport) -> int:
