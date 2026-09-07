@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from experiments.benchmark_statistics import (
     BenchmarkConditionComparison,
@@ -12,6 +12,8 @@ from experiments.benchmark_statistics import (
 from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
     run_repeated_external_benchmarks,
+    validate_external_benchmark,
+    validate_seed_sequence,
 )
 from experiments.external_preflight import validate_repeated_external_benchmark_runtime
 from remem.benchmark import BenchmarkRunReport
@@ -36,14 +38,17 @@ def run_paired_external_benchmarks(
 ) -> PairedBenchmarkResult:
     """Run two policy conditions on the same independent seed set.
 
-    Only the policy specification may differ between conditions. Environment,
-    evaluation, episode-count, step-limit, and trust configuration are held
-    fixed so the resulting reports form a valid paired experimental design.
+    All callable and pairing contracts are validated before either condition
+    starts. This prevents a malformed treatment configuration from consuming
+    baseline episodes and leaving an incomplete paired experiment behind.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
-    baseline_reports = run_repeated_external_benchmarks(baseline_spec, seeds)
-    treatment_reports = run_repeated_external_benchmarks(treatment_spec, seeds)
+    selected_seeds = validate_seed_sequence(seeds)
+    validate_external_benchmark(baseline_spec)
+    validate_external_benchmark(treatment_spec)
+    baseline_reports = run_repeated_external_benchmarks(baseline_spec, selected_seeds)
+    treatment_reports = run_repeated_external_benchmarks(treatment_spec, selected_seeds)
     comparison = compare_benchmark_reports(
         baseline_reports,
         treatment_reports,
