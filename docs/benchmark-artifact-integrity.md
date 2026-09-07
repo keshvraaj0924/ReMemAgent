@@ -4,6 +4,8 @@ ReMemAgent can produce measured benchmark JSON artifacts, but serialization alon
 
 ## Contract
 
+`BenchmarkArtifactManifest` is the typed integrity boundary. Construction rejects unsupported report schema versions, negative/non-integer byte counts, and non-canonical SHA-256 digests. This prevents malformed provenance metadata from entering downstream verification code.
+
 `build_benchmark_artifact_manifest(path)`:
 
 1. reads the exact bytes on disk;
@@ -15,7 +17,7 @@ ReMemAgent can produce measured benchmark JSON artifacts, but serialization alon
 
 `load_benchmark_artifact_manifest(path)` validates the manifest schema and required integrity fields before returning the typed manifest.
 
-`verify_benchmark_artifact(path, manifest)` repeats the report hashing process and fails closed if either the bytes or declared schema differs. The digest comparison uses a constant-time comparison primitive, while schema and byte-count mismatches are rejected before comparing the digest.
+`verify_benchmark_artifact(path, manifest)` repeats the report hashing process and fails closed if either the bytes or declared schema differs. Schema and byte-count mismatches are rejected before the digest comparison, and the digest comparison uses a constant-time comparison primitive.
 
 `verify_benchmark_artifact_manifest(report_path, manifest_path)` is the complete load-and-verify operation for archive consumers. It validates the sidecar, verifies the report against it, and returns the verified metadata for downstream logging.
 
@@ -46,6 +48,10 @@ verify_benchmark_artifact_manifest(
 ```
 
 A benchmark archive should preserve the report and manifest together and verify the pair before downstream analysis or publication.
+
+## Reproducibility boundary
+
+The manifest authenticates the serialized benchmark report bytes and report schema. It does not authenticate external datasets, model checkpoints, dependency environments, or source revisions; those remain separate experiment provenance concerns. A verified artifact therefore means the report matches its declared manifest, not that the experiment itself is independently reproducible.
 
 ## Intended use
 
