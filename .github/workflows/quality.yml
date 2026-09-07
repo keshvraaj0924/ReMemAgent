@@ -36,10 +36,13 @@ jobs:
       - name: Install package and development dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
 
+      - name: Verify installed package imports
+        run: python -c "import remem, experiments; print(remem.__name__, experiments.__name__)"
+
       - name: Run tests
         run: |
           mkdir -p test-results
-          python -m pytest -ra --tb=short --import-mode=importlib --junitxml=test-results/pytest-${{ matrix.python-version }}.xml
+          python -m pytest -ra --strict-config --strict-markers --tb=short --import-mode=importlib --junitxml=test-results/pytest-${{ matrix.python-version }}.xml
 
       - name: Upload pytest report
         if: ${{ always() }}
