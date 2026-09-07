@@ -4,12 +4,12 @@ from dataclasses import replace
 
 import pytest
 
+from experiments.external_benchmark import ExternalBenchmarkSpec
 from experiments.paired_benchmark import (
     preflight_paired_external_benchmarks,
     run_paired_external_benchmarks,
     run_paired_external_benchmarks_with_preflight,
 )
-from experiments.external_benchmark import ExternalBenchmarkSpec
 
 
 def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
@@ -29,6 +29,9 @@ def test_run_paired_external_benchmarks_uses_same_seeds(monkeypatch) -> None:
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")
     calls: list[tuple[str, tuple[int, ...]]] = []
 
+    def fake_validate(spec: ExternalBenchmarkSpec) -> None:
+        calls.append((f"validate:{spec.policy_factory}", ()))
+
     def fake_run(spec: ExternalBenchmarkSpec, seeds: tuple[int, ...]):
         calls.append((spec.policy_factory or "", seeds))
         return tuple()
@@ -37,6 +40,7 @@ def test_run_paired_external_benchmarks_uses_same_seeds(monkeypatch) -> None:
         assert baseline_reports == treatment_reports == ()
         return (baseline_label, treatment_label)
 
+    monkeypatch.setattr("experiments.paired_benchmark.validate_external_benchmark", fake_validate)
     monkeypatch.setattr("experiments.paired_benchmark.run_repeated_external_benchmarks", fake_run)
     monkeypatch.setattr("experiments.paired_benchmark.compare_benchmark_reports", fake_compare)
 
@@ -49,10 +53,37 @@ def test_run_paired_external_benchmarks_uses_same_seeds(monkeypatch) -> None:
     )
 
     assert calls == [
+        ("validate:tests.test_external_benchmark:make_policy", ()),
+        ("validate:tests.test_external_benchmark:make_memory_policy", ()),
         ("tests.test_external_benchmark:make_policy", (11, 17)),
         ("tests.test_external_benchmark:make_memory_policy", (11, 17)),
     ]
     assert result.comparison == ("no-memory", "memory")
+
+
+def test_run_paired_external_benchmarks_validates_both_policies_before_execution(monkeypatch) -> None:
+    baseline = _spec("tests.test_external_benchmark:make_policy")
+    treatment = _spec("tests.test_external_benchmark:missing_policy")
+    events: list[str] = []
+
+    def fake_validate(spec: ExternalBenchmarkSpec) -> None:
+        events.append(f"validate:{spec.policy_factory}")
+        if spec.policy_factory.endswith("missing_policy"):
+            raise ImportError("missing policy")
+
+    monkeypatch.setattr("experiments.paired_benchmark.validate_external_benchmark", fake_validate)
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.run_repeated_external_benchmarks",
+        lambda *args, **kwargs: pytest.fail("execution must not start after validation failure"),
+    )
+
+    with pytest.raises(ImportError, match="missing policy"):
+        run_paired_external_benchmarks(baseline, treatment, (11, 17))
+
+    assert events == [
+        "validate:tests.test_external_benchmark:make_policy",
+        "validate:tests.test_external_benchmark:missing_policy",
+    ]
 
 
 def test_run_paired_external_benchmarks_rejects_evaluation_drift(monkeypatch) -> None:
