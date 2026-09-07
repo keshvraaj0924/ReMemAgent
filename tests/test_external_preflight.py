@@ -1,7 +1,10 @@
 import pytest
 
 from experiments.external_benchmark import ExternalBenchmarkSpec
-from experiments.external_preflight import validate_repeated_external_benchmark_runtime
+from experiments.external_preflight import (
+    run_repeated_external_benchmarks_with_preflight,
+    validate_repeated_external_benchmark_runtime,
+)
 from tests.test_external_benchmark import CLOSED_SEEDS
 
 
@@ -57,3 +60,28 @@ def test_repeated_runtime_preflight_rejects_non_integer_seed() -> None:
 def test_repeated_runtime_preflight_rejects_boolean_seed() -> None:
     with pytest.raises(TypeError, match="only integers"):
         validate_repeated_external_benchmark_runtime(_build_spec(), [True])  # type: ignore[list-item]
+
+
+def test_preflight_failure_blocks_measured_execution(monkeypatch) -> None:
+    events: list[str] = []
+
+    def fake_preflight(*args, **kwargs) -> tuple[object, ...]:
+        events.append("preflight")
+        raise RuntimeError("external environment unavailable")
+
+    def fail_if_measured(*args, **kwargs):
+        pytest.fail("measured execution must not start after preflight failure")
+
+    monkeypatch.setattr(
+        "experiments.external_preflight.validate_repeated_external_benchmark_runtime",
+        fake_preflight,
+    )
+    monkeypatch.setattr(
+        "experiments.external_preflight.run_repeated_external_benchmarks",
+        fail_if_measured,
+    )
+
+    with pytest.raises(RuntimeError, match="external environment unavailable"):
+        run_repeated_external_benchmarks_with_preflight(_build_spec(), (11, 17))
+
+    assert events == ["preflight"]
