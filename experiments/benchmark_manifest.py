@@ -24,6 +24,21 @@ class BenchmarkArtifactManifest:
     byte_count: int
     sha256: str
 
+    def __post_init__(self) -> None:
+        """Reject invalid integrity metadata at the typed boundary."""
+
+        if not _is_strict_integer(self.schema_version):
+            raise ValueError("benchmark artifact manifest schema version must be an integer")
+        if self.schema_version != BENCHMARK_REPORT_SCHEMA_VERSION:
+            raise ValueError(
+                "unsupported benchmark artifact report schema version: "
+                f"{self.schema_version!r}"
+            )
+        if not _is_strict_integer(self.byte_count) or self.byte_count < 0:
+            raise ValueError("benchmark artifact manifest byte count must be non-negative")
+        if not isinstance(self.sha256, str) or not _is_lowercase_hex_digest(self.sha256):
+            raise ValueError("benchmark artifact manifest sha256 must be a lowercase SHA-256 digest")
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible manifest representation."""
 
