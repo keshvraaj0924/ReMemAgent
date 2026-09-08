@@ -4,8 +4,7 @@ import json
 
 from experiments.benchmark_report import save_benchmark_report, save_repeated_benchmark_reports
 from experiments.experiment_identity import build_experiment_identity
-
-from test_benchmark_report import _build_report
+from tests.test_benchmark_report import _build_report
 
 
 RUNTIME_PROVENANCE = {
