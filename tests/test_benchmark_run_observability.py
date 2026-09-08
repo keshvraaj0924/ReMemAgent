@@ -3,7 +3,7 @@ from remem.observability import ObservationCollector
 from tests.test_benchmark import FakeEnvironment
 
 
-def test_successful_suite_records_run_completion() -> None:
+def test_successful_suite_records_run_completion_and_success() -> None:
     collector = ObservationCollector()
 
     BenchmarkSuiteRunner(observation_collector=collector).run(
@@ -18,9 +18,11 @@ def test_successful_suite_records_run_completion() -> None:
     snapshot = collector.snapshot()
     assert snapshot.counters["benchmark.runs"] == 1.0
     assert snapshot.counters["benchmark.runs.completed"] == 1.0
+    assert snapshot.counters["benchmark.runs.succeeded"] == 1.0
+    assert snapshot.counters.get("benchmark.runs.failed", 0.0) == 0.0
 
 
-def test_failed_suite_does_not_record_run_completion() -> None:
+def test_failed_suite_records_run_failure_without_completion() -> None:
     collector = ObservationCollector()
 
     def environment_factory(index: int) -> FakeEnvironment:
@@ -42,4 +44,6 @@ def test_failed_suite_does_not_record_run_completion() -> None:
 
     snapshot = collector.snapshot()
     assert snapshot.counters["benchmark.runs"] == 1.0
+    assert snapshot.counters["benchmark.runs.failed"] == 1.0
+    assert snapshot.counters.get("benchmark.runs.succeeded", 0.0) == 0.0
     assert snapshot.counters.get("benchmark.runs.completed", 0.0) == 0.0
