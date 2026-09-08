@@ -258,3 +258,29 @@ def _reject_preflight_only_conflicts(
     before_run: bool,
 ) -> None:
     """Reject options that only make sense for measured execution."""
+
+    if manifest and getattr(arguments, "manifest", None) is not None:
+        raise ValueError("--manifest requires a measured benchmark run")
+    if getattr(arguments, "observability_output", None) is not None:
+        raise ValueError("--observability-output requires a measured benchmark run")
+    if before_run and getattr(arguments, "preflight_before_run", False):
+        raise ValueError("--preflight-before-run requires a measured benchmark run")
+
+
+def _parse_seeds(value: str | None) -> tuple[int, ...] | None:
+    """Parse a comma-separated seed list, rejecting malformed or duplicate values."""
+
+    if value is None:
+        return None
+    parts = tuple(part.strip() for part in value.split(","))
+    if not parts or any(not part for part in parts):
+        raise ValueError("--seeds must contain comma-separated integers")
+    try:
+        seeds = tuple(int(part) for part in parts)
+    except ValueError as exc:
+        raise ValueError("--seeds must contain comma-separated integers") from exc
+    return validate_seed_sequence(seeds)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
