@@ -174,6 +174,8 @@ def test_save_benchmark_report_writes_json(tmp_path) -> None:
     assert persisted["schema_version"] == BENCHMARK_REPORT_SCHEMA_VERSION
     assert persisted["final_memory_count"] == 1
     assert persisted["episodes"][0]["transfer_outcomes"] == []
+    assert persisted["experiment_identity"]
+    assert persisted["runtime_provenance"] == {}
 
 
 def test_save_benchmark_report_atomically_replaces_existing_output(tmp_path) -> None:
@@ -199,6 +201,7 @@ def test_save_benchmark_report_includes_runtime_provenance(tmp_path) -> None:
         "code_revision": "abc123",
         "python_version": "3.11.0",
     }
+    assert persisted["experiment_identity"]
 
 
 def test_save_benchmark_report_rejects_non_string_provenance_values(tmp_path) -> None:
@@ -281,6 +284,8 @@ def test_save_repeated_reports_allows_seed_only_configuration_difference(tmp_pat
     assert persisted["configuration_fingerprint"] == benchmark_configuration_fingerprint(
         first.configuration
     )
+    assert persisted["experiment_identity"]
+    assert persisted["runtime_provenance"] == {}
 
 
 def test_save_paired_benchmark_result_serializes_ordered_conditions(tmp_path) -> None:
@@ -303,6 +308,7 @@ def test_save_paired_benchmark_result_serializes_ordered_conditions(tmp_path) ->
     assert persisted["treatment"]["label"] == "memory"
     assert persisted["comparison"]["success_rate_delta"]["mean"] == 0.0
     assert persisted["runtime_provenance"]["code_revision"] == "abc123"
+    assert persisted["experiment_identity"]
 
 
 def test_save_paired_benchmark_result_is_byte_deterministic_for_input_order(tmp_path) -> None:
