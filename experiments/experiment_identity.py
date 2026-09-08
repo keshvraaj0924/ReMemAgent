@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from remem.benchmark import BenchmarkRunConfiguration
+from remem.reproducibility import ExperimentManifest
 
 EXPERIMENT_IDENTITY_SCHEMA_VERSION = 1
 SHA256_HEX_LENGTH = 64
@@ -28,20 +27,15 @@ def build_experiment_identity(
 
     normalized_seeds = _normalize_seeds(seeds)
     normalized_provenance = _normalize_provenance(runtime_provenance)
-    payload = {
-        "schema_version": EXPERIMENT_IDENTITY_SCHEMA_VERSION,
-        "configuration": _configuration_payload(configuration),
-        "seeds": list(normalized_seeds),
-        "runtime_provenance": normalized_provenance,
-    }
-    canonical_payload = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(canonical_payload).hexdigest()
+    manifest = ExperimentManifest(
+        {
+            "schema_version": EXPERIMENT_IDENTITY_SCHEMA_VERSION,
+            "configuration": _configuration_payload(configuration),
+            "seeds": list(normalized_seeds),
+            "runtime_provenance": normalized_provenance,
+        }
+    )
+    return manifest.sha256
 
 
 def _configuration_payload(configuration: BenchmarkRunConfiguration) -> dict[str, Any]:
@@ -81,19 +75,10 @@ def _normalize_provenance(runtime_provenance: Mapping[str, Any]) -> dict[str, An
         raise TypeError("runtime_provenance must be a mapping")
     normalized = dict(runtime_provenance)
     try:
-        canonical = json.dumps(
-            normalized,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=True,
-            allow_nan=False,
-        )
+        manifest = ExperimentManifest(normalized)
+        return manifest.values
     except (TypeError, ValueError) as exc:
         raise ValueError("runtime_provenance must be JSON-compatible") from exc
-    decoded = json.loads(canonical)
-    if not isinstance(decoded, dict):
-        raise TypeError("runtime_provenance must serialize to a JSON object")
-    return decoded
 
 
 def is_experiment_identity(value: str) -> bool:
