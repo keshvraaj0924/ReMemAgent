@@ -155,17 +155,18 @@ def main() -> int:
     runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
     observation_collector = ObservationCollector() if observability_path is not None else None
+    benchmark_runner = (
+        BenchmarkSuiteRunner(observation_collector=observation_collector)
+        if observation_collector is not None
+        else None
+    )
     if seeds is None:
         if getattr(arguments, "preflight_before_run", False):
             validate_external_benchmark_runtime(
                 spec,
                 probe_action=probe_action,
             )
-        if observation_collector is None:
-            report = run_external_benchmark(spec)
-        else:
-            runner = BenchmarkSuiteRunner(observation_collector=observation_collector)
-            report = run_external_benchmark(spec, runner=runner)
+        report = run_external_benchmark(spec, runner=benchmark_runner)
         output_path = save_benchmark_report(
             report,
             output_path,
@@ -179,7 +180,11 @@ def main() -> int:
                 probe_action=probe_action,
             )
         else:
-            reports = run_repeated_external_benchmarks(spec, seeds)
+            reports = run_repeated_external_benchmarks(
+                spec,
+                seeds,
+                runner=benchmark_runner,
+            )
         statistics = summarize_benchmark_reports(reports).to_dict()
         output_path = save_repeated_benchmark_reports(
             reports,
@@ -187,8 +192,6 @@ def main() -> int:
             runtime_provenance=runtime_provenance,
             statistics=statistics,
         )
-        if observation_collector is not None:
-            _record_repeated_run_observability(observation_collector, reports)
 
     if selected_manifest_path is not None:
         manifest_output = save_benchmark_artifact_manifest(output_path, selected_manifest_path)
@@ -276,28 +279,6 @@ def _parse_seeds(value: str | None) -> tuple[int, ...] | None:
     except ValueError as exc:
         raise ValueError("--seeds must contain comma-separated integers") from exc
     return validate_seed_sequence(seeds)
-
-
-def _record_repeated_run_observability(
-    collector: ObservationCollector,
-    reports: tuple[BenchmarkRunReport, ...],
-) -> None:
-    """Record aggregate counters for repeated runs executed without runner telemetry."""
-
-    collector.increment("benchmark.runs")
-    collector.increment("benchmark.runs.completed")
-    collector.increment(
-        "benchmark.episodes.completed",
-        float(sum(len(report.episodes) for report in reports)),
-    )
-    collector.increment(
-        "benchmark.episodes.successful",
-        float(sum(report.success_count for report in reports)),
-    )
-    collector.increment(
-        "benchmark.transfers.attributed",
-        float(sum(report.transfer_count for report in reports)),
-    )
 
 
 if __name__ == "__main__":
