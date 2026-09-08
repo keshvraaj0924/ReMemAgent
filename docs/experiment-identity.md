@@ -12,6 +12,8 @@
 
 The canonical payload is serialized with sorted keys and no insignificant whitespace, then hashed with SHA-256. Equivalent seed or mapping order therefore produces the same identity, while changing a protocol field, seed set, or runtime provenance changes the identity.
 
+`verify_experiment_identity()` provides the corresponding semantic verification boundary. It validates the persisted identity format, recomputes the expected identity from the supplied configuration, seed set, and provenance, and fails closed when they disagree. The comparison uses a constant-time digest comparison so callers do not need to duplicate identity-checking logic.
+
 This identity is deliberately distinct from the benchmark artifact manifest. The manifest answers **"are these exact report bytes unchanged?"**; the experiment identity answers **"which protocol and runtime does this artifact represent?"**.
 
 ## Persisted benchmark artifacts
@@ -28,6 +30,6 @@ The identity also does not replace the stored configuration, per-seed reports, r
 
 ## Intended integration
 
-Measured benchmark launchers can compute an identity after validating the final configuration and runtime provenance, then store it alongside the report. Analysis tooling can use the identity as a fast compatibility check before combining artifacts, while still loading and validating the full underlying metadata.
+Measured benchmark launchers can compute an identity after validating the final configuration and runtime provenance, then store it alongside the report. Analysis tooling can use `verify_experiment_identity()` as a fast compatibility check before combining artifacts, while still loading and validating the full underlying metadata.
 
 The current module is intentionally dependency-free and does not alter benchmark execution or claim that external ALFWorld/WebShop runs have been performed.
