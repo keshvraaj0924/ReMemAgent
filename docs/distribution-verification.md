@@ -8,6 +8,8 @@ The test reads the console-script names directly from the `[project.scripts]` ta
 
 This catches packaging failures such as missing packages, incorrect wheel contents, and broken console-script metadata that an editable install can hide. The test intentionally fails if the packaging metadata has no console scripts or contains an invalid script name, making malformed packaging configuration visible during the quality run.
 
+The GitHub Actions quality workflow adds a second artifact-level smoke gate after building distributions. It installs the wheel and source distribution separately into a fresh virtual environment, imports the shipped packages, and verifies the installed `remem-check-environments` entry point responds to `--help`. This ensures both distribution formats remain installable outside the repository checkout.
+
 ## Scope
 
 This is a packaging integrity gate, not an external benchmark gate. It does not execute ALFWorld, WebShop, GRPO, or verl workloads and it does not establish scientific reproducibility or performance.
