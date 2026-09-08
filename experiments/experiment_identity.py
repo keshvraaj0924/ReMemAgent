@@ -19,8 +19,8 @@ def build_experiment_identity(
 ) -> str:
     """Return a stable SHA-256 identity for one reproducibility protocol.
 
-    The identity binds the benchmark protocol, independent seed set, and
-    runtime provenance. It is intentionally separate from the report digest:
+    The identity binds the complete benchmark protocol, independent seed set,
+    and runtime provenance. It is intentionally separate from the report digest:
     the report digest authenticates serialized bytes, while this identity
     identifies the execution protocol represented by those bytes.
     """
@@ -39,12 +39,13 @@ def build_experiment_identity(
 
 
 def _configuration_payload(configuration: BenchmarkRunConfiguration) -> dict[str, Any]:
-    """Return configuration fields that define the benchmark protocol."""
+    """Return every configuration field that defines the benchmark protocol."""
 
     return {
         "benchmark_name": configuration.benchmark_name,
         "episode_count": configuration.episode_count,
         "max_steps": configuration.max_steps,
+        "seed": configuration.seed,
         "environment_factory": configuration.environment_factory,
         "policy_factory": configuration.policy_factory,
         "success_evaluator": configuration.success_evaluator,
