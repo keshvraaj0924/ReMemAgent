@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.experiment_identity import build_experiment_identity, is_experiment_identity
+from experiments.experiment_identity import (
+    build_experiment_identity,
+    is_experiment_identity,
+    verify_experiment_identity,
+)
 from remem.benchmark import BenchmarkRunConfiguration
 from remem.reproducibility import ExperimentManifest
 
@@ -121,3 +125,23 @@ def test_identity_validator_rejects_noncanonical_values() -> None:
     assert not is_experiment_identity("0" * 63)
     assert not is_experiment_identity("0" * 65)
     assert not is_experiment_identity(42)  # type: ignore[arg-type]
+
+
+def test_identity_verification_accepts_matching_protocol() -> None:
+    provenance = {"code_revision": "abc", "dependency_versions": {"python": "3.12"}}
+    identity = build_experiment_identity(_configuration(), [7, 19], provenance)
+
+    verify_experiment_identity(identity, _configuration(), [19, 7], provenance)
+
+
+def test_identity_verification_rejects_stale_identity() -> None:
+    provenance = {"code_revision": "abc"}
+    identity = build_experiment_identity(_configuration(), [7, 19], provenance)
+
+    with pytest.raises(ValueError, match="does not match"):
+        verify_experiment_identity(identity, _configuration(), [7, 20], provenance)
+
+
+def test_identity_verification_rejects_malformed_identity() -> None:
+    with pytest.raises(ValueError, match="canonical SHA-256"):
+        verify_experiment_identity("0" * 63, _configuration(), [7], {})
