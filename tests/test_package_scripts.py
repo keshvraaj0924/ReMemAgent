@@ -4,6 +4,8 @@ import importlib
 import tomllib
 from pathlib import Path
 
+import pytest
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_SCRIPTS = {
@@ -33,10 +35,10 @@ def test_console_scripts_match_supported_cli_contract() -> None:
 
 
 def test_console_script_contract_is_independent_of_working_directory(
-    monkeypatch: object,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
+    monkeypatch.chdir(tmp_path)
 
     assert _load_project_scripts() == EXPECTED_SCRIPTS
 
