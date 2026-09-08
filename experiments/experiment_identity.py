@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -36,6 +37,27 @@ def build_experiment_identity(
         }
     )
     return manifest.sha256
+
+
+def verify_experiment_identity(
+    identity: str,
+    configuration: BenchmarkRunConfiguration,
+    seeds: Sequence[int],
+    runtime_provenance: Mapping[str, Any],
+) -> None:
+    """Fail if a persisted experiment identity does not match its inputs.
+
+    This checks the semantic reproducibility identity rather than the exact
+    serialized artifact bytes. Callers can use it after loading benchmark
+    metadata to detect stale or manually altered identity fields before using
+    an artifact in downstream analysis.
+    """
+
+    if not is_experiment_identity(identity):
+        raise ValueError("identity must be a canonical SHA-256 experiment identity")
+    expected_identity = build_experiment_identity(configuration, seeds, runtime_provenance)
+    if not hmac.compare_digest(identity, expected_identity):
+        raise ValueError("experiment identity does not match the supplied protocol metadata")
 
 
 def _configuration_payload(configuration: BenchmarkRunConfiguration) -> dict[str, Any]:
@@ -94,4 +116,5 @@ __all__ = [
     "EXPERIMENT_IDENTITY_SCHEMA_VERSION",
     "build_experiment_identity",
     "is_experiment_identity",
+    "verify_experiment_identity",
 ]
