@@ -14,7 +14,6 @@ from experiments.external_benchmark import (
     validate_seed_sequence,
 )
 from remem.benchmark import BenchmarkSuiteRunner
-from remem.environments.base import StepResult
 from remem.memory.store import MemoryStore
 
 
