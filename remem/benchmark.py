@@ -207,29 +207,16 @@ class BenchmarkSuiteRunner:
         if self.observation_collector is not None:
             self.observation_collector.increment("benchmark.runs")
 
-        for episode_index in range(episode_count):
-            factory_seed = episode_index if seed is None else seed + episode_index
-            if self.observation_collector is not None:
-                self.observation_collector.increment("benchmark.episodes.started")
+        try:
+            for episode_index in range(episode_count):
+                factory_seed = episode_index if seed is None else seed + episode_index
+                if self.observation_collector is not None:
+                    self.observation_collector.increment("benchmark.episodes.started")
 
-            environment: EnvironmentAdapter | None = None
-            try:
-                environment = environment_factory(factory_seed)
-                if self.observation_collector is None:
-                    execution_result = self._execute_episode(
-                        environment,
-                        memory_store,
-                        factory_seed,
-                        episode_index,
-                        normalized_name,
-                        max_steps,
-                        policy_factory,
-                        success_evaluator,
-                        reset_kwargs,
-                        transfer_success_evaluator,
-                    )
-                else:
-                    with self.observation_collector.timed("benchmark.episode.duration_seconds"):
+                environment: EnvironmentAdapter | None = None
+                try:
+                    environment = environment_factory(factory_seed)
+                    if self.observation_collector is None:
                         execution_result = self._execute_episode(
                             environment,
                             memory_store,
@@ -242,33 +229,51 @@ class BenchmarkSuiteRunner:
                             reset_kwargs,
                             transfer_success_evaluator,
                         )
-            except Exception:
-                if self.observation_collector is not None:
-                    self.observation_collector.record_outcome("benchmark.episodes", False)
-                    self.observation_collector.increment("benchmark.episodes.succeeded", 0.0)
-                raise
-            else:
-                if self.observation_collector is not None:
-                    self.observation_collector.record_outcome("benchmark.episodes", True)
-                    self.observation_collector.increment("benchmark.episodes.completed")
-                    self.observation_collector.increment(
-                        "benchmark.transfers.attributed",
-                        float(len(execution_result[1])),
-                    )
-                    self.observation_collector.increment(
-                        "benchmark.episodes.successful",
-                        float(execution_result[0].episode_success),
-                    )
-                reports.append(_build_episode_report(execution_result[0], execution_result[1]))
-            finally:
-                if environment is not None:
-                    _close_environment(
-                        environment,
-                        observation_collector=self.observation_collector,
-                    )
-
-        if self.observation_collector is not None:
-            self.observation_collector.increment("benchmark.runs.completed")
+                    else:
+                        with self.observation_collector.timed("benchmark.episode.duration_seconds"):
+                            execution_result = self._execute_episode(
+                                environment,
+                                memory_store,
+                                factory_seed,
+                                episode_index,
+                                normalized_name,
+                                max_steps,
+                                policy_factory,
+                                success_evaluator,
+                                reset_kwargs,
+                                transfer_success_evaluator,
+                            )
+                except Exception:
+                    if self.observation_collector is not None:
+                        self.observation_collector.record_outcome("benchmark.episodes", False)
+                        self.observation_collector.increment("benchmark.episodes.succeeded", 0.0)
+                    raise
+                else:
+                    if self.observation_collector is not None:
+                        self.observation_collector.record_outcome("benchmark.episodes", True)
+                        self.observation_collector.increment("benchmark.episodes.completed")
+                        self.observation_collector.increment(
+                            "benchmark.transfers.attributed",
+                            float(len(execution_result[1])),
+                        )
+                        self.observation_collector.increment(
+                            "benchmark.episodes.successful",
+                            float(execution_result[0].episode_success),
+                        )
+                    reports.append(_build_episode_report(execution_result[0], execution_result[1]))
+                finally:
+                    if environment is not None:
+                        _close_environment(
+                            environment,
+                            observation_collector=self.observation_collector,
+                        )
+        except Exception:
+            if self.observation_collector is not None:
+                self.observation_collector.record_outcome("benchmark.runs", False)
+            raise
+        else:
+            if self.observation_collector is not None:
+                self.observation_collector.record_outcome("benchmark.runs", True)
 
         return BenchmarkRunReport(
             benchmark_name=normalized_name,
