@@ -274,6 +274,7 @@ class BenchmarkSuiteRunner:
         else:
             if self.observation_collector is not None:
                 self.observation_collector.record_outcome("benchmark.runs", True)
+                self.observation_collector.increment("benchmark.runs.completed")
 
         return BenchmarkRunReport(
             benchmark_name=normalized_name,
