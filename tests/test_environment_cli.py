@@ -13,8 +13,9 @@ def test_main_reports_all_benchmarks_and_succeeds_when_required_dependency_is_av
         DependencyStatus("webshop", False, "webshop"),
     )
 
-    with patch.object(environment_cli, "parse_args", return_value=Namespace(require=["alfworld"])), patch.object(
-        environment_cli, "check_benchmark_dependencies", return_value=statuses
+    with (
+        patch.object(environment_cli, "parse_args", return_value=Namespace(require=["alfworld"])),
+        patch.object(environment_cli, "check_benchmark_dependencies", return_value=statuses),
     ):
         result = environment_cli.main()
 
@@ -31,8 +32,9 @@ def test_main_fails_when_required_dependency_is_missing(capsys) -> None:
         DependencyStatus("webshop", True, "webshop"),
     )
 
-    with patch.object(environment_cli, "parse_args", return_value=Namespace(require=["alfworld"])), patch.object(
-        environment_cli, "check_benchmark_dependencies", return_value=statuses
+    with (
+        patch.object(environment_cli, "parse_args", return_value=Namespace(require=["alfworld"])),
+        patch.object(environment_cli, "check_benchmark_dependencies", return_value=statuses),
     ):
         result = environment_cli.main()
 
@@ -50,8 +52,9 @@ def test_main_requires_all_benchmarks_by_default(capsys) -> None:
         DependencyStatus("webshop", False, "webshop"),
     )
 
-    with patch.object(environment_cli, "parse_args", return_value=Namespace(require=None)), patch.object(
-        environment_cli, "check_benchmark_dependencies", return_value=statuses
+    with (
+        patch.object(environment_cli, "parse_args", return_value=Namespace(require=None)),
+        patch.object(environment_cli, "check_benchmark_dependencies", return_value=statuses),
     ):
         result = environment_cli.main()
 
