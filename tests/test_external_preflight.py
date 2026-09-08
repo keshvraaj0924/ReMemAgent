@@ -5,6 +5,7 @@ from experiments.external_preflight import (
     run_repeated_external_benchmarks_with_preflight,
     validate_repeated_external_benchmark_runtime,
 )
+from remem.benchmark import BenchmarkSuiteRunner
 from tests.test_external_benchmark import CLOSED_SEEDS
 
 
@@ -85,3 +86,31 @@ def test_preflight_failure_blocks_measured_execution(monkeypatch) -> None:
         run_repeated_external_benchmarks_with_preflight(_build_spec(), (11, 17))
 
     assert events == ["preflight"]
+
+
+def test_preflight_repeated_execution_reuses_injected_runner(monkeypatch) -> None:
+    runner = BenchmarkSuiteRunner()
+    observed: list[BenchmarkSuiteRunner | None] = []
+
+    monkeypatch.setattr(
+        "experiments.external_preflight.validate_repeated_external_benchmark_runtime",
+        lambda *args, **kwargs: (),
+    )
+
+    def fake_run_repeated(spec, seeds, *, runner=None):
+        observed.append(runner)
+        return tuple(object() for _ in seeds)
+
+    monkeypatch.setattr(
+        "experiments.external_preflight.run_repeated_external_benchmarks",
+        fake_run_repeated,
+    )
+
+    reports = run_repeated_external_benchmarks_with_preflight(
+        _build_spec(),
+        (11, 17),
+        runner=runner,
+    )
+
+    assert len(reports) == 2
+    assert observed == [runner]
