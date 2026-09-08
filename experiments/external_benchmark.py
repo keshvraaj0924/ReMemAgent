@@ -201,11 +201,17 @@ def run_external_benchmark(
 def run_repeated_external_benchmarks(
     spec: ExternalBenchmarkSpec,
     seeds: Sequence[int],
+    *,
+    runner: BenchmarkSuiteRunner | None = None,
 ) -> tuple[BenchmarkRunReport, ...]:
-    """Execute the same external benchmark independently for each requested seed."""
+    """Execute each seed through the same runner and optional telemetry sink."""
 
     selected_seeds = validate_seed_sequence(seeds)
-    return tuple(run_external_benchmark(replace(spec, seed=seed)) for seed in selected_seeds)
+    selected_runner = runner or BenchmarkSuiteRunner()
+    return tuple(
+        run_external_benchmark(replace(spec, seed=seed), runner=selected_runner)
+        for seed in selected_seeds
+    )
 
 
 def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
