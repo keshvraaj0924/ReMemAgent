@@ -6,6 +6,10 @@ This document records the implemented research surface without implying experime
 
 The `feat/core-memory-engine` branch previously had a verified green GitHub `Quality` workflow at commit `e9f02fc` (run `305`). That historical run is retained as an engineering baseline; later commits extend the quality and packaging surface and therefore require a fresh successful workflow before the current head can be described as green.
 
+## Current verification state
+
+The current branch head contains the completed packaging-contract and CI hardening work, including isolated wheel/source-distribution smoke checks and validation of all declared console entry points. GitHub does not currently expose a workflow run associated with the current head, so the branch is intentionally **not** described as having a fresh green CI result. The historical green workflow remains useful only as a baseline for the earlier implementation state.
+
 The framework currently provides deterministic implementations for:
 
 - typed episodic memory and lifecycle management;
