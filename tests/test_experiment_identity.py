@@ -47,6 +47,7 @@ def test_identity_matches_shared_canonical_manifest_digest() -> None:
                 "benchmark_name": "alfworld-eval",
                 "episode_count": 10,
                 "max_steps": 20,
+                "seed": 11,
                 "environment_factory": "adapter:make_environment",
                 "policy_factory": "policy:make_policy",
                 "success_evaluator": "metrics:is_success",
@@ -80,6 +81,27 @@ def test_identity_changes_when_protocol_changes() -> None:
     )
 
     assert baseline != changed
+
+
+def test_identity_changes_when_configuration_seed_changes() -> None:
+    baseline = build_experiment_identity(_configuration(), [7, 19], {"code_revision": "abc"})
+    changed_configuration = BenchmarkRunConfiguration(
+        benchmark_name="alfworld-eval",
+        episode_count=10,
+        max_steps=20,
+        seed=12,
+        environment_factory="adapter:make_environment",
+        policy_factory="policy:make_policy",
+        success_evaluator="metrics:is_success",
+        transfer_success_evaluator="metrics:is_transfer_success",
+        minimum_trust=0.7,
+    )
+
+    assert baseline != build_experiment_identity(
+        changed_configuration,
+        [7, 19],
+        {"code_revision": "abc"},
+    )
 
 
 def test_identity_rejects_duplicate_or_missing_seeds() -> None:
