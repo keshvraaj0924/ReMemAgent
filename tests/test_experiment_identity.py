@@ -108,6 +108,13 @@ def test_identity_changes_when_configuration_seed_changes() -> None:
     )
 
 
+def test_identity_changes_when_runtime_provenance_changes() -> None:
+    baseline = build_experiment_identity(_configuration(), [7, 19], {"code_revision": "abc"})
+    changed = build_experiment_identity(_configuration(), [7, 19], {"code_revision": "def"})
+
+    assert baseline != changed
+
+
 def test_identity_rejects_duplicate_or_missing_seeds() -> None:
     with pytest.raises(ValueError, match="at least one"):
         build_experiment_identity(_configuration(), [], {})
@@ -140,6 +147,37 @@ def test_identity_verification_rejects_stale_identity() -> None:
 
     with pytest.raises(ValueError, match="does not match"):
         verify_experiment_identity(identity, _configuration(), [7, 20], provenance)
+
+
+def test_identity_verification_rejects_changed_runtime_provenance() -> None:
+    provenance = {"code_revision": "abc"}
+    identity = build_experiment_identity(_configuration(), [7, 19], provenance)
+
+    with pytest.raises(ValueError, match="does not match"):
+        verify_experiment_identity(
+            identity,
+            _configuration(),
+            [7, 19],
+            {"code_revision": "def"},
+        )
+
+
+def test_identity_verification_rejects_changed_configuration() -> None:
+    identity = build_experiment_identity(_configuration(), [7, 19], {})
+    changed_configuration = BenchmarkRunConfiguration(
+        benchmark_name="alfworld-eval",
+        episode_count=11,
+        max_steps=20,
+        seed=11,
+        environment_factory="adapter:make_environment",
+        policy_factory="policy:make_policy",
+        success_evaluator="metrics:is_success",
+        transfer_success_evaluator="metrics:is_transfer_success",
+        minimum_trust=0.7,
+    )
+
+    with pytest.raises(ValueError, match="does not match"):
+        verify_experiment_identity(identity, changed_configuration, [7, 19], {})
 
 
 def test_identity_verification_rejects_malformed_identity() -> None:
