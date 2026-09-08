@@ -14,6 +14,12 @@ The canonical payload is serialized with sorted keys and no insignificant whites
 
 This identity is deliberately distinct from the benchmark artifact manifest. The manifest answers **"are these exact report bytes unchanged?"**; the experiment identity answers **"which protocol and runtime does this artifact represent?"**.
 
+## Persisted benchmark artifacts
+
+The benchmark report writers now persist `experiment_identity` whenever a report has an explicit configuration and runtime provenance. A single seeded report uses its run seed as the one-element seed set. A repeated report artifact removes the per-run seed from the shared protocol configuration and binds the complete ordered seed set instead. Consequently, changing the repeated seed set or runtime provenance produces a different identity, while merely changing the order in which the same seed reports are supplied does not.
+
+The persisted identity is an audit key, not a substitute for the underlying configuration, per-seed reports, provenance, or exact-byte integrity manifest.
+
 ## Evidence boundary
 
 An experiment identity is not a scientific-validity claim. It does not prove that a benchmark was executed correctly, that a model checkpoint is appropriate, or that two environments are semantically equivalent. It is a compact reproducibility key that makes those inputs explicit and comparable.
