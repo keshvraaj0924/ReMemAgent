@@ -79,10 +79,18 @@ jobs:
           "$smoke_env/bin/python" -m pip install --upgrade pip
           "$smoke_env/bin/python" -m pip install --no-deps dist/*.whl
           "$smoke_env/bin/python" -c "import remem, experiments; print(remem.__name__, experiments.__name__)"
+          "$smoke_env/bin/remem-ablation" --help >/dev/null
+          "$smoke_env/bin/remem-benchmark" --help >/dev/null
+          "$smoke_env/bin/remem-paired-benchmark" --help >/dev/null
+          "$smoke_env/bin/remem-verify-benchmark" --help >/dev/null
           "$smoke_env/bin/remem-check-environments" --help >/dev/null
           "$smoke_env/bin/python" -m pip uninstall -y rememagent >/dev/null
           "$smoke_env/bin/python" -m pip install --no-deps dist/*.tar.gz
           "$smoke_env/bin/python" -c "import remem, experiments; print(remem.__name__, experiments.__name__)"
+          "$smoke_env/bin/remem-ablation" --help >/dev/null
+          "$smoke_env/bin/remem-benchmark" --help >/dev/null
+          "$smoke_env/bin/remem-paired-benchmark" --help >/dev/null
+          "$smoke_env/bin/remem-verify-benchmark" --help >/dev/null
           "$smoke_env/bin/remem-check-environments" --help >/dev/null
 
       - name: Upload distribution artifacts
