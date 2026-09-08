@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
-from remem.benchmark import BenchmarkRunReport
+from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner
 from remem.environments import EnvironmentContractReport
 
 from experiments.external_benchmark import (
@@ -49,12 +49,15 @@ def run_repeated_external_benchmarks_with_preflight(
     seeds: Sequence[int],
     *,
     probe_action: str | None = None,
+    runner: BenchmarkSuiteRunner | None = None,
 ) -> tuple[BenchmarkRunReport, ...]:
     """Preflight every seed and only then launch measured benchmark runs.
 
     The preflight is deliberately a separate phase. A failed environment or
     policy probe prevents any measured run from starting, while successful probes
-    are never included in the returned benchmark evidence.
+    are never included in the returned benchmark evidence. A supplied runner is
+    reused for all measured seeds so suite-level observability remains attached
+    to the same execution lifecycle as non-preflight repeated runs.
     """
 
     selected_seeds = validate_seed_sequence(seeds)
@@ -63,7 +66,7 @@ def run_repeated_external_benchmarks_with_preflight(
         selected_seeds,
         probe_action=probe_action,
     )
-    return run_repeated_external_benchmarks(spec, selected_seeds)
+    return run_repeated_external_benchmarks(spec, selected_seeds, runner=runner)
 
 
 __all__ = [
