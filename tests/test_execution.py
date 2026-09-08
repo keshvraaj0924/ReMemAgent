@@ -35,7 +35,9 @@ def test_runner_records_trajectory_until_termination() -> None:
             StepResult("goal", 1.0, True, False, {"success": True}),
         ]
     )
-    policy: Callable[[str], str] = lambda observation: f"act:{observation}"
+
+    def policy(observation: str) -> str:
+        return f"act:{observation}"
 
     result = EpisodeRunner().run(environment, policy, max_steps=5)
 
