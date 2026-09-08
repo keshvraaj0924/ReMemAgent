@@ -54,18 +54,17 @@ def save_benchmark_report(
     *,
     runtime_provenance: Mapping[str, object] | None = None,
 ) -> Path:
-    """Persist a structurally valid benchmark report with optional provenance."""
+    """Persist a structurally valid benchmark report with reproducibility identity."""
 
     payload = benchmark_report_to_dict(report)
-    if runtime_provenance is not None:
-        normalized_provenance = _normalize_runtime_provenance(runtime_provenance)
-        payload["runtime_provenance"] = normalized_provenance
-        if report.configuration is not None and report.seed is not None:
-            payload["experiment_identity"] = build_experiment_identity(
-                report.configuration,
-                (report.seed,),
-                normalized_provenance,
-            )
+    normalized_provenance = _normalize_runtime_provenance(runtime_provenance or {})
+    payload["runtime_provenance"] = normalized_provenance
+    if report.configuration is not None and report.seed is not None:
+        payload["experiment_identity"] = build_experiment_identity(
+            report.configuration,
+            (report.seed,),
+            normalized_provenance,
+        )
     _write_json(payload, output_path)
     return output_path
 
@@ -112,16 +111,15 @@ def save_repeated_benchmark_reports(
         payload["configuration_fingerprint"] = benchmark_configuration_fingerprint(
             reference_configuration
         )
-    if runtime_provenance is not None:
-        normalized_provenance = _normalize_runtime_provenance(runtime_provenance)
-        payload["runtime_provenance"] = normalized_provenance
-        if reference_configuration is not None:
-            identity_configuration = replace(reference_configuration, seed=None)
-            payload["experiment_identity"] = build_experiment_identity(
-                identity_configuration,
-                tuple(report.seed for report in ordered_reports if report.seed is not None),
-                normalized_provenance,
-            )
+    normalized_provenance = _normalize_runtime_provenance(runtime_provenance or {})
+    payload["runtime_provenance"] = normalized_provenance
+    if reference_configuration is not None:
+        identity_configuration = replace(reference_configuration, seed=None)
+        payload["experiment_identity"] = build_experiment_identity(
+            identity_configuration,
+            tuple(report.seed for report in ordered_reports if report.seed is not None),
+            normalized_provenance,
+        )
     if statistics is not None:
         payload["statistics"] = dict(statistics)
     _write_json(payload, output_path)
@@ -136,7 +134,7 @@ def save_paired_benchmark_result(
     *,
     runtime_provenance: Mapping[str, object] | None = None,
 ) -> Path:
-    """Persist paired condition reports and their descriptive comparison."""
+    """Persist paired condition reports, comparison, and reproducibility identity."""
 
     baseline = _validate_paired_report_collection(baseline_reports, "baseline")
     treatment = _validate_paired_report_collection(treatment_reports, "treatment")
@@ -169,8 +167,15 @@ def save_paired_benchmark_result(
         payload["configuration_fingerprint"] = benchmark_configuration_fingerprint(
             reference_configuration
         )
-    if runtime_provenance is not None:
-        payload["runtime_provenance"] = _normalize_runtime_provenance(runtime_provenance)
+    normalized_provenance = _normalize_runtime_provenance(runtime_provenance or {})
+    payload["runtime_provenance"] = normalized_provenance
+    if reference_configuration is not None:
+        identity_configuration = replace(reference_configuration, seed=None)
+        payload["experiment_identity"] = build_experiment_identity(
+            identity_configuration,
+            tuple(comparison.seeds),
+            normalized_provenance,
+        )
     _write_json(payload, output_path)
     return output_path
 
