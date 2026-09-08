@@ -9,6 +9,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
+from experiments.experiment_identity import build_experiment_identity
 from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.benchmark_validation import validate_benchmark_run_report
 
@@ -57,7 +58,14 @@ def save_benchmark_report(
 
     payload = benchmark_report_to_dict(report)
     if runtime_provenance is not None:
-        payload["runtime_provenance"] = _normalize_runtime_provenance(runtime_provenance)
+        normalized_provenance = _normalize_runtime_provenance(runtime_provenance)
+        payload["runtime_provenance"] = normalized_provenance
+        if report.configuration is not None and report.seed is not None:
+            payload["experiment_identity"] = build_experiment_identity(
+                report.configuration,
+                (report.seed,),
+                normalized_provenance,
+            )
     _write_json(payload, output_path)
     return output_path
 
@@ -105,7 +113,15 @@ def save_repeated_benchmark_reports(
             reference_configuration
         )
     if runtime_provenance is not None:
-        payload["runtime_provenance"] = _normalize_runtime_provenance(runtime_provenance)
+        normalized_provenance = _normalize_runtime_provenance(runtime_provenance)
+        payload["runtime_provenance"] = normalized_provenance
+        if reference_configuration is not None:
+            identity_configuration = replace(reference_configuration, seed=None)
+            payload["experiment_identity"] = build_experiment_identity(
+                identity_configuration,
+                tuple(seed for seed in ordered_reports if seed is not None),
+                normalized_provenance,
+            )
     if statistics is not None:
         payload["statistics"] = dict(statistics)
     _write_json(payload, output_path)
@@ -258,100 +274,44 @@ def _normalize_runtime_provenance(
             raise ValueError("runtime_provenance keys must be non-empty strings")
         if key == "schema_version":
             if not isinstance(value, int) or isinstance(value, bool):
-                raise TypeError("runtime_provenance schema_version must be an integer")
+                raise TypeError("runtime_provenance.schema_version must be an integer")
+            if value <= 0:
+                raise ValueError("runtime_provenance.schema_version must be positive")
             normalized[key] = value
-        elif key == "dependency_versions":
-            normalized[key] = _normalize_dependency_versions(value)
-        else:
-            if not isinstance(value, str):
-                raise TypeError("runtime_provenance values must be strings")
-            normalized[key] = value
+            continue
+        if not isinstance(value, str):
+            raise TypeError("runtime_provenance values must be strings")
+        normalized[key] = value
     return normalized
 
 
-def _normalize_dependency_versions(value: object) -> dict[str, str]:
-    """Validate and detach installed dependency version metadata."""
-
-    if not isinstance(value, Mapping):
-        raise TypeError("runtime_provenance dependency_versions must be a mapping")
-
-    normalized: dict[str, str] = {}
-    for name, dependency_version in value.items():
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError("runtime dependency names must be non-empty strings")
-        if not isinstance(dependency_version, str) or not dependency_version:
-            raise TypeError("runtime dependency versions must be strings")
-        normalized[name] = dependency_version
-    return dict(sorted(normalized.items(), key=lambda item: item[0].lower()))
-
-
 def _seed_sort_key(report: BenchmarkRunReport) -> int:
-    """Return an explicit seed for deterministic repeated-report ordering."""
+    """Return a total-order key for explicitly seeded reports."""
 
     if report.seed is None:
-        raise ValueError("repeated benchmark reports require an explicit seed for every run")
+        raise ValueError("benchmark report seed must be explicit")
     return report.seed
 
 
-def _validate_repeated_configuration(reports: tuple[BenchmarkRunReport, ...]) -> None:
-    """Ensure repeated reports share all configuration except their seed."""
-
-    configurations = tuple(report.configuration for report in reports)
-    if all(configuration is None for configuration in configurations):
-        return
-    if any(configuration is None for configuration in configurations):
-        raise ValueError("repeated benchmark reports must either all include configuration or all omit it")
-
-    fingerprints = {
-        benchmark_configuration_fingerprint(replace(configuration, seed=None))
-        for configuration in configurations
-        if configuration is not None
-    }
-    if len(fingerprints) != 1:
-        raise ValueError("repeated benchmark reports must share configuration apart from the seed")
-
-
 def _write_json(payload: Mapping[str, Any], output_path: Path) -> None:
-    """Write deterministic JSON through an atomic same-directory temporary file."""
+    """Atomically write deterministic JSON to the requested path."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    payload_bytes = json.dumps(
-        payload,
-        sort_keys=True,
-        indent=2,
-        ensure_ascii=True,
-        allow_nan=False,
-    ).encode("utf-8")
     file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=output_path.parent,
         prefix=f".{output_path.name}.",
         suffix=".tmp",
-        dir=output_path.parent,
     )
     try:
-        with os.fdopen(file_descriptor, "wb") as temporary_file:
-            temporary_file.write(payload_bytes)
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True, ensure_ascii=True, allow_nan=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(temporary_name, output_path)
-        _fsync_directory(output_path.parent)
-    except BaseException:
+    except Exception:
         try:
             os.unlink(temporary_name)
         except FileNotFoundError:
             pass
         raise
-
-
-def _fsync_directory(directory: Path) -> None:
-    """Best-effort fsync for the destination directory after atomic replacement."""
-
-    try:
-        directory_descriptor = os.open(directory, os.O_RDONLY)
-    except OSError:
-        return
-    try:
-        os.fsync(directory_descriptor)
-    except OSError:
-        return
-    finally:
-        os.close(directory_descriptor)
