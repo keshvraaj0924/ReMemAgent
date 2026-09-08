@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import isfinite, sqrt
 
 from remem.execution import EpisodeResult
