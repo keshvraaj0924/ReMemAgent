@@ -5,6 +5,7 @@ import tomllib
 from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_SCRIPTS = {
     "remem-ablation": "experiments.cli:main",
     "remem-benchmark": "experiments.benchmark_cli:main",
@@ -15,7 +16,7 @@ EXPECTED_SCRIPTS = {
 
 
 def _load_project_scripts() -> dict[str, str]:
-    with Path("pyproject.toml").open("rb") as project_file:
+    with (PROJECT_ROOT / "pyproject.toml").open("rb") as project_file:
         project = tomllib.load(project_file)
     return project["project"]["scripts"]
 
@@ -28,6 +29,15 @@ def _resolve_entry_point(entry_point: str) -> object:
 
 
 def test_console_scripts_match_supported_cli_contract() -> None:
+    assert _load_project_scripts() == EXPECTED_SCRIPTS
+
+
+def test_console_script_contract_is_independent_of_working_directory(
+    monkeypatch: object,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
+
     assert _load_project_scripts() == EXPECTED_SCRIPTS
 
 
