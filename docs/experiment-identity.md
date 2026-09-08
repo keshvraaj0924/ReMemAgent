@@ -14,6 +14,8 @@ The canonical payload is serialized with sorted keys and no insignificant whites
 
 `verify_experiment_identity()` provides the corresponding semantic verification boundary. It validates the persisted identity format, recomputes the expected identity from the supplied configuration, seed set, and provenance, and fails closed when they disagree. The comparison uses a constant-time digest comparison so callers do not need to duplicate identity-checking logic.
 
+Verification should be performed against the complete persisted metadata rather than an identity copied from an artifact. A changed configuration, seed set, or runtime provenance must invalidate the check.
+
 This identity is deliberately distinct from the benchmark artifact manifest. The manifest answers **"are these exact report bytes unchanged?"**; the experiment identity answers **"which protocol and runtime does this artifact represent?"**.
 
 ## Persisted benchmark artifacts
