@@ -202,6 +202,23 @@ def _validate_paired_report_collection(
     return tuple(sorted(selected_reports, key=_seed_sort_key))
 
 
+def _validate_repeated_configuration(
+    reports: tuple[BenchmarkRunReport, ...],
+) -> None:
+    """Ensure repeated reports share protocol configuration apart from the seed."""
+
+    if any(report.configuration is None for report in reports):
+        raise ValueError("repeated benchmark reports must include explicit configuration")
+
+    fingerprints = {
+        benchmark_configuration_fingerprint(report.configuration)
+        for report in reports
+        if report.configuration is not None
+    }
+    if len(fingerprints) != 1:
+        raise ValueError("repeated benchmark reports must share configuration apart from the seed")
+
+
 def _validate_paired_configuration(
     baseline: tuple[BenchmarkRunReport, ...],
     treatment: tuple[BenchmarkRunReport, ...],
@@ -283,6 +300,24 @@ def _normalize_runtime_provenance(
             if value <= 0:
                 raise ValueError("runtime_provenance.schema_version must be positive")
             normalized[key] = value
+            continue
+        if key == "dependency_versions":
+            if not isinstance(value, Mapping):
+                raise TypeError("runtime_provenance.dependency_versions must be a mapping")
+            dependency_versions: dict[str, str] = {}
+            for dependency_name, dependency_version in value.items():
+                if not isinstance(dependency_name, str) or not dependency_name.strip():
+                    raise ValueError(
+                        "runtime_provenance dependency names must be non-empty strings"
+                    )
+                if not isinstance(dependency_version, str):
+                    raise TypeError(
+                        "runtime_provenance dependency versions must be strings"
+                    )
+                dependency_versions[dependency_name] = dependency_version
+            normalized[key] = dict(
+                sorted(dependency_versions.items(), key=lambda item: item[0].lower())
+            )
             continue
         if not isinstance(value, str):
             raise TypeError("runtime_provenance values must be strings")
