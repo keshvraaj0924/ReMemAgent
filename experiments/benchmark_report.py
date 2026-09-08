@@ -119,7 +119,7 @@ def save_repeated_benchmark_reports(
             identity_configuration = replace(reference_configuration, seed=None)
             payload["experiment_identity"] = build_experiment_identity(
                 identity_configuration,
-                tuple(seed for seed in ordered_reports if seed is not None),
+                tuple(report.seed for report in ordered_reports if report.seed is not None),
                 normalized_provenance,
             )
     if statistics is not None:
