@@ -7,7 +7,11 @@ import pytest
 
 from experiments.benchmark_cli import _parse_seeds
 from experiments.paired_benchmark_cli import _build_spec, _parse_seeds as parse_paired_seeds
-from experiments.paired_benchmark_cli import _prepare_output_path, _validate_artifact_destinations, parse_args
+from experiments.paired_benchmark_cli import (
+    _prepare_output_path,
+    _validate_artifact_destinations,
+    parse_args,
+)
 
 
 def _arguments(**overrides) -> Namespace:

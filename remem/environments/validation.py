@@ -92,10 +92,7 @@ def _validate_step_result(step_result: object) -> None:
     """Validate the normalized result returned by one environment step."""
 
     if not isinstance(step_result, StepResult):
-        raise TypeError(
-            "step result must be a StepResult, "
-            f"got {type(step_result).__name__}"
-        )
+        raise TypeError(f"step result must be a StepResult, got {type(step_result).__name__}")
     _validate_observation(step_result.observation, field_name="step observation")
     if not math.isfinite(step_result.reward):
         raise ValueError("step reward must be finite")

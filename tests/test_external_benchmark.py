@@ -288,7 +288,9 @@ def test_run_external_benchmark_records_callable_provenance() -> None:
         "tests.test_external_benchmark:make_environment"
     )
     assert report.configuration.policy_factory == "tests.test_external_benchmark:make_policy"
-    assert report.configuration.success_evaluator == "tests.test_external_benchmark:evaluate_success"
+    assert (
+        report.configuration.success_evaluator == "tests.test_external_benchmark:evaluate_success"
+    )
     assert report.configuration.transfer_success_evaluator is None
     assert report.configuration.minimum_trust == 0.65
 

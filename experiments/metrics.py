@@ -61,11 +61,20 @@ def _validate_results(results: list[AblationResult]) -> None:
         seen_strategies.add(result.strategy)
         if isinstance(result.total_cases, bool) or result.total_cases < 0:
             raise ValueError("total_cases must be a non-negative integer")
-        if isinstance(result.selected_memory, bool) or not 0 <= result.selected_memory <= result.total_cases:
+        if (
+            isinstance(result.selected_memory, bool)
+            or not 0 <= result.selected_memory <= result.total_cases
+        ):
             raise ValueError("selected_memory must be between zero and total_cases")
-        if isinstance(result.negative_transfer_cases, bool) or not 0 <= result.negative_transfer_cases <= result.total_cases:
+        if (
+            isinstance(result.negative_transfer_cases, bool)
+            or not 0 <= result.negative_transfer_cases <= result.total_cases
+        ):
             raise ValueError("negative_transfer_cases must be between zero and total_cases")
-        if isinstance(result.selected_negative_transfer_cases, bool) or not 0 <= result.selected_negative_transfer_cases <= result.selected_memory:
+        if (
+            isinstance(result.selected_negative_transfer_cases, bool)
+            or not 0 <= result.selected_negative_transfer_cases <= result.selected_memory
+        ):
             raise ValueError(
                 "selected_negative_transfer_cases must be between zero and selected_memory"
             )

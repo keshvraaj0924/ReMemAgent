@@ -5,7 +5,11 @@ import pytest
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
 from remem.integrations.grpo import GrpoBatch, GrpoSample
-from remem.integrations.verl import VerlTrajectory, encode_episode_for_verl, encode_grpo_batch_for_verl
+from remem.integrations.verl import (
+    VerlTrajectory,
+    encode_episode_for_verl,
+    encode_grpo_batch_for_verl,
+)
 from remem.integrations.verl_adapter import adapt_agent_loop_output
 
 

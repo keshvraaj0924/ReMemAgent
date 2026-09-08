@@ -61,7 +61,9 @@ def test_run_paired_external_benchmarks_uses_same_seeds(monkeypatch) -> None:
     assert result.comparison == ("no-memory", "memory")
 
 
-def test_run_paired_external_benchmarks_validates_both_policies_before_execution(monkeypatch) -> None:
+def test_run_paired_external_benchmarks_validates_both_policies_before_execution(
+    monkeypatch,
+) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:missing_policy")
     events: list[str] = []
@@ -88,7 +90,9 @@ def test_run_paired_external_benchmarks_validates_both_policies_before_execution
 
 def test_run_paired_external_benchmarks_rejects_evaluation_drift(monkeypatch) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
-    treatment = replace(baseline, max_steps=5, policy_factory="tests.test_external_benchmark:make_memory_policy")
+    treatment = replace(
+        baseline, max_steps=5, policy_factory="tests.test_external_benchmark:make_memory_policy"
+    )
     monkeypatch.setattr(
         "experiments.paired_benchmark.run_repeated_external_benchmarks",
         lambda *args, **kwargs: pytest.fail("execution must not start after validation failure"),
@@ -125,7 +129,9 @@ def test_preflight_paired_external_benchmarks_checks_both_conditions(monkeypatch
     ]
 
 
-def test_run_paired_external_benchmarks_with_preflight_orders_preflight_before_run(monkeypatch) -> None:
+def test_run_paired_external_benchmarks_with_preflight_orders_preflight_before_run(
+    monkeypatch,
+) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")
     events: list[str] = []

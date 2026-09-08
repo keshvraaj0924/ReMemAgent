@@ -7,7 +7,9 @@ from experiments import environment_cli
 from remem.environments.dependencies import DependencyStatus
 
 
-def test_main_reports_all_benchmarks_and_succeeds_when_required_dependency_is_available(capsys) -> None:
+def test_main_reports_all_benchmarks_and_succeeds_when_required_dependency_is_available(
+    capsys,
+) -> None:
     statuses = (
         DependencyStatus("alfworld", True, "alfworld"),
         DependencyStatus("webshop", False, "webshop"),
@@ -21,8 +23,7 @@ def test_main_reports_all_benchmarks_and_succeeds_when_required_dependency_is_av
 
     assert result == 0
     assert capsys.readouterr().out == (
-        "alfworld: available (import=alfworld)\n"
-        "webshop: missing (import=webshop)\n"
+        "alfworld: available (import=alfworld)\nwebshop: missing (import=webshop)\n"
     )
 
 

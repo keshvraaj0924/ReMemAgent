@@ -133,8 +133,7 @@ def _validate_paired_specs(
     if mismatches:
         joined_fields = ", ".join(mismatches)
         raise ValueError(
-            "paired benchmark specifications must share evaluation configuration: "
-            f"{joined_fields}"
+            f"paired benchmark specifications must share evaluation configuration: {joined_fields}"
         )
 
 

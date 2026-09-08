@@ -60,7 +60,9 @@ def test_seeded_webshop_reset_rejects_explicit_seed() -> None:
         adapter.reset(seed=4)
 
 
-def test_webshop_factory_restores_rng_after_gym_construction(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_webshop_factory_restores_rng_after_gym_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_gym = types.ModuleType("gym")
     environment = FakeWebShopEnvironment()
     construction_values: list[int] = []
@@ -231,12 +233,12 @@ def test_alfworld_factory_freezes_mutable_configuration(monkeypatch: Any) -> Non
 
     factory(7)
 
-    assert observed_configs == [
-        {"env": {"type": "AlfredTWEnv", "nested": {"split": "eval"}}}
-    ]
+    assert observed_configs == [{"env": {"type": "AlfredTWEnv", "nested": {"split": "eval"}}}]
 
 
-def test_alfworld_factory_normalizes_train_eval_before_external_construction(monkeypatch: Any) -> None:
+def test_alfworld_factory_normalizes_train_eval_before_external_construction(
+    monkeypatch: Any,
+) -> None:
     observed_train_eval: list[str] = []
 
     class FakeInitializedEnvironment:

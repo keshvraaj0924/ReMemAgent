@@ -21,9 +21,7 @@ class FakeAlfWorld:
 
 
 def test_alfworld_adapter_normalizes_valid_five_value_step() -> None:
-    adapter = AlfWorldAdapter(
-        FakeAlfWorld((["next"], [1.0], [True], [False], {"score": [1]}))
-    )
+    adapter = AlfWorldAdapter(FakeAlfWorld((["next"], [1.0], [True], [False], {"score": [1]})))
 
     assert adapter.reset() == "initial observation"
     result = adapter.step("look")
@@ -36,9 +34,7 @@ def test_alfworld_adapter_normalizes_valid_five_value_step() -> None:
 
 
 def test_alfworld_adapter_rejects_non_boolean_terminal_flags() -> None:
-    adapter = AlfWorldAdapter(
-        FakeAlfWorld((["next"], [0.0], ["false"], [False], {}))
-    )
+    adapter = AlfWorldAdapter(FakeAlfWorld((["next"], [0.0], ["false"], [False], {})))
 
     with pytest.raises(TypeError, match="terminated flag must be a boolean"):
         adapter.step("look")

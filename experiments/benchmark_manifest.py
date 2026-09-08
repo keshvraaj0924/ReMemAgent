@@ -31,13 +31,14 @@ class BenchmarkArtifactManifest:
             raise ValueError("benchmark artifact manifest schema version must be an integer")
         if self.schema_version != BENCHMARK_REPORT_SCHEMA_VERSION:
             raise ValueError(
-                "unsupported benchmark artifact report schema version: "
-                f"{self.schema_version!r}"
+                f"unsupported benchmark artifact report schema version: {self.schema_version!r}"
             )
         if not _is_strict_integer(self.byte_count) or self.byte_count < 0:
             raise ValueError("benchmark artifact manifest byte count must be non-negative")
         if not isinstance(self.sha256, str) or not _is_lowercase_hex_digest(self.sha256):
-            raise ValueError("benchmark artifact manifest sha256 must be a lowercase SHA-256 digest")
+            raise ValueError(
+                "benchmark artifact manifest sha256 must be a lowercase SHA-256 digest"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible manifest representation."""
@@ -56,10 +57,7 @@ def build_benchmark_artifact_manifest(report_path: Path) -> BenchmarkArtifactMan
     document = _load_json_document(report_path, payload)
     schema_version = document.get("schema_version")
     if not _is_strict_integer(schema_version) or schema_version != BENCHMARK_REPORT_SCHEMA_VERSION:
-        raise ValueError(
-            "unsupported benchmark report schema version: "
-            f"{schema_version!r}"
-        )
+        raise ValueError(f"unsupported benchmark report schema version: {schema_version!r}")
     return BenchmarkArtifactManifest(
         schema_version=schema_version,
         byte_count=len(payload),
@@ -77,11 +75,14 @@ def save_benchmark_artifact_manifest(
         report_path.suffix + ".manifest.json"
     )
     manifest = build_benchmark_artifact_manifest(report_path)
-    payload = json.dumps(
-        {"manifest_schema_version": MANIFEST_SCHEMA_VERSION, **manifest.to_dict()},
-        sort_keys=True,
-        separators=(",", ":"),
-    ) + "\n"
+    payload = (
+        json.dumps(
+            {"manifest_schema_version": MANIFEST_SCHEMA_VERSION, **manifest.to_dict()},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
     selected_manifest_path.parent.mkdir(parents=True, exist_ok=True)
     file_descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{selected_manifest_path.name}.",
@@ -119,8 +120,7 @@ def load_benchmark_artifact_manifest(manifest_path: Path) -> BenchmarkArtifactMa
         or manifest_schema_version != MANIFEST_SCHEMA_VERSION
     ):
         raise ValueError(
-            "unsupported benchmark artifact manifest schema version: "
-            f"{manifest_schema_version!r}"
+            f"unsupported benchmark artifact manifest schema version: {manifest_schema_version!r}"
         )
     schema_version = document.get("schema_version")
     byte_count = document.get("byte_count")
@@ -149,7 +149,10 @@ def verify_benchmark_artifact(
     """Fail closed when a benchmark report differs from its integrity manifest."""
 
     current = build_benchmark_artifact_manifest(report_path)
-    if current.schema_version != manifest.schema_version or current.byte_count != manifest.byte_count:
+    if (
+        current.schema_version != manifest.schema_version
+        or current.byte_count != manifest.byte_count
+    ):
         raise ValueError(
             "benchmark artifact integrity verification failed: "
             f"expected {manifest.sha256}, found {current.sha256}"

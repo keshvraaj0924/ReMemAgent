@@ -18,7 +18,9 @@ def normalize_reset(result: Any) -> str:
     return str(observation)
 
 
-def normalize_step(result: Iterable[Any] | StepResult) -> tuple[str, float, bool, bool, dict[str, Any]]:
+def normalize_step(
+    result: Iterable[Any] | StepResult,
+) -> tuple[str, float, bool, bool, dict[str, Any]]:
     """Normalize native or four-/five-field step results into one stable representation."""
 
     if isinstance(result, StepResult):

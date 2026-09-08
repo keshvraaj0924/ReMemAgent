@@ -67,7 +67,9 @@ def test_alfworld_factory_isolates_mutation_between_environment_instances(
     assert created[0].config["env"] is not created[1].config["env"]
 
 
-def test_alfworld_factory_uses_upstream_environment_constructor(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_alfworld_factory_uses_upstream_environment_constructor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     created: list[FakeAlfWorldEnvironment] = []
 
     def get_environment(env_type: str):
@@ -140,8 +142,8 @@ def test_alfworld_factory_rejects_non_singleton_batch() -> None:
 def test_webshop_factory_creates_seeded_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     environment = FakeWebShopEnvironment()
     gym_module = types.ModuleType("gym")
-    gym_module.make = lambda environment_id, **kwargs: (
-        _assert_webshop_make(environment_id, kwargs, environment)
+    gym_module.make = lambda environment_id, **kwargs: _assert_webshop_make(
+        environment_id, kwargs, environment
     )
     monkeypatch.setitem(sys.modules, "gym", gym_module)
 
@@ -186,7 +188,9 @@ def test_webshop_factory_accepts_supported_gym_version(monkeypatch: pytest.Monke
     assert factory(23) is not environment
 
 
-def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_webshop_factory_supports_legacy_reset_without_seed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     environment = LegacyWebShopEnvironment()
     gym_module = types.ModuleType("gym")
     gym_module.make = lambda _environment_id, **_kwargs: environment
@@ -200,7 +204,9 @@ def test_webshop_factory_supports_legacy_reset_without_seed(monkeypatch: pytest.
     assert environment.reset_calls == 1
 
 
-def test_webshop_factory_preserves_reset_failure_for_caller(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_webshop_factory_preserves_reset_failure_for_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     failure = RuntimeError("reset failed")
     environment = FakeWebShopEnvironment(reset_error=failure)
     gym_module = types.ModuleType("gym")
@@ -219,7 +225,9 @@ def test_webshop_factory_preserves_reset_failure_for_caller(monkeypatch: pytest.
     assert environment.close_calls == 1
 
 
-def test_webshop_factory_closes_environment_when_reset_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_webshop_factory_closes_environment_when_reset_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class MissingResetEnvironment:
         def __init__(self) -> None:
             self.close_calls = 0

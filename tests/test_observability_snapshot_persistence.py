@@ -22,8 +22,7 @@ def test_write_observation_snapshot_is_deterministic(tmp_path: Path) -> None:
 
     assert first_path.read_bytes() == second_path.read_bytes()
     assert first_path.read_text(encoding="utf-8") == (
-        '{"counters":{"a.metric":1.0,"z.metric":2.0},'
-        '"durations_seconds":{"route":0.25}}\n'
+        '{"counters":{"a.metric":1.0,"z.metric":2.0},"durations_seconds":{"route":0.25}}\n'
     )
 
 

@@ -40,14 +40,12 @@ class RuntimeProvenance:
             raise TypeError("schema_version must be an integer")
         if self.schema_version != RUNTIME_PROVENANCE_SCHEMA_VERSION:
             raise ValueError(
-                "unsupported runtime provenance schema version: "
-                f"{self.schema_version}"
+                f"unsupported runtime provenance schema version: {self.schema_version}"
             )
         _require_non_empty_string("code_revision", self.code_revision)
         if self.working_tree_state not in VALID_WORKING_TREE_STATES:
             raise ValueError(
-                "working_tree_state must be one of: "
-                f"{', '.join(sorted(VALID_WORKING_TREE_STATES))}"
+                f"working_tree_state must be one of: {', '.join(sorted(VALID_WORKING_TREE_STATES))}"
             )
         for field_name, value in (
             ("python_version", self.python_version),
@@ -62,9 +60,7 @@ class RuntimeProvenance:
         detached_versions: dict[str, str] = {}
         for name, dependency_version in self.dependency_versions.items():
             _require_non_empty_string("dependency name", name)
-            _require_non_empty_string(
-                f"dependency version for {name!r}", dependency_version
-            )
+            _require_non_empty_string(f"dependency version for {name!r}", dependency_version)
             detached_versions[name] = dependency_version
         normalized_versions = dict(
             sorted(detached_versions.items(), key=lambda item: item[0].lower())
@@ -103,17 +99,14 @@ def collect_runtime_provenance(
     )
 
 
-def _resolve_working_tree_state(
-    environment: Mapping[str, str], repository_path: Path
-) -> str:
+def _resolve_working_tree_state(environment: Mapping[str, str], repository_path: Path) -> str:
     """Resolve an explicit or checkout-derived working-tree state."""
 
     explicit_state = environment.get("REMEM_GIT_STATE")
     if explicit_state is not None:
         if explicit_state not in VALID_WORKING_TREE_STATES:
             raise ValueError(
-                "REMEM_GIT_STATE must be one of: "
-                f"{', '.join(sorted(VALID_WORKING_TREE_STATES))}"
+                f"REMEM_GIT_STATE must be one of: {', '.join(sorted(VALID_WORKING_TREE_STATES))}"
             )
         return explicit_state
     return _git_working_tree_state(repository_path)

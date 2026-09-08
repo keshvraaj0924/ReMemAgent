@@ -35,7 +35,9 @@ class TrainingArtifactManifest:
             raise ValueError("artifact_type must not be empty")
         if self.row_count < 1:
             raise ValueError("row_count must be positive")
-        if len(self.sha256) != 64 or any(character not in "0123456789abcdef" for character in self.sha256):
+        if len(self.sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in self.sha256
+        ):
             raise ValueError("sha256 must be a lowercase SHA-256 digest")
 
     def to_dict(self) -> dict[str, object]:

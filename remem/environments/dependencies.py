@@ -15,7 +15,9 @@ class DependencyStatus:
     import_name: str
 
 
-def check_optional_dependency(package_name: str, *, import_name: str | None = None) -> DependencyStatus:
+def check_optional_dependency(
+    package_name: str, *, import_name: str | None = None
+) -> DependencyStatus:
     """Check whether an optional package can be discovered without importing it."""
 
     if not package_name.strip():

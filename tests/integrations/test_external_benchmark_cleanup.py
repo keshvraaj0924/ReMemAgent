@@ -6,7 +6,10 @@ from typing import Any
 
 import pytest
 
-from experiments.external_benchmark import ExternalBenchmarkSpec, validate_external_benchmark_runtime
+from experiments.external_benchmark import (
+    ExternalBenchmarkSpec,
+    validate_external_benchmark_runtime,
+)
 
 
 class ClosableEnvironment:
@@ -35,7 +38,9 @@ def test_external_preflight_closes_environment_when_environment_validation_fails
 ) -> None:
     environment = ClosableEnvironment()
 
-    monkeypatch.setattr("experiments.external_benchmark.validate_external_benchmark", lambda _spec: None)
+    monkeypatch.setattr(
+        "experiments.external_benchmark.validate_external_benchmark", lambda _spec: None
+    )
     monkeypatch.setattr(
         "experiments.external_benchmark.load_benchmark_environment_factory",
         lambda _name, _spec: lambda _seed: environment,
@@ -44,7 +49,9 @@ def test_external_preflight_closes_environment_when_environment_validation_fails
     def fail_validation(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("environment validation failed")
 
-    monkeypatch.setattr("experiments.external_benchmark.validate_environment_contract", fail_validation)
+    monkeypatch.setattr(
+        "experiments.external_benchmark.validate_environment_contract", fail_validation
+    )
 
     with pytest.raises(RuntimeError, match="environment validation failed"):
         validate_external_benchmark_runtime(_make_spec())
@@ -57,7 +64,9 @@ def test_external_preflight_closes_environment_when_policy_validation_fails(
 ) -> None:
     environment = ClosableEnvironment()
 
-    monkeypatch.setattr("experiments.external_benchmark.validate_external_benchmark", lambda _spec: None)
+    monkeypatch.setattr(
+        "experiments.external_benchmark.validate_external_benchmark", lambda _spec: None
+    )
     monkeypatch.setattr(
         "experiments.external_benchmark.load_benchmark_environment_factory",
         lambda _name, _spec: lambda _seed: environment,

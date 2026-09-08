@@ -73,8 +73,7 @@ class ExperimentManifest:
             raise ValueError("expected_sha256 must contain only hexadecimal characters")
         if not hmac.compare_digest(self.sha256, normalized_digest):
             raise ValueError(
-                "manifest SHA-256 mismatch: "
-                f"expected {expected_sha256}, computed {self.sha256}"
+                f"manifest SHA-256 mismatch: expected {expected_sha256}, computed {self.sha256}"
             )
 
 

@@ -44,7 +44,9 @@ class GrpoSample:
             raise ValueError("reward must be finite")
         if not isinstance(self.memory_ids, tuple):
             raise TypeError("memory_ids must be a tuple of strings")
-        if any(not isinstance(memory_id, str) or not memory_id.strip() for memory_id in self.memory_ids):
+        if any(
+            not isinstance(memory_id, str) or not memory_id.strip() for memory_id in self.memory_ids
+        ):
             raise ValueError("memory_ids must contain only non-empty strings")
 
     def to_dict(self) -> dict[str, object]:

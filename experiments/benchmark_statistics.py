@@ -139,16 +139,13 @@ def compare_benchmark_reports(
 
     seeds = tuple(sorted(baseline_by_seed))
     success_deltas = tuple(
-        treatment_by_seed[seed].success_rate - baseline_by_seed[seed].success_rate
-        for seed in seeds
+        treatment_by_seed[seed].success_rate - baseline_by_seed[seed].success_rate for seed in seeds
     )
     reward_deltas = tuple(
-        treatment_by_seed[seed].mean_reward - baseline_by_seed[seed].mean_reward
-        for seed in seeds
+        treatment_by_seed[seed].mean_reward - baseline_by_seed[seed].mean_reward for seed in seeds
     )
     transfer_deltas = tuple(
-        treatment_by_seed[seed].transfer_success_rate
-        - baseline_by_seed[seed].transfer_success_rate
+        treatment_by_seed[seed].transfer_success_rate - baseline_by_seed[seed].transfer_success_rate
         for seed in seeds
     )
 
@@ -333,9 +330,7 @@ def _summarize(values: tuple[float, ...]) -> MetricSummary:
     if len(values) == 1:
         sample_stddev = 0.0
     else:
-        sample_stddev = sqrt(
-            sum((value - mean) ** 2 for value in values) / (len(values) - 1)
-        )
+        sample_stddev = sqrt(sum((value - mean) ** 2 for value in values) / (len(values) - 1))
     standard_error = sample_stddev / sqrt(len(values))
     margin = CONFIDENCE_Z_95 * standard_error
     return MetricSummary(

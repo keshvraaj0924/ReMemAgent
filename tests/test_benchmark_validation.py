@@ -38,7 +38,9 @@ def test_validation_rejects_duplicate_episode_ids() -> None:
 def test_validation_rejects_non_contiguous_steps() -> None:
     report = _report()
     step = report.episodes[0].episode.steps[0]
-    episode = EpisodeResult("task", (EpisodeStep(2, "task", "look", step.result),), 1.0, True, False)
+    episode = EpisodeResult(
+        "task", (EpisodeStep(2, "task", "look", step.result),), 1.0, True, False
+    )
     invalid = BenchmarkRunReport(
         "synthetic",
         (BenchmarkEpisodeReport("synthetic:0", episode, True, 0),),

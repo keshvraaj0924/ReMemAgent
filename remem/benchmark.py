@@ -55,9 +55,7 @@ class BenchmarkRunConfiguration:
             raise ValueError("max_steps must be a positive integer")
         if self.seed is not None and not _is_strict_integer(self.seed):
             raise ValueError("seed must be an integer when provided")
-        if isinstance(self.minimum_trust, bool) or not isinstance(
-            self.minimum_trust, (int, float)
-        ):
+        if isinstance(self.minimum_trust, bool) or not isinstance(self.minimum_trust, (int, float)):
             raise TypeError("minimum_trust must be a number between 0 and 1")
         if not math.isfinite(float(self.minimum_trust)):
             raise ValueError("minimum_trust must be finite")

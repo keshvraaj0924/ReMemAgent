@@ -232,9 +232,24 @@ def test_benchmark_runner_rejects_non_callable_dependencies_before_execution() -
     }
 
     invalid_inputs = (
-        {**common, "environment_factory": object(), "policy_factory": lambda index, store: lambda state: "act", "success_evaluator": lambda episode: True},
-        {**common, "environment_factory": lambda index: FakeEnvironment(index), "policy_factory": object(), "success_evaluator": lambda episode: True},
-        {**common, "environment_factory": lambda index: FakeEnvironment(index), "policy_factory": lambda index, store: lambda state: "act", "success_evaluator": object()},
+        {
+            **common,
+            "environment_factory": object(),
+            "policy_factory": lambda index, store: lambda state: "act",
+            "success_evaluator": lambda episode: True,
+        },
+        {
+            **common,
+            "environment_factory": lambda index: FakeEnvironment(index),
+            "policy_factory": object(),
+            "success_evaluator": lambda episode: True,
+        },
+        {
+            **common,
+            "environment_factory": lambda index: FakeEnvironment(index),
+            "policy_factory": lambda index, store: lambda state: "act",
+            "success_evaluator": object(),
+        },
     )
 
     for kwargs in invalid_inputs:

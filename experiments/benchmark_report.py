@@ -311,9 +311,7 @@ def _normalize_runtime_provenance(
                         "runtime_provenance dependency names must be non-empty strings"
                     )
                 if not isinstance(dependency_version, str):
-                    raise TypeError(
-                        "runtime_provenance dependency versions must be strings"
-                    )
+                    raise TypeError("runtime_provenance dependency versions must be strings")
                 dependency_versions[dependency_name] = dependency_version
             normalized[key] = dict(
                 sorted(dependency_versions.items(), key=lambda item: item[0].lower())

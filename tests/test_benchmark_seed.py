@@ -57,10 +57,8 @@ def test_unseeded_benchmark_preserves_episode_index_factory_contract() -> None:
         benchmark_name="unseeded-smoke",
         episode_count=2,
         max_steps=1,
-        environment_factory=lambda seed: (
-            observed_seeds.append(seed) or SeedEnvironment(seed)
-        ),
-        policy_factory=lambda seed, store: (lambda state: "act"),
+        environment_factory=lambda seed: observed_seeds.append(seed) or SeedEnvironment(seed),
+        policy_factory=lambda seed, store: lambda state: "act",
         success_evaluator=lambda episode: True,
     )
 

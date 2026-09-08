@@ -54,9 +54,7 @@ class VerlTrajectory:
         if self.response_logprobs is not None:
             normalized_logprobs = tuple(self.response_logprobs)
             if len(normalized_logprobs) != len(self.response_ids):
-                raise ValueError(
-                    "response_logprobs must have the same length as response_ids"
-                )
+                raise ValueError("response_logprobs must have the same length as response_ids")
             for logprob in normalized_logprobs:
                 _validate_real_number(logprob, "response_logprobs")
                 if not isfinite(logprob):

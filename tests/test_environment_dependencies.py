@@ -24,9 +24,13 @@ def test_check_optional_dependency_supports_distinct_package_and_import_names() 
 
 
 def test_check_optional_dependency_reports_missing_import() -> None:
-    status = check_optional_dependency("missing-package", import_name="definitely_missing_remem_dependency")
+    status = check_optional_dependency(
+        "missing-package", import_name="definitely_missing_remem_dependency"
+    )
 
-    assert status == DependencyStatus("missing-package", False, "definitely_missing_remem_dependency")
+    assert status == DependencyStatus(
+        "missing-package", False, "definitely_missing_remem_dependency"
+    )
 
 
 def test_check_optional_dependency_rejects_empty_names() -> None:
@@ -38,7 +42,10 @@ def test_check_optional_dependency_rejects_empty_names() -> None:
 
 
 def test_benchmark_dependency_check_uses_expected_import_names() -> None:
-    with patch("remem.environments.dependencies.find_spec", side_effect=lambda name: object() if name == "alfworld" else None) as find_spec:
+    with patch(
+        "remem.environments.dependencies.find_spec",
+        side_effect=lambda name: object() if name == "alfworld" else None,
+    ) as find_spec:
         statuses = check_benchmark_dependencies()
 
     assert statuses == (

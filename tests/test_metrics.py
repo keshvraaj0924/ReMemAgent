@@ -31,7 +31,9 @@ def test_compare_strategies_rejects_missing_baseline() -> None:
         if result.strategy is not AblationStrategy.SELF_REASONING_ALWAYS
     ]
 
-    with pytest.raises(ValueError, match="results must contain exactly one self-reasoning baseline"):
+    with pytest.raises(
+        ValueError, match="results must contain exactly one self-reasoning baseline"
+    ):
         compare_strategies(without_baseline)
 
 

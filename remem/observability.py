@@ -149,7 +149,12 @@ class ObservationOperation:
         self._started_at = monotonic()
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: object,
+    ) -> None:
         if self._started_at is None:
             return
         self._collector.observe_duration(self._name, monotonic() - self._started_at)
@@ -197,12 +202,15 @@ def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) 
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(
-        snapshot.to_dict(),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ) + "\n"
+    payload = (
+        json.dumps(
+            snapshot.to_dict(),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
 
     with NamedTemporaryFile(
         mode="w",

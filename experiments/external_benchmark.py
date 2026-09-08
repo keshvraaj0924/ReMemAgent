@@ -70,7 +70,9 @@ class ExternalBenchmarkSpec:
         if self.action_policy_factory is not None:
             _validate_callable_specification("action_policy_factory", self.action_policy_factory)
         if self.transfer_success_evaluator is not None:
-            _validate_callable_specification("transfer_success_evaluator", self.transfer_success_evaluator)
+            _validate_callable_specification(
+                "transfer_success_evaluator", self.transfer_success_evaluator
+            )
         if isinstance(self.minimum_trust, bool) or not isinstance(self.minimum_trust, (int, float)):
             raise TypeError("minimum_trust must be a number between 0 and 1")
         if not isfinite(float(self.minimum_trust)):
@@ -121,7 +123,9 @@ def validate_external_benchmark_runtime(
     """
 
     validate_external_benchmark(spec)
-    environment_factory = load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
+    environment_factory = load_benchmark_environment_factory(
+        spec.benchmark_name, spec.environment_factory
+    )
     probe_seed = 0 if spec.seed is None else spec.seed
     environment = environment_factory(probe_seed)
     try:
@@ -160,7 +164,9 @@ def run_external_benchmark(
     """
 
     selected_runner = runner or BenchmarkSuiteRunner()
-    environment_factory = load_benchmark_environment_factory(spec.benchmark_name, spec.environment_factory)
+    environment_factory = load_benchmark_environment_factory(
+        spec.benchmark_name, spec.environment_factory
+    )
     policy_factory = _resolve_policy_factory(spec)
     success_evaluator = cast(SuccessEvaluator, resolve_callable(spec.success_evaluator))
     transfer_success_evaluator = (
@@ -206,7 +212,9 @@ def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     """Resolve either a complete policy or compose one from an action policy."""
 
     if spec.action_policy_factory is not None:
-        action_policy_factory = cast(ActionPolicyFactory, resolve_callable(spec.action_policy_factory))
+        action_policy_factory = cast(
+            ActionPolicyFactory, resolve_callable(spec.action_policy_factory)
+        )
         return build_memory_guided_policy_factory(
             action_policy_factory,
             minimum_trust=spec.minimum_trust,
@@ -258,5 +266,3 @@ def _close_environment(environment: object) -> None:
     close = getattr(environment, "close", None)
     if callable(close):
         close()
-
-

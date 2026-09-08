@@ -63,7 +63,9 @@ def test_save_repeated_benchmark_reports_rejects_mixed_benchmarks(tmp_path) -> N
         ),
     )
 
-    with pytest.raises(ValueError, match="^repeated benchmark reports must use one benchmark name$"):
+    with pytest.raises(
+        ValueError, match="^repeated benchmark reports must use one benchmark name$"
+    ):
         save_repeated_benchmark_reports([first, second], tmp_path / "repeated.json")
 
 
@@ -86,7 +88,9 @@ def test_save_repeated_benchmark_reports_rejects_stale_statistics(tmp_path) -> N
     statistics = summarize_benchmark_reports(reports).to_dict()
     statistics["success_rate"]["mean"] += 0.1
 
-    with pytest.raises(ValueError, match="^statistics must exactly match the supplied benchmark reports$"):
+    with pytest.raises(
+        ValueError, match="^statistics must exactly match the supplied benchmark reports$"
+    ):
         save_repeated_benchmark_reports(
             reports,
             tmp_path / "repeated.json",

@@ -69,9 +69,7 @@ def _load_verl_types(
     try:
         from verl.experimental.agent_loop.agent_loop import AgentLoopBase, AgentLoopOutput
     except ModuleNotFoundError as exc:
-        if exc.name is not None and (
-            exc.name == "verl" or exc.name.startswith("verl.")
-        ):
+        if exc.name is not None and (exc.name == "verl" or exc.name.startswith("verl.")):
             raise RuntimeError(
                 "verl is required to build an AgentLoopBase adapter; "
                 "install a compatible verl release"

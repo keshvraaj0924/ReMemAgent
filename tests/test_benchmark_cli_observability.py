@@ -40,9 +40,7 @@ def test_main_persists_single_run_observability_snapshot(
 
     assert benchmark_cli.main() == 0
 
-    snapshot = json.loads(
-        (tmp_path / "observability.json").read_text(encoding="utf-8")
-    )
+    snapshot = json.loads((tmp_path / "observability.json").read_text(encoding="utf-8"))
     assert snapshot["counters"]["benchmark.runs"] == 1.0
     assert snapshot["counters"]["benchmark.runs.completed"] == 1.0
     assert snapshot["counters"]["benchmark.episodes.started"] == 2.0
@@ -62,9 +60,7 @@ def test_main_persists_repeated_run_observability_snapshot(
 
     assert benchmark_cli.main() == 0
 
-    snapshot = json.loads(
-        (tmp_path / "observability.json").read_text(encoding="utf-8")
-    )
+    snapshot = json.loads((tmp_path / "observability.json").read_text(encoding="utf-8"))
     assert snapshot["counters"]["benchmark.runs"] == 1.0
     assert snapshot["counters"]["benchmark.runs.completed"] == 1.0
     assert snapshot["counters"]["benchmark.episodes.completed"] == 4.0
