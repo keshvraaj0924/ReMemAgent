@@ -9,6 +9,7 @@ change policy behavior or memory selection.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from math import isfinite
 from typing import Any, Callable, Mapping, Sequence
 
 from experiments.benchmark_statistics import (
@@ -39,6 +40,20 @@ class PairedMetricAnalysis:
     effect_size_dz: float | None
     sample_size: int
 
+    def __post_init__(self) -> None:
+        """Reject malformed statistical values before serialization."""
+
+        if not isfinite(self.observed_mean_delta):
+            raise ValueError("observed_mean_delta must be finite")
+        _validate_probability(self.p_value, "p_value")
+        _validate_probability(self.adjusted_p_value, "adjusted_p_value")
+        if self.effect_size_dz is not None and not isfinite(self.effect_size_dz):
+            raise ValueError("effect_size_dz must be finite when provided")
+        if not isinstance(self.sample_size, int) or isinstance(self.sample_size, bool):
+            raise TypeError("sample_size must be an integer")
+        if self.sample_size < 1:
+            raise ValueError("sample_size must be at least one")
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""
 
@@ -53,6 +68,31 @@ class PairedBenchmarkAnalysis:
     treatment_label: str
     seeds: tuple[int, ...]
     metrics: dict[str, PairedMetricAnalysis]
+
+    def __post_init__(self) -> None:
+        """Enforce the immutable schema expected by research artifacts."""
+
+        normalized_baseline = _validate_condition_label(self.baseline_label, "baseline_label")
+        normalized_treatment = _validate_condition_label(self.treatment_label, "treatment_label")
+        if normalized_baseline.casefold() == normalized_treatment.casefold():
+            raise ValueError("baseline_label and treatment_label must identify distinct conditions")
+        if not self.seeds:
+            raise ValueError("seeds must contain at least one paired seed")
+        if len(self.seeds) != len(set(self.seeds)):
+            raise ValueError("seeds must be unique")
+        if tuple(sorted(self.seeds)) != self.seeds:
+            raise ValueError("seeds must be sorted in ascending order")
+        if set(self.metrics) != set(METRIC_NAMES):
+            raise ValueError("metrics must contain exactly the primary benchmark metrics")
+        for metric_name, metric in self.metrics.items():
+            if not isinstance(metric, PairedMetricAnalysis):
+                raise TypeError(f"metrics[{metric_name!r}] must be PairedMetricAnalysis")
+            if metric.sample_size != len(self.seeds):
+                raise ValueError(f"metrics[{metric_name!r}].sample_size must match seeds")
+
+        object.__setattr__(self, "baseline_label", normalized_baseline)
+        object.__setattr__(self, "treatment_label", normalized_treatment)
+        object.__setattr__(self, "metrics", dict(self.metrics))
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""
@@ -154,6 +194,26 @@ def _paired_metric_deltas(
     return tuple(
         getter(treatment_by_seed[seed]) - getter(baseline_by_seed[seed]) for seed in seeds
     )
+
+
+def _validate_condition_label(label: str, field_name: str) -> str:
+    """Normalize and validate a human-readable condition label."""
+
+    if not isinstance(label, str):
+        raise TypeError(f"{field_name} must be a string")
+    normalized_label = label.strip()
+    if not normalized_label:
+        raise ValueError(f"{field_name} must not be empty")
+    return normalized_label
+
+
+def _validate_probability(value: float, field_name: str) -> None:
+    """Validate a finite probability in the closed unit interval."""
+
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise TypeError(f"{field_name} must be a real numeric value")
+    if not isfinite(float(value)) or not 0.0 <= float(value) <= 1.0:
+        raise ValueError(f"{field_name} must be a finite value in [0, 1]")
 
 
 __all__ = [
