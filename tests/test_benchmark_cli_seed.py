@@ -31,7 +31,9 @@ def test_main_forwards_seed_to_external_benchmark(monkeypatch, tmp_path: Path) -
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
-    def run_external_benchmark(spec: ExternalBenchmarkSpec) -> object:
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
         captured["spec"] = spec
         return object()
 
