@@ -76,6 +76,34 @@ def test_invalid_events_are_rejected() -> None:
         collector.observe_duration("invalid", -1.0)
 
 
+def test_metric_names_are_trimmed_consistently() -> None:
+    collector = ObservationCollector()
+
+    collector.increment("  retrieval.calls  ")
+    collector.observe_duration("  retrieval.seconds  ", 0.5)
+    collector.record_outcome("  retrieval  ", True)
+
+    snapshot = collector.snapshot()
+    assert snapshot.counters == {
+        "retrieval.calls": 1.0,
+        "retrieval.succeeded": 1.0,
+    }
+    assert snapshot.durations_seconds == {"retrieval.seconds": 0.5}
+
+
+def test_metric_names_reject_non_string_and_whitespace_values() -> None:
+    collector = ObservationCollector()
+
+    with pytest.raises(ValueError, match="event name"):
+        collector.increment("   ")
+
+    with pytest.raises(TypeError, match="duration name must be a string"):
+        collector.observe_duration(123, 0.0)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="outcome name"):
+        collector.record_outcome("   ", True)
+
+
 def test_record_outcome_tracks_mutually_exclusive_results() -> None:
     collector = ObservationCollector()
 
@@ -86,11 +114,6 @@ def test_record_outcome_tracks_mutually_exclusive_results() -> None:
         "benchmark.episode.failed": 1.0,
         "benchmark.episode.succeeded": 1.0,
     }
-
-
-def test_record_outcome_rejects_empty_name() -> None:
-    with pytest.raises(ValueError, match="outcome name"):
-        ObservationCollector().record_outcome("   ", True)
 
 
 def test_merge_observation_snapshots_adds_workers_without_mutating_inputs() -> None:
