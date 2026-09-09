@@ -50,6 +50,7 @@ act → evaluate → consolidate / retire
 | **Lifecycle management** | Validate, consolidate, stale, and retire memories instead of accumulating them indefinitely. |
 | **Negative-transfer evaluation** | Measure when memory actively makes decisions worse. |
 | **Ablation framework** | Compare memory policies under controlled synthetic conditions. |
+| **Paired statistical analysis** | Evaluate matched seed deltas with exact sign-flip tests, Holm correction, and paired effect sizes. |
 
 ## Architecture
 
@@ -111,25 +112,12 @@ ReMemAgent/
 
 **Active research prototype.**
 
-The deterministic research core and integration contracts are implemented and covered by the repository quality suite. A historical GitHub `Quality` run at commit `e9f02fc` (run 305) provides the last explicitly verified engineering baseline. Later commits have changed the quality, packaging, runtime-contract, and experiment-integrity surfaces, so the current branch head requires a fresh successful workflow before it can be described as green.
+The deterministic research core, external benchmark contracts, reproducibility metadata, and paired seed-level statistical analysis are implemented. The latest branch head still requires a fresh successful GitHub quality workflow before it can be described as green.
+
+The statistical layer now supports exact paired sign-flip tests, Holm-Bonferroni correction across the primary metrics, and paired Cohen's *d_z*. These are analysis primitives only; they do not constitute benchmark evidence until real matched runs are produced.
 
 This is an engineering verification statement, not a scientific result. The repository does **not** claim benchmark improvements or production readiness until the corresponding real-world experiments have been executed, repeated, and reproduced.
 
 See [`docs/research-status.md`](docs/research-status.md) for the current evidence boundary, reproducibility contract, limitations, and next milestone.
 
 ## Engineering principles
-
-- **Explicit contracts** — typed domain objects and small composable interfaces.
-- **Deterministic baselines** — research heuristics are reproducible and independently testable.
-- **Learned components stay isolated** — model-based policies can replace heuristics without coupling them to the memory domain.
-- **Tests before claims** — behavior is covered before experimental conclusions are reported.
-- **Failure is evidence** — unsuccessful experiences remain useful when they encode transferable avoidance knowledge.
-- **Controlled complexity** — new components must justify their effect on latency, tokens, and memory growth.
-
-## Research lineage
-
-ReMemAgent is an independent research implementation inspired by reconstructive-memory research, including [MemHarness](https://github.com/KnowledgeXLab/MemHarness). Related work informs the research direction; implementation and experimental extensions in this repository are developed independently.
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
