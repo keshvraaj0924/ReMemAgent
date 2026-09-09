@@ -11,6 +11,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Lock
 from time import monotonic
+from types import MappingProxyType
 from typing import Self
 
 
@@ -33,13 +34,23 @@ class ObservationSnapshot:
     counters: Mapping[str, float]
     durations_seconds: Mapping[str, float]
 
+    def __post_init__(self) -> None:
+        """Validate, normalize, and freeze aggregate mappings."""
+
+        object.__setattr__(self, "counters", _freeze_aggregate_mapping(self.counters, "counter"))
+        object.__setattr__(
+            self,
+            "durations_seconds",
+            _freeze_aggregate_mapping(self.durations_seconds, "duration"),
+        )
+
     def to_dict(self) -> dict[str, object]:
         """Return a versioned, deterministic JSON-compatible representation."""
 
         return {
             "schema_version": OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
-            "counters": dict(sorted(self.counters.items())),
-            "durations_seconds": dict(sorted(self.durations_seconds.items())),
+            "counters": dict(self.counters),
+            "durations_seconds": dict(self.durations_seconds),
         }
 
     @classmethod
@@ -51,9 +62,10 @@ class ObservationSnapshot:
         schema_version = payload.get("schema_version")
         if schema_version != OBSERVATION_SNAPSHOT_SCHEMA_VERSION:
             raise ValueError(f"unsupported observation snapshot schema version: {schema_version!r}")
-        counters = _parse_aggregate_mapping(payload.get("counters"), "counters")
-        durations = _parse_aggregate_mapping(payload.get("durations_seconds"), "durations_seconds")
-        return cls(counters=counters, durations_seconds=durations)
+        return cls(
+            counters=payload.get("counters", {}),
+            durations_seconds=payload.get("durations_seconds", {}),
+        )
 
 
 class ObservationCollector:
@@ -175,22 +187,24 @@ def merge_observation_snapshots(
     return ObservationSnapshot(counters=counters, durations_seconds=durations_seconds)
 
 
-def _parse_aggregate_mapping(value: object, field_name: str) -> dict[str, float]:
-    """Parse and validate one persisted aggregate mapping."""
+def _freeze_aggregate_mapping(value: object, value_type: str) -> Mapping[str, float]:
+    """Validate, normalize, and freeze one aggregate mapping."""
 
     if not isinstance(value, Mapping):
-        raise TypeError(f"observation snapshot {field_name} must be a mapping")
+        raise TypeError(f"observation snapshot {value_type}s must be a mapping")
     parsed: dict[str, float] = {}
     for name, aggregate in value.items():
         if not isinstance(name, str):
-            raise TypeError(f"observation snapshot {field_name} names must be strings")
+            raise TypeError(f"observation snapshot {value_type}s names must be strings")
         if not isinstance(aggregate, (int, float)) or isinstance(aggregate, bool):
-            raise TypeError(f"observation snapshot {field_name} values must be numbers")
-        normalized_name = _validate_snapshot_value(
-            name, float(aggregate), field_name.removesuffix("s")
-        )
+            raise TypeError(f"observation snapshot {value_type}s values must be numbers")
+        normalized_name = _validate_snapshot_value(name, float(aggregate), value_type)
+        if normalized_name in parsed and name != normalized_name:
+            raise ValueError(
+                f"observation snapshot {value_type} names normalize to the same key: {name!r}"
+            )
         parsed[normalized_name] = float(aggregate)
-    return dict(sorted(parsed.items()))
+    return MappingProxyType(dict(sorted(parsed.items())))
 
 
 def _validate_snapshot_value(name: str, value: float, value_type: str) -> str:
