@@ -1,5 +1,3 @@
-"""Stable runtime metadata used to make measured experiments auditable."""
-
 from __future__ import annotations
 
 import hashlib
@@ -58,10 +56,23 @@ class RuntimeProvenance:
             raise TypeError("dependency_versions must be a mapping")
 
         detached_versions: dict[str, str] = {}
+        normalized_names: dict[str, str] = {}
         for name, dependency_version in self.dependency_versions.items():
             _require_non_empty_string("dependency name", name)
-            _require_non_empty_string(f"dependency version for {name!r}", dependency_version)
-            detached_versions[name] = dependency_version
+            normalized_name = name.strip()
+            if not normalized_name:
+                raise ValueError("dependency name must not be whitespace-only")
+            normalized_key = normalized_name.lower()
+            existing_name = normalized_names.get(normalized_key)
+            if existing_name is not None:
+                raise ValueError(
+                    "dependency names must be unique after whitespace and case normalization"
+                )
+            _require_non_empty_string(
+                f"dependency version for {normalized_name!r}", dependency_version
+            )
+            normalized_names[normalized_key] = normalized_name
+            detached_versions[normalized_name] = dependency_version
         normalized_versions = dict(
             sorted(detached_versions.items(), key=lambda item: item[0].lower())
         )
