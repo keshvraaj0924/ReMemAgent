@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from experiments.benchmark_statistics import BenchmarkConditionComparison
 
 BENCHMARK_REPORT_SCHEMA_VERSION = 1
+RUNTIME_PROVENANCE_SCHEMA_VERSION = 1
 
 
 def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
@@ -296,8 +297,10 @@ def _normalize_runtime_provenance(
         if key == "schema_version":
             if not isinstance(value, int) or isinstance(value, bool):
                 raise TypeError("runtime_provenance.schema_version must be an integer")
-            if value <= 0:
-                raise ValueError("runtime_provenance.schema_version must be positive")
+            if value != RUNTIME_PROVENANCE_SCHEMA_VERSION:
+                raise ValueError(
+                    "runtime_provenance.schema_version must match the supported schema version"
+                )
             normalized[key] = value
             continue
         if key == "dependency_versions":
