@@ -171,11 +171,13 @@ def merge_observation_snapshots(
     durations_seconds: dict[str, float] = {}
     for snapshot in snapshots:
         for name, value in snapshot.counters.items():
-            _validate_snapshot_value(name, value, "counter")
-            counters[name] = counters.get(name, 0.0) + value
+            normalized_name = _validate_snapshot_value(name, value, "counter")
+            counters[normalized_name] = counters.get(normalized_name, 0.0) + value
         for name, value in snapshot.durations_seconds.items():
-            _validate_snapshot_value(name, value, "duration")
-            durations_seconds[name] = durations_seconds.get(name, 0.0) + value
+            normalized_name = _validate_snapshot_value(name, value, "duration")
+            durations_seconds[normalized_name] = (
+                durations_seconds.get(normalized_name, 0.0) + value
+            )
     return ObservationSnapshot(counters=counters, durations_seconds=durations_seconds)
 
 
@@ -190,17 +192,20 @@ def _parse_aggregate_mapping(value: object, field_name: str) -> dict[str, float]
             raise TypeError(f"observation snapshot {field_name} names must be strings")
         if not isinstance(aggregate, (int, float)) or isinstance(aggregate, bool):
             raise TypeError(f"observation snapshot {field_name} values must be numbers")
-        _validate_snapshot_value(name, float(aggregate), field_name)
-        parsed[name] = float(aggregate)
+        normalized_name = _validate_snapshot_value(
+            name, float(aggregate), field_name.removesuffix("s")
+        )
+        parsed[normalized_name] = float(aggregate)
     return dict(sorted(parsed.items()))
 
 
-def _validate_snapshot_value(name: str, value: float, value_type: str) -> None:
-    """Validate a persisted aggregate value before including it in a merge."""
+def _validate_snapshot_value(name: str, value: float, value_type: str) -> str:
+    """Validate and normalize a persisted aggregate before using it."""
 
-    _normalize_metric_name(name, f"{value_type} name")
+    normalized_name = _normalize_metric_name(name, f"{value_type} name")
     if not isfinite(value) or value < 0.0:
         raise ValueError(f"{value_type} value must be finite and non-negative")
+    return normalized_name
 
 
 def _normalize_metric_name(name: str, field_name: str) -> str:
