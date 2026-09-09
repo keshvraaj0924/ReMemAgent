@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
-from experiments.verify_benchmark_artifact import verify_report_artifact
+from experiments.verify_benchmark_artifact import main, verify_report_artifact
 
 
 def _write_report(path: Path) -> None:
@@ -48,3 +48,48 @@ def test_verify_report_artifact_rejects_missing_manifest(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="invalid benchmark artifact manifest"):
         verify_report_artifact(report_path)
+
+
+def test_main_returns_nonzero_and_writes_diagnostic_for_invalid_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The executable CLI should report verification failures without a traceback."""
+
+    report_path = tmp_path / "benchmark.json"
+    _write_report(report_path)
+    manifest_path = save_benchmark_artifact_manifest(report_path)
+    report_path.write_text(report_path.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["remem-verify-benchmark", str(report_path), "--manifest", str(manifest_path)],
+    )
+
+    exit_code = main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "benchmark artifact verification failed:" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_returns_zero_for_valid_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The executable CLI should return zero and emit a concise success message."""
+
+    report_path = tmp_path / "benchmark.json"
+    _write_report(report_path)
+    save_benchmark_artifact_manifest(report_path)
+    monkeypatch.setattr("sys.argv", ["remem-verify-benchmark", str(report_path)])
+
+    exit_code = main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "benchmark artifact integrity verified:" in captured.out
+    assert captured.err == ""
