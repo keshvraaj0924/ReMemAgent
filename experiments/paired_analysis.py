@@ -9,7 +9,7 @@ change policy behavior or memory selection.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from experiments.benchmark_statistics import (
     compare_benchmark_reports,
@@ -21,6 +21,12 @@ from remem.benchmark import BenchmarkRunReport
 
 
 METRIC_NAMES = ("success_rate", "mean_reward", "transfer_success_rate")
+MetricGetter = Callable[[BenchmarkRunReport], float]
+_METRIC_GETTERS: dict[str, MetricGetter] = {
+    "success_rate": lambda report: report.success_rate,
+    "mean_reward": lambda report: report.mean_reward,
+    "transfer_success_rate": lambda report: report.transfer_success_rate,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,19 +92,13 @@ def analyze_paired_benchmark_reports(
     seeds = tuple(comparison.seeds)
 
     metric_deltas = {
-        "success_rate": tuple(
-            treatment_by_seed[seed].success_rate - baseline_by_seed[seed].success_rate
-            for seed in seeds
-        ),
-        "mean_reward": tuple(
-            treatment_by_seed[seed].mean_reward - baseline_by_seed[seed].mean_reward
-            for seed in seeds
-        ),
-        "transfer_success_rate": tuple(
-            treatment_by_seed[seed].transfer_success_rate
-            - baseline_by_seed[seed].transfer_success_rate
-            for seed in seeds
-        ),
+        metric_name: _paired_metric_deltas(
+            baseline_by_seed,
+            treatment_by_seed,
+            seeds,
+            getter,
+        )
+        for metric_name, getter in _METRIC_GETTERS.items()
     }
 
     raw_results = {
@@ -114,7 +114,7 @@ def analyze_paired_benchmark_reports(
             observed_mean_delta=raw_results[metric_name].observed_mean_delta,
             p_value=raw_results[metric_name].p_value,
             adjusted_p_value=adjusted_p_values[metric_name],
-            effect_size_dz=paired_cohens_dz(metric_deltas[metric_name]),
+            effect_size_dz=paired_cohens_dz(deltas),
             sample_size=len(deltas),
         )
         for metric_name, deltas in metric_deltas.items()
@@ -124,6 +124,19 @@ def analyze_paired_benchmark_reports(
         treatment_label=comparison.treatment_label,
         seeds=seeds,
         metrics=metrics,
+    )
+
+
+def _paired_metric_deltas(
+    baseline_by_seed: dict[int | None, BenchmarkRunReport],
+    treatment_by_seed: dict[int | None, BenchmarkRunReport],
+    seeds: tuple[int, ...],
+    getter: MetricGetter,
+) -> tuple[float, ...]:
+    """Return treatment-minus-baseline deltas for one metric and seed set."""
+
+    return tuple(
+        getter(treatment_by_seed[seed]) - getter(baseline_by_seed[seed]) for seed in seeds
     )
 
 
