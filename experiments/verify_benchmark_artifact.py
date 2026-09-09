@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from experiments.benchmark_manifest import (
@@ -38,7 +39,12 @@ def main() -> int:
     """Verify a benchmark report and return a process exit status."""
 
     arguments = parse_args()
-    verify_report_artifact(arguments.report, arguments.manifest)
+    try:
+        verify_report_artifact(arguments.report, arguments.manifest)
+    except (OSError, ValueError) as error:
+        print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
+        return 1
+
     print(f"benchmark artifact integrity verified: {arguments.report}")
     return 0
 
