@@ -41,7 +41,9 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
-    def run_external_benchmark(spec: ExternalBenchmarkSpec) -> object:
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
         captured["spec"] = spec
         return report
 
@@ -88,11 +90,14 @@ def test_main_builds_memory_guided_spec(monkeypatch, tmp_path) -> None:
     captured: dict[str, ExternalBenchmarkSpec] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
-    monkeypatch.setattr(
-        benchmark_cli,
-        "run_external_benchmark",
-        lambda spec: captured.setdefault("spec", spec) or report,
-    )
+
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
+        captured["spec"] = spec
+        return report
+
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
     monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
     assert benchmark_cli.main() == 0
@@ -143,7 +148,13 @@ def test_main_persists_requested_benchmark_manifest(monkeypatch, tmp_path: Path)
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
-    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", lambda spec: report)
+
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
+        return report
+
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
     monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
     def save_manifest(report_path: Path, requested_path: Path) -> Path:
@@ -187,7 +198,13 @@ def test_main_allows_existing_output_with_overwrite(monkeypatch, tmp_path: Path)
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
-    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", lambda spec: report)
+
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
+        return report
+
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
     monkeypatch.setattr(
         benchmark_cli,
         "save_benchmark_report",
@@ -206,7 +223,9 @@ def test_main_rejects_existing_manifest_before_running(monkeypatch, tmp_path: Pa
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
-    def run_external_benchmark(spec: ExternalBenchmarkSpec) -> object:
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
         nonlocal run_called
         run_called = True
         return object()
@@ -225,7 +244,9 @@ def test_main_rejects_manifest_equal_to_output_before_running(monkeypatch, tmp_p
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
 
-    def run_external_benchmark(spec: ExternalBenchmarkSpec) -> object:
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
         nonlocal run_called
         run_called = True
         return object()
@@ -246,7 +267,13 @@ def test_main_allows_existing_manifest_with_overwrite(monkeypatch, tmp_path: Pat
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
-    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", lambda spec: report)
+
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
+        return report
+
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
     monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
     def save_manifest(report_path: Path, requested_path: Path) -> Path:
