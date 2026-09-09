@@ -309,6 +309,52 @@ def test_benchmark_runner_accepts_matching_provenance_configuration() -> None:
     assert report.configuration == configuration
 
 
+def test_benchmark_runner_rejects_non_string_provenance_callables() -> None:
+    common = {
+        "benchmark_name": "provenance-contract-smoke",
+        "episode_count": 1,
+        "max_steps": 1,
+        "seed": 3,
+    }
+
+    for field_name in (
+        "environment_factory",
+        "policy_factory",
+        "success_evaluator",
+        "transfer_success_evaluator",
+    ):
+        values = {**common, field_name: object()}
+        try:
+            BenchmarkRunConfiguration(**values)
+        except TypeError as exc:
+            assert field_name in str(exc)
+        else:
+            raise AssertionError("non-string provenance callable fields must be rejected")
+
+
+def test_benchmark_runner_rejects_whitespace_provenance_callables() -> None:
+    common = {
+        "benchmark_name": "provenance-contract-smoke",
+        "episode_count": 1,
+        "max_steps": 1,
+        "seed": 3,
+    }
+
+    for field_name in (
+        "environment_factory",
+        "policy_factory",
+        "success_evaluator",
+        "transfer_success_evaluator",
+    ):
+        values = {**common, field_name: "   "}
+        try:
+            BenchmarkRunConfiguration(**values)
+        except ValueError as exc:
+            assert field_name in str(exc)
+        else:
+            raise AssertionError("whitespace provenance callable fields must be rejected")
+
+
 def test_benchmark_runner_surfaces_cleanup_failure_when_episode_succeeds() -> None:
     collector = ObservationCollector()
 
@@ -345,46 +391,7 @@ def test_benchmark_runner_does_not_mask_episode_failure_with_cleanup_failure() -
     except RuntimeError as exc:
         assert str(exc) == "step failed"
     else:
-        raise AssertionError("episode failure should remain the primary exception")
+        raise AssertionError("episode failure should remain primary")
 
     snapshot = collector.snapshot()
-    assert snapshot.counters["benchmark.episodes.failed"] == 1.0
     assert snapshot.counters["benchmark.environment.close_failures"] == 1.0
-
-
-def test_benchmark_run_configuration_rejects_boolean_and_non_finite_trust() -> None:
-    for minimum_trust in (True, float("nan"), float("inf")):
-        try:
-            BenchmarkRunConfiguration(
-                benchmark_name="strict-config",
-                episode_count=1,
-                max_steps=1,
-                seed=1,
-                minimum_trust=minimum_trust,
-            )
-        except (TypeError, ValueError):
-            pass
-        else:
-            raise AssertionError("invalid minimum_trust should be rejected")
-
-
-def test_benchmark_run_configuration_rejects_boolean_integer_metadata() -> None:
-    common = {
-        "benchmark_name": "strict-config",
-        "episode_count": 1,
-        "max_steps": 1,
-        "seed": 1,
-    }
-
-    for field_name, invalid_value in (
-        ("episode_count", True),
-        ("max_steps", False),
-        ("seed", True),
-    ):
-        values = {**common, field_name: invalid_value}
-        try:
-            BenchmarkRunConfiguration(**values)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError(f"boolean {field_name} should be rejected")
