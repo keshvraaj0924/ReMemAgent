@@ -50,14 +50,9 @@ class ObservationSnapshot:
             raise TypeError("observation snapshot must be a mapping")
         schema_version = payload.get("schema_version")
         if schema_version != OBSERVATION_SNAPSHOT_SCHEMA_VERSION:
-            raise ValueError(
-                "unsupported observation snapshot schema version: "
-                f"{schema_version!r}"
-            )
+            raise ValueError(f"unsupported observation snapshot schema version: {schema_version!r}")
         counters = _parse_aggregate_mapping(payload.get("counters"), "counters")
-        durations = _parse_aggregate_mapping(
-            payload.get("durations_seconds"), "durations_seconds"
-        )
+        durations = _parse_aggregate_mapping(payload.get("durations_seconds"), "durations_seconds")
         return cls(counters=counters, durations_seconds=durations)
 
 
@@ -176,9 +171,7 @@ def merge_observation_snapshots(
             counters[normalized_name] = counters.get(normalized_name, 0.0) + value
         for name, value in snapshot.durations_seconds.items():
             normalized_name = _validate_snapshot_value(name, value, "duration")
-            durations_seconds[normalized_name] = (
-                durations_seconds.get(normalized_name, 0.0) + value
-            )
+            durations_seconds[normalized_name] = durations_seconds.get(normalized_name, 0.0) + value
     return ObservationSnapshot(counters=counters, durations_seconds=durations_seconds)
 
 
