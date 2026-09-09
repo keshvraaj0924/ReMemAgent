@@ -1,106 +1,45 @@
-"""Tests for reproducible experiment fingerprints."""
-
-import math
-
-import pytest
-
-from experiments.reproducibility import fingerprint_cases, fingerprint_experiment_inputs
-from experiments.synthetic_negative_transfer import BenchmarkCase
+from remem.benchmark import BenchmarkRunConfiguration
+from remem.reproducibility import benchmark_configuration_digest
 
 
-def test_case_fingerprint_is_stable_for_identical_inputs() -> None:
-    cases = [
-        BenchmarkCase("a", 0.8, 0.4),
-        BenchmarkCase("b", 0.3, 0.7),
-    ]
-
-    assert fingerprint_cases(cases) == fingerprint_cases(cases)
-
-
-def test_case_fingerprint_changes_when_case_values_change() -> None:
-    original = [BenchmarkCase("a", 0.8, 0.4)]
-    changed = [BenchmarkCase("a", 0.81, 0.4)]
-
-    assert fingerprint_cases(original) != fingerprint_cases(changed)
-
-
-def test_case_fingerprint_preserves_case_order() -> None:
-    first = [BenchmarkCase("a", 0.8, 0.4), BenchmarkCase("b", 0.3, 0.7)]
-    reversed_cases = list(reversed(first))
-
-    assert fingerprint_cases(first) != fingerprint_cases(reversed_cases)
+def make_configuration(**overrides: object) -> BenchmarkRunConfiguration:
+    values: dict[str, object] = {
+        "benchmark_name": "alfworld-smoke",
+        "episode_count": 8,
+        "max_steps": 12,
+        "seed": 41,
+        "environment_factory": "package.module:make_environment",
+        "policy_factory": "package.module:make_policy",
+        "success_evaluator": "package.module:evaluate_success",
+        "transfer_success_evaluator": "package.module:evaluate_transfer",
+        "minimum_trust": 0.25,
+    }
+    values.update(overrides)
+    return BenchmarkRunConfiguration(**values)
 
 
-def test_case_fingerprint_changes_when_memory_attribution_changes() -> None:
-    original = [BenchmarkCase("a", 0.8, 0.4, memory_id="memory_a")]
-    changed = [BenchmarkCase("a", 0.8, 0.4, memory_id="memory_b")]
+def test_benchmark_configuration_digest_is_deterministic() -> None:
+    configuration = make_configuration()
 
-    assert fingerprint_cases(original) != fingerprint_cases(changed)
-
-
-def test_case_fingerprint_changes_when_transfer_outcome_changes() -> None:
-    successful = [BenchmarkCase("a", 0.8, 0.4, transfer_success=True)]
-    failed = [BenchmarkCase("a", 0.8, 0.4, transfer_success=False)]
-
-    assert fingerprint_cases(successful) != fingerprint_cases(failed)
+    assert benchmark_configuration_digest(configuration) == benchmark_configuration_digest(
+        make_configuration()
+    )
+    assert len(benchmark_configuration_digest(configuration)) == 64
 
 
-def test_experiment_fingerprint_is_stable_when_configuration_key_order_changes() -> None:
-    cases = [BenchmarkCase("a", 0.8, 0.4)]
-    first = {"minimum_delta": 0.05, "seed": 42}
-    second = {"seed": 42, "minimum_delta": 0.05}
+def test_benchmark_configuration_digest_changes_when_configuration_changes() -> None:
+    configuration = make_configuration()
+    changed_configuration = make_configuration(seed=42)
 
-    assert fingerprint_experiment_inputs(cases, first) == fingerprint_experiment_inputs(
-        cases, second
+    assert benchmark_configuration_digest(configuration) != benchmark_configuration_digest(
+        changed_configuration
     )
 
 
-def test_experiment_fingerprint_changes_when_configuration_changes() -> None:
-    cases = [BenchmarkCase("a", 0.8, 0.4)]
-    baseline = {"minimum_delta": 0.05, "seed": 42}
-    changed = {"minimum_delta": 0.10, "seed": 42}
+def test_benchmark_configuration_digest_includes_provenance_fields() -> None:
+    configuration = make_configuration()
+    changed_provenance = make_configuration(policy_factory="other.module:make_policy")
 
-    assert fingerprint_experiment_inputs(cases, baseline) != fingerprint_experiment_inputs(
-        cases, changed
+    assert benchmark_configuration_digest(configuration) != benchmark_configuration_digest(
+        changed_provenance
     )
-
-
-def test_experiment_fingerprint_changes_when_cases_change() -> None:
-    original = [BenchmarkCase("a", 0.8, 0.4)]
-    changed = [BenchmarkCase("a", 0.8, 0.5)]
-    configuration = {"minimum_delta": 0.05}
-
-    assert fingerprint_experiment_inputs(original, configuration) != fingerprint_experiment_inputs(
-        changed, configuration
-    )
-
-
-def test_experiment_fingerprint_normalizes_nested_mapping_order() -> None:
-    cases = [BenchmarkCase("a", 0.8, 0.4)]
-    first = {"policy": {"temperature": 0.2, "top_k": 5}}
-    second = {"policy": {"top_k": 5, "temperature": 0.2}}
-
-    assert fingerprint_experiment_inputs(cases, first) == fingerprint_experiment_inputs(
-        cases, second
-    )
-
-
-def test_experiment_fingerprint_rejects_non_string_configuration_keys() -> None:
-    cases = [BenchmarkCase("a", 0.8, 0.4)]
-
-    with pytest.raises(TypeError, match="keys must be strings"):
-        fingerprint_experiment_inputs(cases, {1: "invalid"})  # type: ignore[dict-item]
-
-
-def test_experiment_fingerprint_rejects_non_finite_configuration_values() -> None:
-    cases = [BenchmarkCase("a", 0.8, 0.4)]
-
-    with pytest.raises(ValueError, match="finite floats"):
-        fingerprint_experiment_inputs(cases, {"temperature": math.inf})
-
-
-def test_experiment_fingerprint_rejects_unsupported_nested_values() -> None:
-    cases = [BenchmarkCase("a", 0.8, 0.4)]
-
-    with pytest.raises(TypeError, match="unsupported JSON value"):
-        fingerprint_experiment_inputs(cases, {"scheduler": {"steps": (1, 2)}})  # type: ignore[dict-item]
