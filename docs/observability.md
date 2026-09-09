@@ -2,7 +2,7 @@
 
 ReMemAgent exposes a small standard-library-only observability layer in `remem.observability`.
 
-`ObservationCollector` records scalar counters and aggregate durations. `ObservationEvent` is immutable, and `ObservationSnapshot` copies the current aggregates so callers can serialize or report them without retaining mutable collector state.
+`ObservationCollector` records scalar counters and aggregate durations. `ObservationEvent` is immutable, and `ObservationSnapshot` validates, normalizes, and freezes its aggregate mappings at construction time so callers can serialize or report a stable point-in-time view without retaining mutable collector state.
 
 ```python
 from remem.observability import ObservationCollector
@@ -16,13 +16,15 @@ with collector.timed("routing.seconds"):
 snapshot = collector.snapshot()
 ```
 
-The collector is thread-safe and uses `time.monotonic()` for durations. It rejects empty metric names, non-finite counter values, and invalid durations.
+The collector is thread-safe and uses `time.monotonic()` for durations. It rejects empty metric names, non-finite counter values, and invalid durations. Snapshot construction applies the same finite, non-negative aggregate validation and trims metric names consistently.
 
 ## Durable snapshots
 
 `write_observation_snapshot(path, snapshot)` persists one snapshot as deterministic JSON. The writer creates missing parent directories and replaces the destination atomically after flushing and syncing a temporary file in the same directory. This makes local telemetry suitable for inclusion in experiment artifacts without introducing a telemetry backend dependency.
 
 The serialized representation sorts metric keys and ends with a newline, so equivalent snapshots produce byte-identical files. Persistence is intentionally snapshot-oriented: it does not turn the collector into an event log or distributed tracing system.
+
+Snapshot mappings are detached from caller-owned dictionaries and exposed as read-only mappings. Whitespace-normalized metric-name collisions are rejected instead of silently overwriting one aggregate with another. This keeps a persisted snapshot's metric identity unambiguous.
 
 ## Multi-worker aggregation
 
