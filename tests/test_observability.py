@@ -25,6 +25,20 @@ def test_snapshot_isolated_from_future_mutation() -> None:
     assert collector.snapshot().counters == {"retrieval.calls": 4.0}
 
 
+def test_snapshot_mapping_is_immutable_and_detached_from_source() -> None:
+    counters = {"retrieval.calls": 2.0}
+    durations = {"routing.seconds": 1.5}
+    snapshot = ObservationSnapshot(counters=counters, durations_seconds=durations)
+
+    counters["retrieval.calls"] = 99.0
+    durations["routing.seconds"] = 99.0
+
+    assert snapshot.counters == {"retrieval.calls": 2.0}
+    assert snapshot.durations_seconds == {"routing.seconds": 1.5}
+    with pytest.raises(TypeError):
+        snapshot.counters["new.metric"] = 1.0  # type: ignore[index]
+
+
 def test_duration_context_records_elapsed_time() -> None:
     collector = ObservationCollector()
 
@@ -146,14 +160,17 @@ def test_merge_observation_snapshots_normalizes_metric_names() -> None:
     assert merged.durations_seconds == {"routing.seconds": 1.5}
 
 
-def test_merge_observation_snapshots_rejects_invalid_values() -> None:
-    invalid = ObservationSnapshot(
-        counters={"bad": -1.0},
-        durations_seconds={},
-    )
-
+def test_snapshot_rejects_invalid_values_at_construction() -> None:
     with pytest.raises(ValueError, match="counter value"):
-        merge_observation_snapshots([invalid])
+        ObservationSnapshot(counters={"bad": -1.0}, durations_seconds={})
+
+
+def test_snapshot_rejects_normalization_collisions() -> None:
+    with pytest.raises(ValueError, match="normalize to the same key"):
+        ObservationSnapshot(
+            counters={"retrieval.calls": 1.0, " retrieval.calls ": 2.0},
+            durations_seconds={},
+        )
 
 
 def test_snapshot_round_trips_through_versioned_mapping() -> None:
