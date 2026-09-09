@@ -52,7 +52,7 @@ python -m experiments.paired_benchmark_cli \
   --manifest artifacts/<benchmark>-paired.json.manifest.json
 ```
 
-The paired statistics layer aligns observations by seed and computes descriptive treatment-minus-baseline deltas. It does not pool episodes and does not turn a descriptive delta into a causal or production claim.
+The paired statistics layer aligns observations by seed and computes descriptive treatment-minus-baseline deltas. It does not pool episodes and does not turn a descriptive delta into a causal or production claim. For inferential reporting, the framework also provides an exact paired sign-flip test and a paired Cohen's *d_z* effect-size calculation; effect size is reported as undefined when fewer than two independent paired observations exist or when their sample variance is zero.
 
 ## 3. Preserve exact evidence artifacts
 
@@ -73,4 +73,4 @@ Do not overwrite an existing artifact unless `--overwrite` is intentional. The m
 
 A successful quality workflow establishes software correctness for the covered tests. It does not establish benchmark effectiveness. A benchmark result is publishable only after the corresponding real environment and model configuration has executed, the requested independent seeds completed, artifacts were preserved, and the result can be reproduced from the recorded revision and dependency environment.
 
-No benchmark improvement, significance, or production-readiness claim should be inferred from the repository's dependency-free smoke fixture, adapter tests, preflight result, or CI status alone.
+No benchmark improvement, significance, effect-size interpretation, or production-readiness claim should be inferred from the repository's dependency-free smoke fixture, adapter tests, preflight result, or CI status alone.
