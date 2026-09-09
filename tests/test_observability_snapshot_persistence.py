@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from remem.observability import (
+    OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
     ObservationCollector,
     ObservationSnapshot,
     write_observation_snapshot,
@@ -22,7 +23,7 @@ def test_write_observation_snapshot_is_deterministic(tmp_path: Path) -> None:
 
     assert first_path.read_bytes() == second_path.read_bytes()
     assert first_path.read_text(encoding="utf-8") == (
-        '{"counters":{"a.metric":1.0,"z.metric":2.0},"durations_seconds":{"route":0.25}}\n'
+        '{"counters":{"a.metric":1.0,"z.metric":2.0},"durations_seconds":{"route":0.25},"schema_version":1}\n'
     )
 
 
@@ -35,7 +36,7 @@ def test_write_observation_snapshot_replaces_existing_file(tmp_path: Path) -> No
     write_observation_snapshot(path, collector.snapshot())
 
     assert path.read_text(encoding="utf-8") == (
-        '{"counters":{"episodes":1.0},"durations_seconds":{}}\n'
+        '{"counters":{"episodes":1.0},"durations_seconds":{},"schema_version":1}\n'
     )
 
 
