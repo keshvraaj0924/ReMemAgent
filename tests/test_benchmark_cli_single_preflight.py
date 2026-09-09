@@ -46,11 +46,14 @@ def test_single_run_preflights_before_execution(monkeypatch, tmp_path: Path) -> 
         return EnvironmentContractReport(initial_observation="ready")
 
     monkeypatch.setattr(benchmark_cli, "validate_external_benchmark_runtime", runtime_preflight)
-    monkeypatch.setattr(
-        benchmark_cli,
-        "run_external_benchmark",
-        lambda spec: events.append("run") or object(),
-    )
+
+    def run_external_benchmark(
+        spec: ExternalBenchmarkSpec, *, runner: object | None = None
+    ) -> object:
+        events.append("run")
+        return object()
+
+    monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
     monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
     assert benchmark_cli.main() == 0
