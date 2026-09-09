@@ -238,6 +238,18 @@ def test_compare_benchmark_reports_rejects_non_string_labels() -> None:
         raise AssertionError("non-string condition labels must be rejected")
 
 
+def test_compare_benchmark_reports_rejects_ambiguous_condition_labels() -> None:
+    """Paired outputs must name baseline and treatment distinctly."""
+
+    reports = (_report(1, 0.0, False),)
+    try:
+        compare_benchmark_reports(reports, reports, baseline_label="Memory", treatment_label=" memory ")
+    except ValueError as exc:
+        assert "distinct conditions" in str(exc)
+    else:
+        raise AssertionError("ambiguous condition labels must be rejected")
+
+
 def test_exact_paired_sign_flip_test_matches_enumerated_two_sided_probability() -> None:
     result = exact_paired_sign_flip_test((1.0, 1.0, 1.0))
     assert result.observed_mean_delta == 1.0
