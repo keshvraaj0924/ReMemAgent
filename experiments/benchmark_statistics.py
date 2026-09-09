@@ -128,6 +128,11 @@ def compare_benchmark_reports(
     if baseline[0].benchmark_name != treatment[0].benchmark_name:
         raise ValueError("baseline and treatment reports must use one benchmark name")
 
+    normalized_baseline_label = _validate_label(baseline_label, "baseline_label")
+    normalized_treatment_label = _validate_label(treatment_label, "treatment_label")
+    if normalized_baseline_label.casefold() == normalized_treatment_label.casefold():
+        raise ValueError("baseline_label and treatment_label must identify distinct conditions")
+
     _validate_paired_configuration(baseline, treatment)
     _validate_explicit_seeds(baseline, "baseline")
     _validate_explicit_seeds(treatment, "treatment")
@@ -150,8 +155,8 @@ def compare_benchmark_reports(
     )
 
     return BenchmarkConditionComparison(
-        baseline_label=_validate_label(baseline_label, "baseline_label"),
-        treatment_label=_validate_label(treatment_label, "treatment_label"),
+        baseline_label=normalized_baseline_label,
+        treatment_label=normalized_treatment_label,
         seeds=seeds,
         success_rate_delta=_summarize(success_deltas),
         mean_reward_delta=_summarize(reward_deltas),
