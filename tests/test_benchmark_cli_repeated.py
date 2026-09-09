@@ -52,9 +52,15 @@ def test_main_persists_statistics_for_repeated_runs(monkeypatch, tmp_path: Path)
 
     captured: dict[str, object] = {}
 
-    def fake_run(spec: ExternalBenchmarkSpec, seeds: tuple[int, ...]):
+    def fake_run(
+        spec: ExternalBenchmarkSpec,
+        seeds: tuple[int, ...],
+        *,
+        runner: object | None = None,
+    ):
         captured["spec"] = spec
         captured["seeds"] = seeds
+        captured["runner"] = runner
         return (_report(1, True, 1.0), _report(2, False, 0.0))
 
     monkeypatch.setattr(benchmark_cli, "run_repeated_external_benchmarks", fake_run)
@@ -72,6 +78,7 @@ def test_main_persists_statistics_for_repeated_runs(monkeypatch, tmp_path: Path)
 
     assert benchmark_cli.main() == 0
     assert captured["seeds"] == (1, 2)
+    assert captured["runner"] is None
     persisted = json.loads((tmp_path / "repeated.json").read_text(encoding="utf-8"))
     assert persisted["seeds"] == [1, 2]
     assert persisted["statistics"]["success_rate"]["mean"] == 0.5
