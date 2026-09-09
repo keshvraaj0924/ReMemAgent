@@ -55,6 +55,13 @@ class BenchmarkRunConfiguration:
             raise ValueError("max_steps must be a positive integer")
         if self.seed is not None and not _is_strict_integer(self.seed):
             raise ValueError("seed must be an integer when provided")
+        for field_name, value in (
+            ("environment_factory", self.environment_factory),
+            ("policy_factory", self.policy_factory),
+            ("success_evaluator", self.success_evaluator),
+            ("transfer_success_evaluator", self.transfer_success_evaluator),
+        ):
+            _validate_optional_string(field_name, value)
         if isinstance(self.minimum_trust, bool) or not isinstance(self.minimum_trust, (int, float)):
             raise TypeError("minimum_trust must be a number between 0 and 1")
         if not math.isfinite(float(self.minimum_trust)):
@@ -454,3 +461,12 @@ def _is_strict_integer(value: object) -> bool:
     """Return whether a value is an integer but not a boolean."""
 
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _validate_optional_string(field_name: str, value: object) -> None:
+    """Validate optional callable provenance fields without changing their value."""
+
+    if value is not None and not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string or None")
+    if isinstance(value, str) and not value.strip():
+        raise ValueError(f"{field_name} must not be empty or whitespace-only")
