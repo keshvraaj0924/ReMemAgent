@@ -49,3 +49,16 @@ def test_save_benchmark_report_rejects_non_string_dependency_version(tmp_path) -
             tmp_path / "report.json",
             runtime_provenance=provenance,
         )
+
+
+def test_save_benchmark_report_rejects_unsupported_runtime_provenance_schema(
+    tmp_path,
+) -> None:
+    provenance = {"schema_version": 2}
+
+    with pytest.raises(ValueError, match="must match the supported schema version"):
+        save_benchmark_report(
+            _build_report(),
+            tmp_path / "report.json",
+            runtime_provenance=provenance,
+        )
