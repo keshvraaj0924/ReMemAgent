@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from experiments.paired_analysis import METRIC_NAMES, analyze_paired_benchmark_reports
-from remem.benchmark import BenchmarkRunConfiguration, BenchmarkSuiteRunner
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport, BenchmarkSuiteRunner
 from remem.environments.base import StepResult
 from remem.execution import Policy
 from remem.memory.store import MemoryStore
@@ -45,7 +45,7 @@ def _run(
     successful_episode_count: int,
     reward_offset: float,
     policy_name: str,
-) :
+) -> BenchmarkRunReport:
     """Run one deterministic condition with explicit provenance metadata."""
 
     configuration = BenchmarkRunConfiguration(
@@ -105,8 +105,14 @@ def test_analyze_paired_reports_computes_effects_and_adjusted_p_values() -> None
 def test_analyze_paired_reports_preserves_zero_variance_effect_size_as_none() -> None:
     """A constant paired effect has no finite Cohen's d_z denominator."""
 
-    baseline = [_run(seed, successful_episode_count=5, reward_offset=0.0, policy_name="baseline") for seed in (1, 2, 3)]
-    treatment = [_run(seed, successful_episode_count=6, reward_offset=0.0, policy_name="treatment") for seed in (1, 2, 3)]
+    baseline = [
+        _run(seed, successful_episode_count=5, reward_offset=0.0, policy_name="baseline")
+        for seed in (1, 2, 3)
+    ]
+    treatment = [
+        _run(seed, successful_episode_count=6, reward_offset=0.0, policy_name="treatment")
+        for seed in (1, 2, 3)
+    ]
 
     analysis = analyze_paired_benchmark_reports(baseline, treatment)
 
@@ -118,8 +124,12 @@ def test_analyze_paired_reports_preserves_zero_variance_effect_size_as_none() ->
 def test_analyze_paired_reports_rejects_unpaired_seed_sets() -> None:
     """Inferential analysis must retain the strict paired-seed contract."""
 
-    baseline = [_run(1, successful_episode_count=5, reward_offset=0.0, policy_name="baseline")]
-    treatment = [_run(2, successful_episode_count=6, reward_offset=0.0, policy_name="treatment")]
+    baseline = [
+        _run(1, successful_episode_count=5, reward_offset=0.0, policy_name="baseline")
+    ]
+    treatment = [
+        _run(2, successful_episode_count=6, reward_offset=0.0, policy_name="treatment")
+    ]
 
     with pytest.raises(ValueError, match="same seed set"):
         analyze_paired_benchmark_reports(baseline, treatment)
