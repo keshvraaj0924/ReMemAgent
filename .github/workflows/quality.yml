@@ -52,18 +52,6 @@ jobs:
           path: test-results/pytest-${{ matrix.python-version }}.xml
           if-no-files-found: error
 
-      - name: Capture formatter diff
-        if: ${{ always() }}
-        run: python -m ruff format --diff . > ruff-format.diff || true
-
-      - name: Upload formatter diff
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruff-format-diff-${{ matrix.python-version }}
-          path: ruff-format.diff
-          if-no-files-found: error
-
       - name: Check formatting
         run: python -m ruff format --check .
 
