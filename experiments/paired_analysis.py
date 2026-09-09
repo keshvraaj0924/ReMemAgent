@@ -9,7 +9,7 @@ change policy behavior or memory selection.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from experiments.benchmark_statistics import (
     compare_benchmark_reports,
@@ -87,9 +87,9 @@ def analyze_paired_benchmark_reports(
         baseline_label=baseline_label,
         treatment_label=treatment_label,
     )
-    baseline_by_seed = {report.seed: report for report in baseline_reports}
-    treatment_by_seed = {report.seed: report for report in treatment_reports}
-    seeds = tuple(comparison.seeds)
+    baseline_by_seed = _index_reports_by_seed(baseline_reports)
+    treatment_by_seed = _index_reports_by_seed(treatment_reports)
+    seeds = comparison.seeds
 
     metric_deltas = {
         metric_name: _paired_metric_deltas(
@@ -127,9 +127,25 @@ def analyze_paired_benchmark_reports(
     )
 
 
+def _index_reports_by_seed(
+    reports: Sequence[BenchmarkRunReport],
+) -> dict[int, BenchmarkRunReport]:
+    """Index explicitly seeded reports after the paired validation boundary."""
+
+    return {_require_seed(report): report for report in reports}
+
+
+def _require_seed(report: BenchmarkRunReport) -> int:
+    """Return a report seed as a non-optional integer."""
+
+    if report.seed is None:
+        raise ValueError("paired benchmark reports must provide explicit seeds for pairing")
+    return report.seed
+
+
 def _paired_metric_deltas(
-    baseline_by_seed: dict[int | None, BenchmarkRunReport],
-    treatment_by_seed: dict[int | None, BenchmarkRunReport],
+    baseline_by_seed: Mapping[int, BenchmarkRunReport],
+    treatment_by_seed: Mapping[int, BenchmarkRunReport],
     seeds: tuple[int, ...],
     getter: MetricGetter,
 ) -> tuple[float, ...]:
