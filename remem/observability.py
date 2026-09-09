@@ -71,12 +71,11 @@ class ObservationCollector:
     def record(self, event: ObservationEvent) -> None:
         """Record one scalar observation event."""
 
-        if not event.name:
-            raise ValueError("event name must not be empty")
+        name = _normalize_metric_name(event.name, "event name")
         if not isfinite(event.value):
             raise ValueError("event value must be finite")
         with self._lock:
-            self._counters[event.name] = self._counters.get(event.name, 0.0) + event.value
+            self._counters[name] = self._counters.get(name, 0.0) + event.value
 
     def increment(self, name: str, value: float = 1.0) -> None:
         """Increment a named counter."""
@@ -86,22 +85,19 @@ class ObservationCollector:
     def record_outcome(self, name: str, succeeded: bool) -> None:
         """Record a mutually exclusive success or failure outcome."""
 
-        normalized_name = name.strip()
-        if not normalized_name:
-            raise ValueError("outcome name must not be empty")
+        normalized_name = _normalize_metric_name(name, "outcome name")
         suffix = "succeeded" if succeeded else "failed"
         self.increment(f"{normalized_name}.{suffix}")
 
     def observe_duration(self, name: str, duration_seconds: float) -> None:
         """Add one measured duration to a named aggregate."""
 
-        if not name:
-            raise ValueError("duration name must not be empty")
+        normalized_name = _normalize_metric_name(name, "duration name")
         if not isfinite(duration_seconds) or duration_seconds < 0.0:
             raise ValueError("duration must be finite and non-negative")
         with self._lock:
-            self._durations_seconds[name] = (
-                self._durations_seconds.get(name, 0.0) + duration_seconds
+            self._durations_seconds[normalized_name] = (
+                self._durations_seconds.get(normalized_name, 0.0) + duration_seconds
             )
 
     def snapshot(self) -> ObservationSnapshot:
@@ -128,10 +124,8 @@ class ObservationTimer:
     """Context manager for recording elapsed monotonic time."""
 
     def __init__(self, collector: ObservationCollector, name: str) -> None:
-        if not name:
-            raise ValueError("duration name must not be empty")
         self._collector = collector
-        self._name = name
+        self._name = _normalize_metric_name(name, "duration name")
         self._started_at: float | None = None
 
     def __enter__(self) -> Self:
@@ -148,11 +142,8 @@ class ObservationOperation:
     """Context manager for timing and outcome accounting of one operation."""
 
     def __init__(self, collector: ObservationCollector, name: str) -> None:
-        normalized_name = name.strip()
-        if not normalized_name:
-            raise ValueError("operation name must not be empty")
         self._collector = collector
-        self._name = normalized_name
+        self._name = _normalize_metric_name(name, "operation name")
         self._started_at: float | None = None
 
     def __enter__(self) -> Self:
@@ -207,10 +198,20 @@ def _parse_aggregate_mapping(value: object, field_name: str) -> dict[str, float]
 def _validate_snapshot_value(name: str, value: float, value_type: str) -> None:
     """Validate a persisted aggregate value before including it in a merge."""
 
-    if not name:
-        raise ValueError(f"{value_type} name must not be empty")
+    _normalize_metric_name(name, f"{value_type} name")
     if not isfinite(value) or value < 0.0:
         raise ValueError(f"{value_type} value must be finite and non-negative")
+
+
+def _normalize_metric_name(name: str, field_name: str) -> str:
+    """Normalize and validate a metric name at every collection boundary."""
+
+    if not isinstance(name, str):
+        raise TypeError(f"{field_name} must be a string")
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError(f"{field_name} must not be empty")
+    return normalized_name
 
 
 def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) -> None:
