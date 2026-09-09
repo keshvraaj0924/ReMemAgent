@@ -134,6 +134,18 @@ def test_merge_observation_snapshots_adds_workers_without_mutating_inputs() -> N
     assert second.counters["retrieval.calls"] == 3.0
 
 
+def test_merge_observation_snapshots_normalizes_metric_names() -> None:
+    snapshot = ObservationSnapshot(
+        counters={"  retrieval.calls  ": 2.0},
+        durations_seconds={"  routing.seconds  ": 1.5},
+    )
+
+    merged = merge_observation_snapshots([snapshot])
+
+    assert merged.counters == {"retrieval.calls": 2.0}
+    assert merged.durations_seconds == {"routing.seconds": 1.5}
+
+
 def test_merge_observation_snapshots_rejects_invalid_values() -> None:
     invalid = ObservationSnapshot(
         counters={"bad": -1.0},
