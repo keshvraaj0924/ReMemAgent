@@ -48,3 +48,12 @@ def test_paired_cohens_dz_rejects_non_numeric_values() -> None:
         assert "real numeric" in str(exc)
     else:
         raise AssertionError("non-numeric paired observations must be rejected")
+
+
+def test_paired_cohens_dz_rejects_boolean_values() -> None:
+    try:
+        paired_cohens_dz((1.0, True))  # type: ignore[arg-type]
+    except TypeError as exc:
+        assert "real numeric" in str(exc)
+    else:
+        raise AssertionError("boolean observations must be rejected")
