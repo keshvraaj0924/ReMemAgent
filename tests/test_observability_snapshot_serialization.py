@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from remem.observability import ObservationCollector
+from remem.observability import OBSERVATION_SNAPSHOT_SCHEMA_VERSION, ObservationCollector
 
 
 def test_snapshot_to_dict_sorts_metric_names() -> None:
@@ -13,6 +13,7 @@ def test_snapshot_to_dict_sorts_metric_names() -> None:
     collector.observe_duration("alpha.seconds", 0.25)
 
     assert collector.snapshot().to_dict() == {
+        "schema_version": OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
         "counters": {"alpha": 2.0, "zeta": 1.0},
         "durations_seconds": {"alpha.seconds": 0.25, "zeta.seconds": 0.5},
     }
