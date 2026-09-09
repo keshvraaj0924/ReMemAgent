@@ -1,5 +1,9 @@
 from remem.benchmark import BenchmarkRunConfiguration
-from remem.reproducibility import benchmark_configuration_digest
+from remem.reproducibility import (
+    REPRODUCIBILITY_SCHEMA_VERSION,
+    benchmark_configuration_digest,
+    benchmark_configuration_payload,
+)
 
 
 def make_configuration(**overrides: object) -> BenchmarkRunConfiguration:
@@ -43,3 +47,20 @@ def test_benchmark_configuration_digest_includes_provenance_fields() -> None:
     assert benchmark_configuration_digest(configuration) != benchmark_configuration_digest(
         changed_provenance
     )
+
+
+def test_benchmark_configuration_payload_is_versioned_and_nested() -> None:
+    payload = benchmark_configuration_payload(make_configuration())
+
+    assert payload["schema_version"] == REPRODUCIBILITY_SCHEMA_VERSION
+    assert payload["configuration"] == {
+        "benchmark_name": "alfworld-smoke",
+        "episode_count": 8,
+        "max_steps": 12,
+        "seed": 41,
+        "environment_factory": "package.module:make_environment",
+        "policy_factory": "package.module:make_policy",
+        "success_evaluator": "package.module:evaluate_success",
+        "transfer_success_evaluator": "package.module:evaluate_transfer",
+        "minimum_trust": 0.25,
+    }
