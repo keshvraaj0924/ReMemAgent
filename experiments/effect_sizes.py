@@ -36,7 +36,10 @@ def paired_cohens_dz(deltas: Sequence[float]) -> float | None:
     normalized_deltas = tuple(deltas)
     if not normalized_deltas:
         raise ValueError("deltas must contain at least one paired observation")
-    if any(not isinstance(delta, (int, float)) or isinstance(delta, bool) for delta in normalized_deltas):
+    if any(
+        not isinstance(delta, (int, float)) or isinstance(delta, bool)
+        for delta in normalized_deltas
+    ):
         raise TypeError("deltas must contain real numeric values")
     if any(not isfinite(float(delta)) for delta in normalized_deltas):
         raise ValueError("deltas must contain only finite values")
