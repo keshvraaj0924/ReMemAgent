@@ -14,6 +14,9 @@ from time import monotonic
 from typing import Self
 
 
+OBSERVATION_SNAPSHOT_SCHEMA_VERSION = 1
+
+
 @dataclass(frozen=True, slots=True)
 class ObservationEvent:
     """Immutable event emitted by a memory or integration boundary."""
@@ -30,13 +33,31 @@ class ObservationSnapshot:
     counters: Mapping[str, float]
     durations_seconds: Mapping[str, float]
 
-    def to_dict(self) -> dict[str, dict[str, float]]:
-        """Return a deterministic JSON-compatible representation."""
+    def to_dict(self) -> dict[str, object]:
+        """Return a versioned, deterministic JSON-compatible representation."""
 
         return {
+            "schema_version": OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
             "counters": dict(sorted(self.counters.items())),
             "durations_seconds": dict(sorted(self.durations_seconds.items())),
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> Self:
+        """Validate and reconstruct a snapshot loaded from persisted JSON."""
+
+        if not isinstance(payload, Mapping):
+            raise TypeError("observation snapshot must be a mapping")
+        schema_version = payload.get("schema_version")
+        if schema_version != OBSERVATION_SNAPSHOT_SCHEMA_VERSION:
+            raise ValueError(
+                f"unsupported observation snapshot schema version: {schema_version!r}"
+            )
+        counters = _parse_aggregate_mapping(payload.get("counters"), "counters")
+        durations = _parse_aggregate_mapping(
+            payload.get("durations_seconds"), "durations_seconds"
+        )
+        return cls(counters=counters, durations_seconds=durations)
 
 
 class ObservationCollector:
@@ -63,13 +84,7 @@ class ObservationCollector:
         self.record(ObservationEvent(name=name, value=value))
 
     def record_outcome(self, name: str, succeeded: bool) -> None:
-        """Record a mutually exclusive success or failure outcome.
-
-        The method emits ``<name>.succeeded`` or ``<name>.failed`` with a
-        single count. This keeps outcome accounting explicit and avoids
-        deriving failure counts from unrelated totals when an operation can
-        fail before another counter is emitted.
-        """
+        """Record a mutually exclusive success or failure outcome."""
 
         normalized_name = name.strip()
         if not normalized_name:
@@ -104,12 +119,7 @@ class ObservationCollector:
         return ObservationTimer(self, name)
 
     def observed(self, name: str) -> ObservationOperation:
-        """Create an operation scope that records duration and outcome.
-
-        A normal context exit records ``<name>.succeeded``; an exception exit
-        records ``<name>.failed`` while preserving the exception for the caller.
-        The duration is recorded for both paths using a monotonic clock.
-        """
+        """Create an operation scope that records duration and outcome."""
 
         return ObservationOperation(self, name)
 
@@ -164,12 +174,7 @@ class ObservationOperation:
 def merge_observation_snapshots(
     snapshots: Sequence[ObservationSnapshot],
 ) -> ObservationSnapshot:
-    """Combine independent snapshots without mutating any source mapping.
-
-    This is intended for aggregating per-worker or per-process telemetry after
-    execution. Counters and duration totals are additive; no event-level
-    ordering or timestamp information is reconstructed.
-    """
+    """Combine independent snapshots without mutating any source mapping."""
 
     counters: dict[str, float] = {}
     durations_seconds: dict[str, float] = {}
@@ -183,6 +188,22 @@ def merge_observation_snapshots(
     return ObservationSnapshot(counters=counters, durations_seconds=durations_seconds)
 
 
+def _parse_aggregate_mapping(value: object, field_name: str) -> dict[str, float]:
+    """Parse and validate one persisted aggregate mapping."""
+
+    if not isinstance(value, Mapping):
+        raise TypeError(f"observation snapshot {field_name} must be a mapping")
+    parsed: dict[str, float] = {}
+    for name, aggregate in value.items():
+        if not isinstance(name, str):
+            raise TypeError(f"observation snapshot {field_name} names must be strings")
+        if not isinstance(aggregate, (int, float)) or isinstance(aggregate, bool):
+            raise TypeError(f"observation snapshot {field_name} values must be numbers")
+        _validate_snapshot_value(name, float(aggregate), field_name)
+        parsed[name] = float(aggregate)
+    return dict(sorted(parsed.items()))
+
+
 def _validate_snapshot_value(name: str, value: float, value_type: str) -> None:
     """Validate a persisted aggregate value before including it in a merge."""
 
@@ -193,19 +214,14 @@ def _validate_snapshot_value(name: str, value: float, value_type: str) -> None:
 
 
 def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) -> None:
-    """Atomically persist one deterministic observation snapshot as JSON.
-
-    The destination is replaced only after the complete JSON document has been
-    flushed to a temporary file in the same directory. This avoids leaving a
-    partially written telemetry artifact when a process fails during a write.
-    """
+    """Atomically persist one deterministic observation snapshot as JSON."""
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = (
         json.dumps(
             snapshot.to_dict(),
-            ensure_ascii=False,
+            ensure_ascii=True,
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -232,11 +248,11 @@ def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) 
 
 
 __all__ = [
+    "OBSERVATION_SNAPSHOT_SCHEMA_VERSION",
     "ObservationCollector",
     "ObservationEvent",
     "ObservationOperation",
     "ObservationSnapshot",
-    "ObservationTimer",
     "merge_observation_snapshots",
     "write_observation_snapshot",
 ]

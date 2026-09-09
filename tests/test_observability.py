@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from remem.observability import (
+    OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
     ObservationCollector,
     ObservationEvent,
     ObservationSnapshot,
@@ -118,3 +119,37 @@ def test_merge_observation_snapshots_rejects_invalid_values() -> None:
 
     with pytest.raises(ValueError, match="counter value"):
         merge_observation_snapshots([invalid])
+
+
+def test_snapshot_round_trips_through_versioned_mapping() -> None:
+    snapshot = ObservationSnapshot(
+        counters={"retrieval.calls": 3.0},
+        durations_seconds={"routing.seconds": 1.25},
+    )
+
+    restored = ObservationSnapshot.from_dict(snapshot.to_dict())
+
+    assert restored == snapshot
+    assert snapshot.to_dict()["schema_version"] == OBSERVATION_SNAPSHOT_SCHEMA_VERSION
+
+
+def test_snapshot_loader_rejects_unknown_schema_version() -> None:
+    payload = {
+        "schema_version": OBSERVATION_SNAPSHOT_SCHEMA_VERSION + 1,
+        "counters": {},
+        "durations_seconds": {},
+    }
+
+    with pytest.raises(ValueError, match="unsupported observation snapshot schema version"):
+        ObservationSnapshot.from_dict(payload)
+
+
+def test_snapshot_loader_rejects_non_numeric_aggregate() -> None:
+    payload = {
+        "schema_version": OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
+        "counters": {"retrieval.calls": "three"},
+        "durations_seconds": {},
+    }
+
+    with pytest.raises(TypeError, match="values must be numbers"):
+        ObservationSnapshot.from_dict(payload)
