@@ -250,10 +250,25 @@ def _validate_paired_configuration(
     baseline: tuple[BenchmarkRunReport, ...],
     treatment: tuple[BenchmarkRunReport, ...],
 ) -> None:
-    """Ensure paired conditions share protocol configuration apart from policy."""
+    """Ensure paired conditions are internally stable and differ only by policy."""
 
     if any(report.configuration is None for report in baseline + treatment):
         raise ValueError("paired benchmark reports must include explicit configuration")
+
+    baseline_configurations = {
+        benchmark_configuration_fingerprint(report.configuration)
+        for report in baseline
+        if report.configuration is not None
+    }
+    treatment_configurations = {
+        benchmark_configuration_fingerprint(report.configuration)
+        for report in treatment
+        if report.configuration is not None
+    }
+    if len(baseline_configurations) != 1:
+        raise ValueError("baseline reports must use one policy configuration across all seeds")
+    if len(treatment_configurations) != 1:
+        raise ValueError("treatment reports must use one policy configuration across all seeds")
 
     baseline_fingerprints = {_paired_protocol_fingerprint(report) for report in baseline}
     treatment_fingerprints = {_paired_protocol_fingerprint(report) for report in treatment}
@@ -261,6 +276,8 @@ def _validate_paired_configuration(
         raise ValueError(
             "baseline and treatment reports must share configuration apart from the seed and policy"
         )
+    if baseline_configurations == treatment_configurations:
+        raise ValueError("baseline and treatment reports must use distinct policy configurations")
 
 
 def _paired_protocol_fingerprint(report: BenchmarkRunReport) -> str:
