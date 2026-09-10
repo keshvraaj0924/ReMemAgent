@@ -92,81 +92,74 @@ class BenchmarkEpisodeReport:
 
     @property
     def transfer_success_count(self) -> int:
-        """Return the number of successful attributed memory selections."""
+        """Return the number of successful attributed memory transfers."""
 
-        return sum(1 for outcome in self.transfer_outcomes if outcome.successful)
-
-    @property
-    def transfer_success_rate(self) -> float:
-        """Return transfer-success rate for this episode."""
-
-        if not self.transfer_outcomes:
-            return 0.0
-        return self.transfer_success_count / len(self.transfer_outcomes)
+        return sum(outcome.success for outcome in self.transfer_outcomes)
 
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkRunReport:
-    """Aggregate report from a benchmark-suite invocation."""
+    """Aggregate report for a benchmark suite run."""
 
     benchmark_name: str
-    seed: int | None
     episodes: tuple[BenchmarkEpisodeReport, ...]
-    retained_memory_count: int
+    final_memory_count: int
+    seed: int | None = None
     configuration: BenchmarkRunConfiguration | None = None
 
     @property
-    def episode_count(self) -> int:
-        """Return number of completed episodes."""
-
-        return len(self.episodes)
-
-    @property
     def success_count(self) -> int:
-        """Return number of successful episodes."""
+        """Return the number of successful episodes."""
 
-        return sum(1 for episode in self.episodes if episode.episode_success)
+        return sum(episode.episode_success for episode in self.episodes)
 
     @property
     def success_rate(self) -> float:
-        """Return episode success rate."""
+        """Return the observed episode success rate, or zero when empty."""
 
         if not self.episodes:
             return 0.0
         return self.success_count / len(self.episodes)
 
     @property
+    def mean_reward(self) -> float:
+        """Return the arithmetic mean episode reward, or zero when empty."""
+
+        if not self.episodes:
+            return 0.0
+        return sum(episode.episode.total_reward for episode in self.episodes) / len(self.episodes)
+
+    @property
     def transfer_count(self) -> int:
-        """Return total number of attributed memory selections."""
+        """Return the total number of attributed memory transfers."""
 
         return sum(episode.transfer_count for episode in self.episodes)
 
     @property
-    def transfer_success_count(self) -> int:
-        """Return total number of successful attributed memory selections."""
-
-        return sum(episode.transfer_success_count for episode in self.episodes)
-
-    @property
     def transfer_success_rate(self) -> float:
-        """Return transfer-success rate across all attributed memory selections."""
+        """Return observed transfer success, or zero when no transfers occurred."""
 
-        if self.transfer_count == 0:
+        if not self.transfer_count:
             return 0.0
-        return self.transfer_success_count / self.transfer_count
+        return (
+            sum(episode.transfer_success_count for episode in self.episodes) / self.transfer_count
+        )
 
 
 class BenchmarkSuiteRunner:
-    """Run benchmark episodes with deterministic seed and lifecycle management."""
+    """Run multiple episodes while sharing one memory store across episodes."""
 
     def __init__(
         self,
-        *,
-        store: MemoryStore | None = None,
+        execution_service: EpisodeExecutionService | None = None,
+        transfer_recorder: MemoryTransferRecorder | None = None,
         observation_collector: ObservationCollector | None = None,
     ) -> None:
-        self._store = store or MemoryStore()
-        self._observation_collector = observation_collector
+        """Create a suite runner with injectable execution and observability services."""
+
+        self.execution_service = execution_service or EpisodeExecutionService()
+        self.transfer_recorder = transfer_recorder or MemoryTransferRecorder()
+        self.observation_collector = observation_collector
 
     def run(
         self,
@@ -177,138 +170,307 @@ class BenchmarkSuiteRunner:
         environment_factory: EnvironmentFactory,
         policy_factory: PolicyFactory,
         success_evaluator: SuccessEvaluator,
+        store: MemoryStore | None = None,
+        reset_kwargs: dict[str, Any] | None = None,
         transfer_success_evaluator: TransferSuccessEvaluator | None = None,
         seed: int | None = None,
         configuration: BenchmarkRunConfiguration | None = None,
     ) -> BenchmarkRunReport:
-        """Execute a benchmark suite and return an immutable aggregate report."""
+        """Execute a benchmark suite, persist memories, and trace guided transfers.
 
-        _validate_benchmark_arguments(benchmark_name, episode_count, max_steps, seed)
-        reports: list[BenchmarkEpisodeReport] = []
-        for episode_index in range(episode_count):
-            episode_seed = None if seed is None else seed + episode_index
-            environment = environment_factory(0 if episode_seed is None else episode_seed)
-            transfer_recorder = MemoryTransferRecorder()
-            try:
-                policy = policy_factory(0 if episode_seed is None else episode_seed, self._store)
-                if isinstance(policy, MemoryGuidedPolicy):
-                    policy.set_transfer_recorder(transfer_recorder)
-                execution_service = EpisodeExecutionService(
-                    store=self._store,
-                    observation_collector=self._observation_collector,
-                )
-                execution_result = execution_service.execute(
-                    environment=environment,
-                    policy=policy,
-                    max_steps=max_steps,
-                    success_evaluator=success_evaluator,
-                    episode_id=_episode_id(benchmark_name, episode_index, episode_seed),
-                )
-                transfer_outcomes = _attribute_transfers(
-                    transfer_recorder=transfer_recorder,
-                    episode_result=execution_result,
-                    evaluator=transfer_success_evaluator,
-                )
-                reports.append(
-                    BenchmarkEpisodeReport(
-                        episode_id=execution_result.episode_id,
-                        episode=execution_result.episode,
-                        episode_success=execution_result.successful,
-                        retained_memory_count=len(self._store),
-                        transfer_outcomes=transfer_outcomes,
-                    )
-                )
-            finally:
-                _close_environment(environment)
-        return BenchmarkRunReport(
+        Policies created as :class:`MemoryGuidedPolicy` expose one guidance
+        decision per executed step. Those decisions are attributed after the
+        episode using the supplied transfer evaluator. Non-memory-guided
+        policies remain fully supported and produce no transfer outcomes.
+        When an :class:`ObservationCollector` is configured, the runner records
+        suite and episode counters plus aggregate episode duration without
+        changing benchmark behavior. Episode lifecycle failures are counted
+        explicitly before being re-raised so observability cannot hide failed
+        runs behind a missing completion counter.
+
+        If ``seed`` is supplied, factories receive ``seed + episode_index`` as
+        their episode seed. This gives externally owned benchmark integrations a
+        deterministic seed contract without introducing a global random-state
+        dependency. When omitted, factories retain the historical episode-index
+        argument.
+        """
+
+        normalized_name = _validate_run_inputs(
             benchmark_name=benchmark_name,
+            episode_count=episode_count,
+            max_steps=max_steps,
+            environment_factory=environment_factory,
+            policy_factory=policy_factory,
+            success_evaluator=success_evaluator,
             seed=seed,
+        )
+        _validate_run_configuration(
+            configuration,
+            benchmark_name=normalized_name,
+            episode_count=episode_count,
+            max_steps=max_steps,
+            seed=seed,
+            minimum_trust=configuration.minimum_trust if configuration is not None else 0.0,
+        )
+
+        memory_store = store if store is not None else MemoryStore()
+        reports: list[BenchmarkEpisodeReport] = []
+        if self.observation_collector is not None:
+            self.observation_collector.increment("benchmark.runs")
+
+        try:
+            for episode_index in range(episode_count):
+                factory_seed = episode_index if seed is None else seed + episode_index
+                if self.observation_collector is not None:
+                    self.observation_collector.increment("benchmark.episodes.started")
+
+                environment: EnvironmentAdapter | None = None
+                try:
+                    environment = environment_factory(factory_seed)
+                    if self.observation_collector is None:
+                        execution_result = self._execute_episode(
+                            environment,
+                            memory_store,
+                            factory_seed,
+                            episode_index,
+                            normalized_name,
+                            max_steps,
+                            policy_factory,
+                            success_evaluator,
+                            reset_kwargs,
+                            transfer_success_evaluator,
+                        )
+                    else:
+                        with self.observation_collector.timed("benchmark.episode.duration_seconds"):
+                            execution_result = self._execute_episode(
+                                environment,
+                                memory_store,
+                                factory_seed,
+                                episode_index,
+                                normalized_name,
+                                max_steps,
+                                policy_factory,
+                                success_evaluator,
+                                reset_kwargs,
+                                transfer_success_evaluator,
+                            )
+                except Exception:
+                    if self.observation_collector is not None:
+                        self.observation_collector.record_outcome("benchmark.episodes", False)
+                        self.observation_collector.increment("benchmark.episodes.succeeded", 0.0)
+                    raise
+                else:
+                    if self.observation_collector is not None:
+                        self.observation_collector.record_outcome("benchmark.episodes", True)
+                        self.observation_collector.increment("benchmark.episodes.completed")
+                        self.observation_collector.increment(
+                            "benchmark.transfers.attributed",
+                            float(len(execution_result[1])),
+                        )
+                        self.observation_collector.increment(
+                            "benchmark.episodes.successful",
+                            float(execution_result[0].episode_success),
+                        )
+                    reports.append(_build_episode_report(execution_result[0], execution_result[1]))
+                finally:
+                    if environment is not None:
+                        _close_environment(
+                            environment,
+                            observation_collector=self.observation_collector,
+                        )
+        except Exception:
+            if self.observation_collector is not None:
+                self.observation_collector.record_outcome("benchmark.runs", False)
+            raise
+        else:
+            if self.observation_collector is not None:
+                self.observation_collector.record_outcome("benchmark.runs", True)
+                self.observation_collector.increment("benchmark.runs.completed")
+
+        return BenchmarkRunReport(
+            benchmark_name=normalized_name,
             episodes=tuple(reports),
-            retained_memory_count=len(self._store),
-            configuration=configuration,
+            final_memory_count=len(memory_store.all()),
+            seed=seed,
+            configuration=configuration
+            or BenchmarkRunConfiguration(
+                benchmark_name=normalized_name,
+                episode_count=episode_count,
+                max_steps=max_steps,
+                seed=seed,
+            ),
         )
 
+    def _execute_episode(
+        self,
+        environment: EnvironmentAdapter,
+        memory_store: MemoryStore,
+        factory_seed: int,
+        episode_index: int,
+        benchmark_name: str,
+        max_steps: int,
+        policy_factory: PolicyFactory,
+        success_evaluator: SuccessEvaluator,
+        reset_kwargs: dict[str, Any] | None,
+        transfer_success_evaluator: TransferSuccessEvaluator | None,
+    ) -> tuple[EpisodeExecutionResult, tuple[MemoryTransferOutcome, ...]]:
+        """Execute one episode and attribute memory transfers."""
 
-def _attribute_transfers(
+        policy = policy_factory(factory_seed, memory_store)
+        execution_result = self.execution_service.execute_and_ingest(
+            environment,
+            policy,
+            memory_store,
+            episode_id=f"{benchmark_name}:{episode_index}",
+            max_steps=max_steps,
+            success_evaluator=success_evaluator,
+            reset_kwargs=reset_kwargs,
+        )
+        transfer_outcomes = _record_transfer_outcomes(
+            self.transfer_recorder,
+            memory_store,
+            policy,
+            execution_result,
+            success_evaluator=transfer_success_evaluator,
+        )
+        return execution_result, transfer_outcomes
+
+
+def _validate_run_inputs(
     *,
-    transfer_recorder: MemoryTransferRecorder,
-    episode_result: EpisodeExecutionResult,
-    evaluator: TransferSuccessEvaluator | None,
-) -> tuple[MemoryTransferOutcome, ...]:
-    """Convert memory-use selections into transfer outcomes after an episode."""
-
-    if evaluator is None:
-        return ()
-    outcomes: list[MemoryTransferOutcome] = []
-    for selection in transfer_recorder.selections:
-        outcomes.append(
-            MemoryTransferOutcome(
-                memory_id=selection.memory_id,
-                source_task=selection.source_task,
-                target_task=selection.target_task,
-                successful=evaluator(selection, episode_result.episode),
-            )
-        )
-    return tuple(outcomes)
-
-
-def _episode_id(benchmark_name: str, episode_index: int, episode_seed: int | None) -> str:
-    """Return a deterministic episode identifier."""
-
-    if episode_seed is None:
-        return f"{benchmark_name}:episode-{episode_index}"
-    return f"{benchmark_name}:seed-{episode_seed}:episode-{episode_index}"
-
-
-def _close_environment(environment: object) -> None:
-    """Close an environment when its adapter exposes lifecycle cleanup."""
-
-    close = getattr(environment, "close", None)
-    if close is None:
-        return
-    if not callable(close):
-        raise TypeError("environment close attribute must be callable")
-    close()
-
-
-def _validate_benchmark_arguments(
     benchmark_name: str,
     episode_count: int,
     max_steps: int,
+    environment_factory: EnvironmentFactory,
+    policy_factory: PolicyFactory,
+    success_evaluator: SuccessEvaluator,
     seed: int | None,
-) -> None:
-    """Validate runner inputs before constructing environments."""
+) -> str:
+    """Validate execution inputs before invoking any caller-owned component."""
 
-    if not isinstance(benchmark_name, str) or not benchmark_name.strip():
-        raise ValueError("benchmark_name must be a non-empty string")
+    if not isinstance(benchmark_name, str):
+        raise TypeError("benchmark_name must be a string")
+    normalized_name = benchmark_name.strip()
+    if not normalized_name:
+        raise ValueError("benchmark_name must not be empty")
     if not _is_strict_integer(episode_count) or episode_count < 0:
         raise ValueError("episode_count must be a non-negative integer")
     if not _is_strict_integer(max_steps) or max_steps <= 0:
         raise ValueError("max_steps must be a positive integer")
     if seed is not None and not _is_strict_integer(seed):
         raise ValueError("seed must be an integer when provided")
+    if not callable(environment_factory):
+        raise TypeError("environment_factory must be callable")
+    if not callable(policy_factory):
+        raise TypeError("policy_factory must be callable")
+    if not callable(success_evaluator):
+        raise TypeError("success_evaluator must be callable")
+    return normalized_name
+
+
+def _validate_run_configuration(
+    configuration: BenchmarkRunConfiguration | None,
+    *,
+    benchmark_name: str,
+    episode_count: int,
+    max_steps: int,
+    seed: int | None,
+    minimum_trust: float,
+) -> None:
+    """Reject provenance metadata that does not describe the requested run."""
+
+    if configuration is None:
+        return
+    expected_values = {
+        "benchmark_name": benchmark_name,
+        "episode_count": episode_count,
+        "max_steps": max_steps,
+        "seed": seed,
+    }
+    for field_name, expected_value in expected_values.items():
+        actual_value = getattr(configuration, field_name)
+        if actual_value != expected_value:
+            raise ValueError(
+                f"configuration.{field_name}={actual_value!r} does not match "
+                f"run value {expected_value!r}"
+            )
+    if not 0.0 <= minimum_trust <= 1.0:
+        raise ValueError("minimum_trust must be between 0 and 1")
+
+
+def _record_transfer_outcomes(
+    recorder: MemoryTransferRecorder,
+    store: MemoryStore,
+    policy: Policy,
+    result: EpisodeExecutionResult,
+    *,
+    success_evaluator: TransferSuccessEvaluator | None,
+) -> tuple[MemoryTransferOutcome, ...]:
+    """Attribute traced decisions only for policies that provide memory guidance."""
+
+    if not isinstance(policy, MemoryGuidedPolicy):
+        return ()
+    return recorder.record_episode(
+        store,
+        policy.decision_history,
+        result.episode,
+        success_evaluator=success_evaluator,
+    )
+
+
+def _build_episode_report(
+    result: EpisodeExecutionResult,
+    transfer_outcomes: tuple[MemoryTransferOutcome, ...] = (),
+) -> BenchmarkEpisodeReport:
+    """Convert an execution result into the stable benchmark report contract."""
+
+    return BenchmarkEpisodeReport(
+        episode_id=result.episode_id,
+        episode=result.episode,
+        episode_success=result.episode_success,
+        retained_memory_count=len(result.ingestion.retained_memories),
+        transfer_outcomes=transfer_outcomes,
+    )
+
+
+def _close_environment(
+    environment: EnvironmentAdapter,
+    *,
+    observation_collector: ObservationCollector | None,
+) -> None:
+    """Close an environment without masking a more important episode failure.
+
+    Cleanup failures are still surfaced when cleanup is the only failure. If an
+    episode already failed, the original exception remains the primary signal;
+    the cleanup failure is counted so infrastructure health is not silently
+    lost. This keeps benchmark diagnostics causal while preserving guaranteed
+    cleanup attempts.
+    """
+
+    close = getattr(environment, "close", None)
+    if not callable(close):
+        return
+
+    primary_exception = sys.exc_info()[1]
+    try:
+        close()
+    except Exception:
+        if observation_collector is not None:
+            observation_collector.increment("benchmark.environment.close_failures")
+        if primary_exception is None:
+            raise
 
 
 def _is_strict_integer(value: object) -> bool:
-    """Return whether ``value`` is an integer excluding booleans."""
+    """Return whether a value is an integer but not a boolean."""
 
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _validate_optional_string(field_name: str, value: str | None) -> None:
-    """Reject blank or non-string optional provenance values."""
+def _validate_optional_string(field_name: str, value: object) -> None:
+    """Validate optional callable provenance fields without changing their value."""
 
-    if value is None:
-        return
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must be a non-empty string when provided")
-
-
-__all__ = [
-    "BenchmarkEpisodeReport",
-    "BenchmarkRunConfiguration",
-    "BenchmarkRunReport",
-    "BenchmarkSuiteRunner",
-    "EnvironmentFactory",
-    "PolicyFactory",
-]
+    if value is not None and not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string or None")
+    if isinstance(value, str) and not value.strip():
+        raise ValueError(f"{field_name} must not be empty or whitespace-only")
