@@ -8,12 +8,18 @@ the core package.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
-from remem.observability import ObservationSnapshot, observation_snapshot_delta
+from remem.observability import (
+    ObservationSnapshot,
+    observation_snapshot_delta,
+    write_observation_snapshot,
+)
 
 
 class ObservationExporter(Protocol):
@@ -21,6 +27,16 @@ class ObservationExporter(Protocol):
 
     def export(self, snapshot: ObservationSnapshot) -> None:
         """Export one validated observation snapshot."""
+
+
+class ObservationCheckpointStore(Protocol):
+    """Persistence boundary for the last successfully exported cumulative snapshot."""
+
+    def load(self) -> ObservationSnapshot:
+        """Load the latest durable checkpoint."""
+
+    def save(self, snapshot: ObservationSnapshot) -> None:
+        """Persist the latest cumulative checkpoint."""
 
 
 ObservationPayloadCallback = Callable[[Mapping[str, object]], None]
@@ -61,12 +77,39 @@ class CompositeObservationExporter:
             exporter.export(snapshot)
 
 
+@dataclass(frozen=True, slots=True)
+class FileObservationCheckpointStore:
+    """Atomically persist observation export checkpoints as versioned JSON."""
+
+    path: Path
+
+    def __init__(self, path: str | Path) -> None:
+        object.__setattr__(self, "path", Path(path))
+
+    def load(self) -> ObservationSnapshot:
+        """Load and validate the checkpoint, or return an empty snapshot if absent."""
+
+        if not self.path.exists():
+            return ObservationSnapshot(counters={}, durations_seconds={})
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        if not isinstance(payload, Mapping):
+            raise TypeError("observation checkpoint payload must be a mapping")
+        return ObservationSnapshot.from_dict(payload)
+
+    def save(self, snapshot: ObservationSnapshot) -> None:
+        """Atomically replace the checkpoint with ``snapshot``."""
+
+        write_observation_snapshot(self.path, snapshot)
+
+
 class ObservationExportSession:
     """Export cumulative snapshots as retry-safe deltas.
 
     The session advances its in-memory checkpoint only after the configured exporter
-    accepts the delta. If export raises, the checkpoint is preserved so a subsequent
-    retry emits the same interval rather than losing observations.
+    accepts the delta. When a checkpoint store is configured, the durable checkpoint
+    is written after backend export and before in-memory advancement. This provides
+    at-least-once delivery across process restarts: a checkpoint-write failure may
+    cause a repeated delta, but cannot silently skip an uncheckpointed interval.
     """
 
     def __init__(
@@ -74,18 +117,30 @@ class ObservationExportSession:
         exporter: ObservationExporter,
         *,
         initial_snapshot: ObservationSnapshot | None = None,
+        checkpoint_store: ObservationCheckpointStore | None = None,
     ) -> None:
         if not callable(getattr(exporter, "export", None)):
             raise TypeError("exporter must provide a callable export method")
+        if checkpoint_store is not None:
+            if not callable(getattr(checkpoint_store, "load", None)) or not callable(
+                getattr(checkpoint_store, "save", None)
+            ):
+                raise TypeError("checkpoint_store must provide callable load and save methods")
+            if initial_snapshot is not None:
+                raise ValueError("initial_snapshot and checkpoint_store are mutually exclusive")
+            checkpoint = checkpoint_store.load()
+        else:
+            checkpoint = initial_snapshot or ObservationSnapshot(
+                counters={}, durations_seconds={}
+            )
         self._exporter = exporter
-        self._checkpoint = initial_snapshot or ObservationSnapshot(
-            counters={}, durations_seconds={}
-        )
+        self._checkpoint_store = checkpoint_store
+        self._checkpoint = checkpoint
         self._lock = Lock()
 
     @property
     def checkpoint(self) -> ObservationSnapshot:
-        """Return the last cumulative snapshot exported successfully."""
+        """Return the last cumulative snapshot checkpointed successfully."""
 
         with self._lock:
             return ObservationSnapshot(
@@ -105,6 +160,8 @@ class ObservationExportSession:
             delta = observation_snapshot_delta(self._checkpoint, current)
             if delta.counters or delta.durations_seconds:
                 self._exporter.export(delta)
+                if self._checkpoint_store is not None:
+                    self._checkpoint_store.save(current)
             self._checkpoint = current
             return delta
 
@@ -121,6 +178,8 @@ def export_observation_snapshot(
 __all__ = [
     "CallbackObservationExporter",
     "CompositeObservationExporter",
+    "FileObservationCheckpointStore",
+    "ObservationCheckpointStore",
     "ObservationExporter",
     "ObservationExportSession",
     "ObservationPayloadCallback",
