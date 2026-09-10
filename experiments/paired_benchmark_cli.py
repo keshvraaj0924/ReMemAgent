@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
-from experiments.benchmark_report import save_paired_benchmark_result
 from experiments.external_benchmark import ExternalBenchmarkSpec, validate_seed_sequence
+from experiments.paired_artifacts import save_paired_execution_result
 from experiments.paired_benchmark import run_paired_external_benchmarks_with_preflight
 from experiments.runtime_provenance import collect_runtime_provenance
 
@@ -74,10 +74,8 @@ def main() -> int:
             probe_action=arguments.probe_action,
         )
         runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
-        output_path = save_paired_benchmark_result(
-            result.baseline_reports,
-            result.treatment_reports,
-            result.comparison,
+        output_path = save_paired_execution_result(
+            result,
             output_path,
             runtime_provenance=runtime_provenance,
         )
