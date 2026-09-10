@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from types import SimpleNamespace
 
@@ -56,8 +57,6 @@ def _persisted_execution_payload() -> dict[str, object]:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
-    import hashlib
-
     digest = hashlib.sha256(canonical_payload).hexdigest()
     return {
         "seeds": [11, 17],
