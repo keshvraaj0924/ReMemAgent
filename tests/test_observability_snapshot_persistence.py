@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from remem.observability import (
-    OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
     ObservationCollector,
     ObservationSnapshot,
     write_observation_snapshot,
