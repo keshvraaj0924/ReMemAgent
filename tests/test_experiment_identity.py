@@ -54,6 +54,7 @@ def test_identity_matches_shared_canonical_manifest_digest() -> None:
                 "seed": 11,
                 "environment_factory": "adapter:make_environment",
                 "policy_factory": "policy:make_policy",
+                "action_policy_factory": None,
                 "success_evaluator": "metrics:is_success",
                 "transfer_success_evaluator": "metrics:is_transfer_success",
                 "minimum_trust": 0.7,
