@@ -60,6 +60,7 @@ def test_benchmark_configuration_payload_is_versioned_and_nested() -> None:
         "seed": 41,
         "environment_factory": "package.module:make_environment",
         "policy_factory": "package.module:make_policy",
+        "action_policy_factory": None,
         "success_evaluator": "package.module:evaluate_success",
         "transfer_success_evaluator": "package.module:evaluate_transfer",
         "minimum_trust": 0.25,
