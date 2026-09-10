@@ -13,6 +13,7 @@ from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
     run_repeated_external_benchmarks,
     validate_external_benchmark,
+    validate_repeated_benchmark_request,
     validate_seed_sequence,
 )
 from experiments.external_preflight import validate_repeated_external_benchmark_runtime
@@ -38,15 +39,16 @@ def run_paired_external_benchmarks(
 ) -> PairedBenchmarkResult:
     """Run two policy conditions on the same independent seed set.
 
-    All callable, pairing, and condition-label contracts are validated before
-    either condition starts. This prevents malformed experiment metadata or a
-    treatment configuration from consuming benchmark episodes and leaving an
-    incomplete or unusable paired experiment behind.
+    All callable, pairing, repeated-seed, and condition-label contracts are
+    validated before either condition starts. This prevents malformed experiment
+    metadata or a treatment configuration from consuming benchmark episodes and
+    leaving an incomplete or unusable paired experiment behind.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
     _validate_condition_labels(baseline_label, treatment_label)
     selected_seeds = validate_seed_sequence(seeds)
+    _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
     baseline_reports = run_repeated_external_benchmarks(baseline_spec, selected_seeds)
@@ -98,26 +100,40 @@ def preflight_paired_external_benchmarks(
     *,
     probe_action: str | None = None,
 ) -> None:
-    """Validate both callables before probing either policy condition.
+    """Validate both conditions completely before probing either policy.
 
     Paired preflight can construct one real environment per seed and condition.
-    Resolve every configured callable first so a broken treatment specification
-    cannot waste baseline environment/model setup before failing.
+    Validate repeated-seed ownership and resolve every configured callable first
+    so a broken treatment specification cannot waste baseline environment/model
+    setup before failing.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
+    selected_seeds = validate_seed_sequence(seeds)
+    _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
     validate_repeated_external_benchmark_runtime(
         baseline_spec,
-        seeds,
+        selected_seeds,
         probe_action=probe_action,
     )
     validate_repeated_external_benchmark_runtime(
         treatment_spec,
-        seeds,
+        selected_seeds,
         probe_action=probe_action,
     )
+
+
+def _validate_paired_repeated_requests(
+    baseline_spec: ExternalBenchmarkSpec,
+    treatment_spec: ExternalBenchmarkSpec,
+    seeds: tuple[int, ...],
+) -> None:
+    """Validate repeated-run seed ownership for both conditions before execution."""
+
+    validate_repeated_benchmark_request(baseline_spec, seeds)
+    validate_repeated_benchmark_request(treatment_spec, seeds)
 
 
 def _validate_paired_specs(
