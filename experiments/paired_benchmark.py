@@ -98,9 +98,16 @@ def preflight_paired_external_benchmarks(
     *,
     probe_action: str | None = None,
 ) -> None:
-    """Preflight both policy conditions independently before measured execution."""
+    """Validate both callables before probing either policy condition.
+
+    Paired preflight can construct one real environment per seed and condition.
+    Resolve every configured callable first so a broken treatment specification
+    cannot waste baseline environment/model setup before failing.
+    """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
+    validate_external_benchmark(baseline_spec)
+    validate_external_benchmark(treatment_spec)
     validate_repeated_external_benchmark_runtime(
         baseline_spec,
         seeds,
