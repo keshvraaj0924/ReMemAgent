@@ -69,11 +69,37 @@ def verify_experiment_identity(
 ) -> None:
     """Fail if a persisted experiment identity does not match its inputs."""
 
-    if not is_experiment_identity(identity):
-        raise ValueError("identity must be a canonical SHA-256 experiment identity")
+    _validate_identity(identity)
     expected_identity = build_experiment_identity(configuration, seeds, runtime_provenance)
     if not hmac.compare_digest(identity, expected_identity):
         raise ValueError("experiment identity does not match the supplied protocol metadata")
+
+
+def verify_paired_experiment_identity(
+    identity: str,
+    baseline_configuration: BenchmarkRunConfiguration,
+    treatment_configuration: BenchmarkRunConfiguration,
+    seeds: Sequence[int],
+    runtime_provenance: Mapping[str, Any],
+) -> None:
+    """Fail if a persisted paired identity does not match both condition protocols."""
+
+    _validate_identity(identity)
+    expected_identity = build_paired_experiment_identity(
+        baseline_configuration,
+        treatment_configuration,
+        seeds,
+        runtime_provenance,
+    )
+    if not hmac.compare_digest(identity, expected_identity):
+        raise ValueError("paired experiment identity does not match the supplied protocol metadata")
+
+
+def _validate_identity(identity: str) -> None:
+    """Require the canonical lowercase SHA-256 representation used by artifacts."""
+
+    if not is_experiment_identity(identity):
+        raise ValueError("identity must be a canonical SHA-256 experiment identity")
 
 
 def _configuration_payload(configuration: BenchmarkRunConfiguration) -> dict[str, Any]:
@@ -135,4 +161,5 @@ __all__ = [
     "build_paired_experiment_identity",
     "is_experiment_identity",
     "verify_experiment_identity",
+    "verify_paired_experiment_identity",
 ]

@@ -13,7 +13,7 @@ from experiments.benchmark_manifest import (
     load_benchmark_artifact_manifest,
     verify_benchmark_artifact,
 )
-from experiments.paired_artifacts import validate_persisted_paired_execution_provenance
+from experiments.paired_artifacts import validate_persisted_paired_artifact
 from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
 
 
@@ -40,7 +40,7 @@ def verify_report_artifact(report_path: Path, manifest_path: Path | None = None)
     verify_benchmark_artifact(report_path, manifest)
     payload = _load_report_payload(report_path)
     validate_persisted_benchmark_artifact(payload)
-    validate_persisted_paired_execution_provenance(payload)
+    validate_persisted_paired_artifact(payload)
 
 
 def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
