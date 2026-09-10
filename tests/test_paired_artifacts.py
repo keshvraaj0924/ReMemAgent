@@ -8,6 +8,7 @@ import pytest
 from experiments.paired_artifacts import (
     PAIRED_EXECUTION_ORDER_PROVENANCE_KEY,
     save_paired_execution_result,
+    validate_persisted_paired_execution_provenance,
 )
 from experiments.paired_benchmark import PairedBenchmarkResult, PairedSeedExecution
 
@@ -33,6 +34,36 @@ def _result(
         ),
         comparison=SimpleNamespace(seeds=(11, 17)),  # type: ignore[arg-type]
     )
+
+
+def _persisted_execution_payload() -> dict[str, object]:
+    execution_order = [
+        {
+            "seed": 11,
+            "first_condition": "baseline",
+            "second_condition": "treatment",
+        },
+        {
+            "seed": 17,
+            "first_condition": "treatment",
+            "second_condition": "baseline",
+        },
+    ]
+    canonical_payload = json.dumps(
+        execution_order,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    import hashlib
+
+    digest = hashlib.sha256(canonical_payload).hexdigest()
+    return {
+        "seeds": [11, 17],
+        "execution_order": execution_order,
+        "runtime_provenance": {PAIRED_EXECUTION_ORDER_PROVENANCE_KEY: digest},
+    }
 
 
 def test_save_paired_execution_result_persists_temporal_provenance(
@@ -135,3 +166,35 @@ def test_save_paired_execution_result_rejects_reserved_provenance_key(tmp_path) 
             tmp_path / "paired.json",
             runtime_provenance={PAIRED_EXECUTION_ORDER_PROVENANCE_KEY: "caller-value"},
         )
+
+
+def test_validate_persisted_paired_execution_provenance_accepts_valid_trace() -> None:
+    validate_persisted_paired_execution_provenance(_persisted_execution_payload())
+
+
+def test_validate_persisted_paired_execution_provenance_rejects_tampered_trace() -> None:
+    payload = _persisted_execution_payload()
+    execution_order = payload["execution_order"]
+    assert isinstance(execution_order, list)
+    execution_order[1] = {
+        "seed": 17,
+        "first_condition": "baseline",
+        "second_condition": "treatment",
+    }
+
+    with pytest.raises(ValueError, match="deterministic counterbalanced"):
+        validate_persisted_paired_execution_provenance(payload)
+
+
+def test_validate_persisted_paired_execution_provenance_rejects_stale_digest() -> None:
+    payload = _persisted_execution_payload()
+    runtime_provenance = payload["runtime_provenance"]
+    assert isinstance(runtime_provenance, dict)
+    runtime_provenance[PAIRED_EXECUTION_ORDER_PROVENANCE_KEY] = "0" * 64
+
+    with pytest.raises(ValueError, match="digest does not match"):
+        validate_persisted_paired_execution_provenance(payload)
+
+
+def test_validate_persisted_paired_execution_provenance_allows_legacy_artifact() -> None:
+    validate_persisted_paired_execution_provenance({"seeds": [11, 17]})
