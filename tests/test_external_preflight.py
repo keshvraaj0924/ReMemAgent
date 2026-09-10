@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from experiments.external_benchmark import ExternalBenchmarkSpec
@@ -17,7 +19,7 @@ def _build_spec() -> ExternalBenchmarkSpec:
         environment_factory="tests.test_external_benchmark:make_environment",
         policy_factory="tests.test_external_benchmark:make_policy",
         success_evaluator="tests.test_external_benchmark:evaluate_success",
-        seed=999,
+        seed=None,
     )
 
 
@@ -41,6 +43,16 @@ def test_repeated_runtime_preflight_probes_optional_action_for_each_seed() -> No
 
     assert [report.step_result.reward for report in reports if report.step_result] == [1.0, 1.0]
     assert CLOSED_SEEDS == [3, 5]
+
+
+def test_repeated_runtime_preflight_rejects_single_seed_on_spec() -> None:
+    CLOSED_SEEDS.clear()
+    spec = replace(_build_spec(), seed=999)
+
+    with pytest.raises(ValueError, match="spec.seed must be None"):
+        validate_repeated_external_benchmark_runtime(spec, [11, 17])
+
+    assert CLOSED_SEEDS == []
 
 
 def test_repeated_runtime_preflight_rejects_empty_seed_sequence() -> None:
