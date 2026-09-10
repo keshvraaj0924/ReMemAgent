@@ -10,6 +10,7 @@ from remem.observability import ObservationSnapshot
 from remem.observability_exporters import (
     CallbackObservationExporter,
     CompositeObservationExporter,
+    ObservationExportSession,
     export_observation_snapshot,
 )
 
@@ -24,6 +25,16 @@ class RecordingExporter:
     def export(self, snapshot: ObservationSnapshot) -> None:
         assert snapshot.counters == {"benchmark.runs": 1.0}
         self._events.append(self._name)
+
+
+class SnapshotRecordingExporter:
+    """Record exported snapshots for export-session assertions."""
+
+    def __init__(self) -> None:
+        self.snapshots: list[ObservationSnapshot] = []
+
+    def export(self, snapshot: ObservationSnapshot) -> None:
+        self.snapshots.append(snapshot)
 
 
 class FailingExporter:
@@ -100,3 +111,60 @@ def test_export_observation_snapshot_uses_same_ordered_contract() -> None:
     )
 
     assert events == ["first", "second"]
+
+
+def test_export_session_emits_only_interval_delta() -> None:
+    exporter = SnapshotRecordingExporter()
+    initial = ObservationSnapshot(
+        counters={"benchmark.runs": 2.0},
+        durations_seconds={"benchmark.seconds": 1.0},
+    )
+    session = ObservationExportSession(exporter, initial_snapshot=initial)
+    current = ObservationSnapshot(
+        counters={"benchmark.runs": 5.0},
+        durations_seconds={"benchmark.seconds": 1.75},
+    )
+
+    delta = session.export(current)
+
+    assert delta.counters == {"benchmark.runs": 3.0}
+    assert delta.durations_seconds == {"benchmark.seconds": 0.75}
+    assert exporter.snapshots == [delta]
+    assert session.checkpoint == current
+
+
+def test_export_session_does_not_advance_checkpoint_after_backend_failure() -> None:
+    initial = ObservationSnapshot(counters={"runs": 1.0}, durations_seconds={})
+    current = ObservationSnapshot(counters={"runs": 3.0}, durations_seconds={})
+    session = ObservationExportSession(FailingExporter(), initial_snapshot=initial)
+
+    with pytest.raises(RuntimeError, match="backend unavailable"):
+        session.export(current)
+
+    assert session.checkpoint == initial
+
+
+def test_export_session_skips_backend_for_empty_delta() -> None:
+    exporter = SnapshotRecordingExporter()
+    snapshot = ObservationSnapshot(counters={"runs": 2.0}, durations_seconds={})
+    session = ObservationExportSession(exporter, initial_snapshot=snapshot)
+
+    delta = session.export(snapshot)
+
+    assert delta.counters == {}
+    assert delta.durations_seconds == {}
+    assert exporter.snapshots == []
+    assert session.checkpoint == snapshot
+
+
+def test_export_session_rejects_regressing_cumulative_snapshot() -> None:
+    exporter = SnapshotRecordingExporter()
+    initial = ObservationSnapshot(counters={"runs": 3.0}, durations_seconds={})
+    session = ObservationExportSession(exporter, initial_snapshot=initial)
+    regressed = ObservationSnapshot(counters={"runs": 2.0}, durations_seconds={})
+
+    with pytest.raises(ValueError, match="counter aggregate regressed"):
+        session.export(regressed)
+
+    assert exporter.snapshots == []
+    assert session.checkpoint == initial
