@@ -40,9 +40,11 @@ def run_paired_external_benchmarks(
     """Run two policy conditions on the same independent seed set.
 
     All callable, pairing, repeated-seed, and condition-label contracts are
-    validated before either condition starts. This prevents malformed experiment
-    metadata or a treatment configuration from consuming benchmark episodes and
-    leaving an incomplete or unusable paired experiment behind.
+    validated before either condition starts. Measured execution is then
+    counterbalanced by seed: baseline runs first for even seed positions and
+    treatment runs first for odd positions. This prevents one condition from
+    always being measured later than the other while preserving identical seed
+    ownership for both conditions.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
@@ -51,8 +53,11 @@ def run_paired_external_benchmarks(
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
-    baseline_reports = run_repeated_external_benchmarks(baseline_spec, selected_seeds)
-    treatment_reports = run_repeated_external_benchmarks(treatment_spec, selected_seeds)
+    baseline_reports, treatment_reports = _run_counterbalanced_pairs(
+        baseline_spec,
+        treatment_spec,
+        selected_seeds,
+    )
     comparison = compare_benchmark_reports(
         baseline_reports,
         treatment_reports,
@@ -123,6 +128,35 @@ def preflight_paired_external_benchmarks(
         selected_seeds,
         probe_action=probe_action,
     )
+
+
+def _run_counterbalanced_pairs(
+    baseline_spec: ExternalBenchmarkSpec,
+    treatment_spec: ExternalBenchmarkSpec,
+    seeds: tuple[int, ...],
+) -> tuple[tuple[BenchmarkRunReport, ...], tuple[BenchmarkRunReport, ...]]:
+    """Execute matched seeds with deterministic alternating condition order.
+
+    The output remains ordered by the caller-provided seed sequence regardless
+    of which condition executes first for an individual seed. Each one-seed run
+    therefore contributes exactly one report to each paired collection while
+    reducing systematic warm-up, throttling, or temporal-drift bias.
+    """
+
+    baseline_reports: list[BenchmarkRunReport] = []
+    treatment_reports: list[BenchmarkRunReport] = []
+
+    for seed_index, seed in enumerate(seeds):
+        if seed_index % 2 == 0:
+            baseline_report = run_repeated_external_benchmarks(baseline_spec, (seed,))[0]
+            treatment_report = run_repeated_external_benchmarks(treatment_spec, (seed,))[0]
+        else:
+            treatment_report = run_repeated_external_benchmarks(treatment_spec, (seed,))[0]
+            baseline_report = run_repeated_external_benchmarks(baseline_spec, (seed,))[0]
+        baseline_reports.append(baseline_report)
+        treatment_reports.append(treatment_report)
+
+    return tuple(baseline_reports), tuple(treatment_reports)
 
 
 def _validate_paired_repeated_requests(
