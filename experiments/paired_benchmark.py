@@ -38,12 +38,14 @@ def run_paired_external_benchmarks(
 ) -> PairedBenchmarkResult:
     """Run two policy conditions on the same independent seed set.
 
-    All callable and pairing contracts are validated before either condition
-    starts. This prevents a malformed treatment configuration from consuming
-    baseline episodes and leaving an incomplete paired experiment behind.
+    All callable, pairing, and condition-label contracts are validated before
+    either condition starts. This prevents malformed experiment metadata or a
+    treatment configuration from consuming benchmark episodes and leaving an
+    incomplete or unusable paired experiment behind.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
+    _validate_condition_labels(baseline_label, treatment_label)
     selected_seeds = validate_seed_sequence(seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
@@ -73,6 +75,7 @@ def run_paired_external_benchmarks_with_preflight(
 ) -> PairedBenchmarkResult:
     """Preflight both conditions before running a paired benchmark experiment."""
 
+    _validate_condition_labels(baseline_label, treatment_label)
     preflight_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
@@ -138,6 +141,22 @@ def _validate_paired_specs(
 
     if _policy_identity(baseline_spec) == _policy_identity(treatment_spec):
         raise ValueError("paired benchmark specifications must use distinct policy configurations")
+
+
+def _validate_condition_labels(baseline_label: str, treatment_label: str) -> None:
+    """Reject unusable or ambiguous condition labels before expensive execution."""
+
+    for field_name, value in (
+        ("baseline_label", baseline_label),
+        ("treatment_label", treatment_label),
+    ):
+        if not isinstance(value, str):
+            raise TypeError(f"{field_name} must be a string")
+        if not value.strip():
+            raise ValueError(f"{field_name} must be a non-empty string")
+
+    if baseline_label.strip().casefold() == treatment_label.strip().casefold():
+        raise ValueError("baseline_label and treatment_label must identify distinct conditions")
 
 
 def _policy_identity(spec: ExternalBenchmarkSpec) -> tuple[str, str]:
