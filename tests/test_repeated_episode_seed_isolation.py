@@ -2,7 +2,10 @@
 
 import pytest
 
-from experiments.external_benchmark import ExternalBenchmarkSpec, validate_repeated_benchmark_request
+from experiments.external_benchmark import (
+    ExternalBenchmarkSpec,
+    validate_repeated_benchmark_request,
+)
 
 
 def _spec(*, episode_count: int) -> ExternalBenchmarkSpec:
