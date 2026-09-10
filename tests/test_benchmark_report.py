@@ -18,6 +18,7 @@ from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunConfiguration, B
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
 from remem.memory.store import MemoryStore
+from remem.reproducibility_manifest import benchmark_configuration_manifest
 
 
 def _build_report(
@@ -119,11 +120,13 @@ def test_benchmark_report_to_dict_preserves_measured_core_fields() -> None:
 
 
 def test_benchmark_report_to_dict_adds_configuration_fingerprint() -> None:
-    payload = benchmark_report_to_dict(_build_report(seed=17))
+    report = _build_report(seed=17)
+    payload = benchmark_report_to_dict(report)
 
     assert payload["configuration_fingerprint"] == benchmark_configuration_fingerprint(
-        _build_report(seed=17).configuration
+        report.configuration
     )
+    assert payload["configuration_manifest"] == benchmark_configuration_manifest(report.configuration)
 
 
 def test_benchmark_report_to_dict_rejects_invalid_report() -> None:
@@ -167,13 +170,15 @@ def test_configuration_fingerprint_changes_when_configuration_changes() -> None:
 
 
 def test_save_benchmark_report_writes_json(tmp_path) -> None:
-    output_path = save_benchmark_report(_build_report(seed=1), tmp_path / "nested" / "report.json")
+    report = _build_report(seed=1)
+    output_path = save_benchmark_report(report, tmp_path / "nested" / "report.json")
 
     assert output_path.exists()
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
     assert persisted["schema_version"] == BENCHMARK_REPORT_SCHEMA_VERSION
     assert persisted["final_memory_count"] == 1
     assert persisted["episodes"][0]["transfer_outcomes"] == []
+    assert persisted["configuration_manifest"] == benchmark_configuration_manifest(report.configuration)
     assert persisted["experiment_identity"]
     assert persisted["runtime_provenance"] == {}
 
@@ -286,6 +291,7 @@ def test_save_repeated_reports_allows_seed_only_configuration_difference(tmp_pat
     )
     assert persisted["experiment_identity"]
     assert persisted["runtime_provenance"] == {}
+    assert all("configuration_manifest" in report for report in persisted["reports"])
 
 
 def test_save_paired_benchmark_result_serializes_ordered_conditions(tmp_path) -> None:
@@ -309,6 +315,10 @@ def test_save_paired_benchmark_result_serializes_ordered_conditions(tmp_path) ->
     assert persisted["comparison"]["success_rate_delta"]["mean"] == 0.0
     assert persisted["runtime_provenance"]["code_revision"] == "abc123"
     assert persisted["experiment_identity"]
+    assert all(
+        "configuration_manifest" in report
+        for report in persisted["baseline"]["reports"] + persisted["treatment"]["reports"]
+    )
 
 
 def test_save_paired_benchmark_result_is_byte_deterministic_for_input_order(tmp_path) -> None:

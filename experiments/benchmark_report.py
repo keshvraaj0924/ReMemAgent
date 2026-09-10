@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Mapping
 from experiments.experiment_identity import build_experiment_identity
 from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.benchmark_validation import validate_benchmark_run_report
+from remem.reproducibility_manifest import benchmark_configuration_manifest
 
 if TYPE_CHECKING:
     from experiments.benchmark_statistics import BenchmarkConditionComparison
@@ -31,6 +32,7 @@ def benchmark_report_to_dict(report: BenchmarkRunReport) -> dict[str, Any]:
     configuration = report.configuration
     if configuration is not None:
         payload["configuration_fingerprint"] = benchmark_configuration_fingerprint(configuration)
+        payload["configuration_manifest"] = benchmark_configuration_manifest(configuration)
     return payload
 
 
