@@ -1,4 +1,4 @@
-from remem.benchmark import BenchmarkRunConfiguration, BenchmarkSuiteRunner
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport, BenchmarkSuiteRunner
 from remem.benchmark_artifacts import (
     benchmark_run_artifact,
     validate_benchmark_run_artifact,
@@ -22,7 +22,7 @@ class FakeEnvironment:
         pass
 
 
-def _build_report() -> object:
+def _build_report() -> BenchmarkRunReport:
     configuration = BenchmarkRunConfiguration(
         benchmark_name="artifact-smoke",
         episode_count=1,
@@ -77,19 +77,15 @@ def test_benchmark_run_artifact_validation_rejects_tampered_manifest() -> None:
 
 
 def test_benchmark_run_artifact_requires_configuration_provenance() -> None:
-    report = BenchmarkSuiteRunner().run(
+    report = BenchmarkRunReport(
         benchmark_name="unprovenanced-smoke",
-        episode_count=0,
-        max_steps=1,
-        environment_factory=lambda index: FakeEnvironment(),
-        policy_factory=lambda index, store: lambda state: "act",
-        success_evaluator=lambda episode: True,
+        episodes=(),
+        final_memory_count=0,
     )
-    report.configuration = None  # type: ignore[misc]
 
     try:
         benchmark_run_artifact(report)
-    except (ValueError, AttributeError):
-        pass
+    except ValueError as exc:
+        assert "configuration provenance" in str(exc)
     else:
         raise AssertionError("artifact creation must require configuration provenance")
