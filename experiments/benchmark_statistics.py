@@ -47,11 +47,11 @@ class BenchmarkSeedStatistics:
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkConditionComparison:
-    """Paired descriptive deltas between two conditions sharing independent seeds."""
+    """Paired descriptive deltas between two conditions sharing explicit seeds."""
 
     baseline_label: str
     treatment_label: str
-    seeds: tuple[int | None, ...]
+    seeds: tuple[int, ...]
     success_rate_delta: MetricSummary
     mean_reward_delta: MetricSummary
     transfer_success_rate_delta: MetricSummary
@@ -137,8 +137,8 @@ def compare_benchmark_reports(
     _validate_explicit_seeds(baseline, "baseline")
     _validate_explicit_seeds(treatment, "treatment")
 
-    baseline_by_seed = {report.seed: report for report in baseline}
-    treatment_by_seed = {report.seed: report for report in treatment}
+    baseline_by_seed = {_require_seed(report): report for report in baseline}
+    treatment_by_seed = {_require_seed(report): report for report in treatment}
     if set(baseline_by_seed) != set(treatment_by_seed):
         raise ValueError("baseline and treatment reports must use the same seed set")
 
@@ -278,6 +278,14 @@ def _validate_explicit_seeds(
 
     if any(report.seed is None for report in reports):
         raise ValueError(f"{condition_label} reports must provide explicit seeds for pairing")
+
+
+def _require_seed(report: BenchmarkRunReport) -> int:
+    """Return an explicitly recorded seed as a non-optional integer."""
+
+    if report.seed is None:
+        raise ValueError("paired benchmark reports must provide explicit seeds for pairing")
+    return report.seed
 
 
 def _validate_paired_configuration(
