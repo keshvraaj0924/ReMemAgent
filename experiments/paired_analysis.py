@@ -191,9 +191,7 @@ def _paired_metric_deltas(
 ) -> tuple[float, ...]:
     """Return treatment-minus-baseline deltas for one metric and seed set."""
 
-    return tuple(
-        getter(treatment_by_seed[seed]) - getter(baseline_by_seed[seed]) for seed in seeds
-    )
+    return tuple(getter(treatment_by_seed[seed]) - getter(baseline_by_seed[seed]) for seed in seeds)
 
 
 def _validate_condition_label(label: str, field_name: str) -> str:
