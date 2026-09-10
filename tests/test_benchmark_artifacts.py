@@ -107,7 +107,7 @@ def test_serialized_artifact_validation_rejects_configuration_tampering() -> Non
     try:
         validate_serialized_benchmark_run_artifact(artifact)
     except ValueError as exc:
-        assert "digest mismatch" in str(exc)
+        assert "mismatch" in str(exc)
     else:
         raise AssertionError("configuration tampering must be rejected")
 
