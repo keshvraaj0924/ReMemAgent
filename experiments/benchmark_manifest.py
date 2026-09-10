@@ -9,7 +9,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from experiments.benchmark_report import BENCHMARK_REPORT_SCHEMA_VERSION
 
@@ -187,7 +187,7 @@ def _load_json_document(report_path: Path, payload: bytes) -> dict[str, Any]:
     return document
 
 
-def _is_strict_integer(value: object) -> bool:
+def _is_strict_integer(value: object) -> TypeGuard[int]:
     """Return whether a value is an integer but not a boolean."""
 
     return isinstance(value, int) and not isinstance(value, bool)
