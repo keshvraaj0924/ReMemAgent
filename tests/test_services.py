@@ -85,7 +85,7 @@ def test_service_rejects_non_boolean_success_evaluator_result() -> None:
             success_evaluator=malformed_success_evaluator,
         )
 
-    assert store.all() == ()
+    assert not store.all()
 
 
 def test_service_rejects_blank_episode_id_before_execution() -> None:
