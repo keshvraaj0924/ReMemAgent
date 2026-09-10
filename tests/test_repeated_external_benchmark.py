@@ -19,7 +19,7 @@ def test_repeated_external_benchmarks_isolate_seeded_runs() -> None:
         policy_factory=None,
         action_policy_factory="experiments.smoke_benchmark:build_action_policy",
         success_evaluator="experiments.smoke_benchmark:is_success",
-        seed=999,
+        seed=None,
     )
 
     reports = run_repeated_external_benchmarks(spec, [0, 10])
