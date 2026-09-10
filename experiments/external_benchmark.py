@@ -98,16 +98,23 @@ def validate_repeated_benchmark_request(
     spec: ExternalBenchmarkSpec,
     seeds: Sequence[int],
 ) -> tuple[int, ...]:
-    """Validate a repeated-run request without silently overriding ``spec.seed``.
+    """Validate repeated-run seed ownership and episode-level isolation.
 
     A repeated experiment owns its independent seed set through ``seeds``. A
     simultaneously configured single-run seed is ambiguous provenance and must
     therefore fail closed instead of being discarded by ``dataclasses.replace``.
+
+    ``BenchmarkSuiteRunner`` currently derives each episode seed as
+    ``run_seed + episode_index``. Distinct run seeds can therefore still reuse
+    episode seeds when their integer ranges overlap. Repeated experiments reject
+    that overlap so nominally independent runs cannot silently share environment
+    or policy RNG seeds.
     """
 
     selected_seeds = validate_seed_sequence(seeds)
     if spec.seed is not None:
         raise ValueError("spec.seed must be None when repeated seeds are provided")
+    _validate_disjoint_episode_seed_ranges(selected_seeds, spec.episode_count)
     return selected_seeds
 
 
@@ -221,7 +228,7 @@ def run_repeated_external_benchmarks(
     *,
     runner: BenchmarkSuiteRunner | None = None,
 ) -> tuple[BenchmarkRunReport, ...]:
-    """Execute each explicit seed without accepting ambiguous single-seed state."""
+    """Execute each explicit seed without accepting ambiguous or overlapping seed state."""
 
     selected_seeds = validate_repeated_benchmark_request(spec, seeds)
     selected_runner = runner or BenchmarkSuiteRunner()
@@ -245,6 +252,31 @@ def _resolve_policy_factory(spec: ExternalBenchmarkSpec) -> PolicyFactory:
     if spec.policy_factory is None:
         raise ValueError("policy_factory is required when action_policy_factory is absent")
     return cast(PolicyFactory, resolve_callable(spec.policy_factory))
+
+
+def _validate_disjoint_episode_seed_ranges(seeds: tuple[int, ...], episode_count: int) -> None:
+    """Reject repeated runs that would reuse any derived episode RNG seed."""
+
+    if episode_count == 0 or len(seeds) < 2:
+        return
+
+    seed_ranges = sorted(
+        (seed, seed + episode_count - 1, seed)
+        for seed in seeds
+    )
+    previous_start, previous_end, previous_seed = seed_ranges[0]
+    for current_start, current_end, current_seed in seed_ranges[1:]:
+        if current_start <= previous_end:
+            raise ValueError(
+                "repeated benchmark seeds produce overlapping episode seed ranges: "
+                f"run seed {previous_seed} uses [{previous_start}, {previous_end}] and "
+                f"run seed {current_seed} uses [{current_start}, {current_end}]"
+            )
+        previous_start, previous_end, previous_seed = (
+            current_start,
+            current_end,
+            current_seed,
+        )
 
 
 def _validate_callable_specification(field_name: str, specification: str) -> None:
