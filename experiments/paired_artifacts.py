@@ -85,16 +85,17 @@ def validate_persisted_paired_artifact(payload: Mapping[str, Any]) -> None:
     """Verify paired protocol identity plus optional temporal execution provenance.
 
     This validator is intended to run after the generic per-run artifact checks.
-    It recomputes the top-level paired configuration fingerprint and experiment
-    identity from the persisted condition configurations, seed set, and runtime
-    provenance. Legacy paired artifacts without an experiment identity remain
+    Temporal execution provenance is validated whenever present, including on
+    legacy/minimal artifacts that predate the complete paired-condition payload.
+    Top-level paired identity checks are applied only when condition collections
+    are present. Legacy paired artifacts without an experiment identity remain
     readable but do not gain an identity guarantee retroactively.
     """
 
+    validate_persisted_paired_execution_provenance(payload)
+
     if "baseline" not in payload and "treatment" not in payload:
         return
-
-    validate_persisted_paired_execution_provenance(payload)
 
     identity = payload.get("experiment_identity")
     if identity is None:
