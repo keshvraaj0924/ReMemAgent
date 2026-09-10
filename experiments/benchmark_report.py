@@ -8,7 +8,10 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
-from experiments.experiment_identity import build_experiment_identity
+from experiments.experiment_identity import (
+    build_experiment_identity,
+    build_paired_experiment_identity,
+)
 from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 from remem.benchmark_validation import validate_benchmark_run_report
 from remem.reproducibility_manifest import benchmark_configuration_manifest
@@ -42,6 +45,25 @@ def benchmark_configuration_fingerprint(configuration: BenchmarkRunConfiguration
     canonical_configuration = asdict(replace(configuration, seed=None))
     canonical_payload = json.dumps(
         canonical_configuration,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical_payload).hexdigest()
+
+
+def paired_configuration_fingerprint(
+    baseline_configuration: BenchmarkRunConfiguration,
+    treatment_configuration: BenchmarkRunConfiguration,
+) -> str:
+    """Fingerprint both condition configurations independent of run seeds."""
+
+    canonical_payload = json.dumps(
+        {
+            "baseline": asdict(replace(baseline_configuration, seed=None)),
+            "treatment": asdict(replace(treatment_configuration, seed=None)),
+        },
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,
@@ -150,6 +172,11 @@ def save_paired_benchmark_result(
         raise ValueError("comparison seeds must match both paired report seed sets")
     _validate_paired_comparison(baseline, treatment, comparison)
 
+    baseline_configuration = baseline[0].configuration
+    treatment_configuration = treatment[0].configuration
+    if baseline_configuration is None or treatment_configuration is None:
+        raise ValueError("paired benchmark reports must include explicit configuration")
+
     payload: dict[str, Any] = {
         "schema_version": BENCHMARK_REPORT_SCHEMA_VERSION,
         "benchmark_name": baseline[0].benchmark_name,
@@ -163,21 +190,19 @@ def save_paired_benchmark_result(
             "reports": [benchmark_report_to_dict(report) for report in treatment],
         },
         "comparison": comparison.to_dict(),
+        "configuration_fingerprint": paired_configuration_fingerprint(
+            baseline_configuration,
+            treatment_configuration,
+        ),
     }
-    reference_configuration = baseline[0].configuration
-    if reference_configuration is not None:
-        payload["configuration_fingerprint"] = benchmark_configuration_fingerprint(
-            reference_configuration
-        )
     normalized_provenance = _normalize_runtime_provenance(runtime_provenance or {})
     payload["runtime_provenance"] = normalized_provenance
-    if reference_configuration is not None:
-        identity_configuration = replace(reference_configuration, seed=None)
-        payload["experiment_identity"] = build_experiment_identity(
-            identity_configuration,
-            tuple(comparison.seeds),
-            normalized_provenance,
-        )
+    payload["experiment_identity"] = build_paired_experiment_identity(
+        replace(baseline_configuration, seed=None),
+        replace(treatment_configuration, seed=None),
+        tuple(comparison.seeds),
+        normalized_provenance,
+    )
     _write_json(payload, output_path)
     return output_path
 
@@ -230,22 +255,27 @@ def _validate_paired_configuration(
     if any(report.configuration is None for report in baseline + treatment):
         raise ValueError("paired benchmark reports must include explicit configuration")
 
-    baseline_fingerprints = {_paired_configuration_fingerprint(report) for report in baseline}
-    treatment_fingerprints = {_paired_configuration_fingerprint(report) for report in treatment}
+    baseline_fingerprints = {_paired_protocol_fingerprint(report) for report in baseline}
+    treatment_fingerprints = {_paired_protocol_fingerprint(report) for report in treatment}
     if baseline_fingerprints != treatment_fingerprints:
         raise ValueError(
             "baseline and treatment reports must share configuration apart from the seed and policy"
         )
 
 
-def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str:
+def _paired_protocol_fingerprint(report: BenchmarkRunReport) -> str:
     """Fingerprint paired protocol metadata while excluding seed and policy identity."""
 
     configuration = report.configuration
     if configuration is None:
         raise ValueError("paired benchmark reports must include explicit configuration")
     return benchmark_configuration_fingerprint(
-        replace(configuration, seed=None, policy_factory=None)
+        replace(
+            configuration,
+            seed=None,
+            policy_factory=None,
+            action_policy_factory=None,
+        )
     )
 
 

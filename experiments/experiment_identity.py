@@ -39,19 +39,35 @@ def build_experiment_identity(
     return manifest.sha256
 
 
+def build_paired_experiment_identity(
+    baseline_configuration: BenchmarkRunConfiguration,
+    treatment_configuration: BenchmarkRunConfiguration,
+    seeds: Sequence[int],
+    runtime_provenance: Mapping[str, Any],
+) -> str:
+    """Return a stable identity binding both conditions of a paired protocol."""
+
+    normalized_seeds = _normalize_seeds(seeds)
+    normalized_provenance = _normalize_provenance(runtime_provenance)
+    manifest = ExperimentManifest(
+        {
+            "schema_version": EXPERIMENT_IDENTITY_SCHEMA_VERSION,
+            "baseline_configuration": _configuration_payload(baseline_configuration),
+            "treatment_configuration": _configuration_payload(treatment_configuration),
+            "seeds": list(normalized_seeds),
+            "runtime_provenance": normalized_provenance,
+        }
+    )
+    return manifest.sha256
+
+
 def verify_experiment_identity(
     identity: str,
     configuration: BenchmarkRunConfiguration,
     seeds: Sequence[int],
     runtime_provenance: Mapping[str, Any],
 ) -> None:
-    """Fail if a persisted experiment identity does not match its inputs.
-
-    This checks the semantic reproducibility identity rather than the exact
-    serialized artifact bytes. Callers can use it after loading benchmark
-    metadata to detect stale or manually altered identity fields before using
-    an artifact in downstream analysis.
-    """
+    """Fail if a persisted experiment identity does not match its inputs."""
 
     if not is_experiment_identity(identity):
         raise ValueError("identity must be a canonical SHA-256 experiment identity")
@@ -70,6 +86,7 @@ def _configuration_payload(configuration: BenchmarkRunConfiguration) -> dict[str
         "seed": configuration.seed,
         "environment_factory": configuration.environment_factory,
         "policy_factory": configuration.policy_factory,
+        "action_policy_factory": configuration.action_policy_factory,
         "success_evaluator": configuration.success_evaluator,
         "transfer_success_evaluator": configuration.transfer_success_evaluator,
         "minimum_trust": configuration.minimum_trust,
@@ -115,6 +132,7 @@ def is_experiment_identity(value: str) -> bool:
 __all__ = [
     "EXPERIMENT_IDENTITY_SCHEMA_VERSION",
     "build_experiment_identity",
+    "build_paired_experiment_identity",
     "is_experiment_identity",
     "verify_experiment_identity",
 ]

@@ -204,7 +204,8 @@ def run_external_benchmark(
         max_steps=spec.max_steps,
         seed=spec.seed,
         environment_factory=spec.environment_factory,
-        policy_factory=spec.policy_factory or spec.action_policy_factory,
+        policy_factory=spec.policy_factory,
+        action_policy_factory=spec.action_policy_factory,
         success_evaluator=spec.success_evaluator,
         transfer_success_evaluator=spec.transfer_success_evaluator,
         minimum_trust=spec.minimum_trust,
@@ -309,12 +310,26 @@ def _close_environment_safely(environment: object) -> None:
     try:
         _close_environment(environment)
     except Exception:
-        return
+        pass
 
 
 def _close_environment(environment: object) -> None:
-    """Close an environment when it exposes a callable cleanup method."""
+    """Close an environment when its adapter exposes lifecycle cleanup."""
 
     close = getattr(environment, "close", None)
-    if callable(close):
-        close()
+    if close is None:
+        return
+    if not callable(close):
+        raise TypeError("environment close attribute must be callable")
+    close()
+
+
+__all__ = [
+    "ExternalBenchmarkSpec",
+    "run_external_benchmark",
+    "run_repeated_external_benchmarks",
+    "validate_external_benchmark",
+    "validate_external_benchmark_runtime",
+    "validate_repeated_benchmark_request",
+    "validate_seed_sequence",
+]
