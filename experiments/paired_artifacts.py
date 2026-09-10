@@ -48,9 +48,7 @@ def save_paired_execution_result(
     execution_order = _validate_execution_order(result)
     provenance = dict(runtime_provenance or {})
     if PAIRED_EXECUTION_ORDER_PROVENANCE_KEY in provenance:
-        raise ValueError(
-            f"runtime_provenance reserves {PAIRED_EXECUTION_ORDER_PROVENANCE_KEY!r}"
-        )
+        raise ValueError(f"runtime_provenance reserves {PAIRED_EXECUTION_ORDER_PROVENANCE_KEY!r}")
     provenance[PAIRED_EXECUTION_ORDER_PROVENANCE_KEY] = _execution_order_fingerprint(
         execution_order
     )
@@ -177,9 +175,7 @@ def validate_persisted_paired_execution_provenance(payload: Mapping[str, Any]) -
             raise ValueError("execution_order seeds must exactly match artifact seeds")
 
         expected_conditions = (
-            ("baseline", "treatment")
-            if seed_index % 2 == 0
-            else ("treatment", "baseline")
+            ("baseline", "treatment") if seed_index % 2 == 0 else ("treatment", "baseline")
         )
         if (first_condition, second_condition) != expected_conditions:
             raise ValueError(
@@ -198,9 +194,7 @@ def validate_persisted_paired_execution_provenance(payload: Mapping[str, Any]) -
         raise ValueError("paired execution artifact requires runtime_provenance")
     stored_digest = runtime_provenance.get(PAIRED_EXECUTION_ORDER_PROVENANCE_KEY)
     if not isinstance(stored_digest, str):
-        raise ValueError(
-            f"runtime_provenance requires {PAIRED_EXECUTION_ORDER_PROVENANCE_KEY!r}"
-        )
+        raise ValueError(f"runtime_provenance requires {PAIRED_EXECUTION_ORDER_PROVENANCE_KEY!r}")
 
     expected_digest = _execution_order_fingerprint(tuple(normalized_entries))
     if not hmac.compare_digest(stored_digest, expected_digest):
@@ -267,9 +261,7 @@ def _validate_execution_order(
 
     for seed_index, entry in enumerate(execution_order):
         expected_conditions = (
-            ("baseline", "treatment")
-            if seed_index % 2 == 0
-            else ("treatment", "baseline")
+            ("baseline", "treatment") if seed_index % 2 == 0 else ("treatment", "baseline")
         )
         actual_conditions = (entry.first_condition, entry.second_condition)
         if actual_conditions != expected_conditions:
