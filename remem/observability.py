@@ -62,10 +62,11 @@ class ObservationSnapshot:
         schema_version = payload.get("schema_version")
         if schema_version != OBSERVATION_SNAPSHOT_SCHEMA_VERSION:
             raise ValueError(f"unsupported observation snapshot schema version: {schema_version!r}")
-        return cls(
-            counters=payload.get("counters", {}),
-            durations_seconds=payload.get("durations_seconds", {}),
+        counters = _parse_aggregate_mapping(payload.get("counters", {}), "counter")
+        durations_seconds = _parse_aggregate_mapping(
+            payload.get("durations_seconds", {}), "duration"
         )
+        return cls(counters=counters, durations_seconds=durations_seconds)
 
 
 class ObservationCollector:
@@ -187,8 +188,8 @@ def merge_observation_snapshots(
     return ObservationSnapshot(counters=counters, durations_seconds=durations_seconds)
 
 
-def _freeze_aggregate_mapping(value: object, value_type: str) -> Mapping[str, float]:
-    """Validate, normalize, and freeze one aggregate mapping."""
+def _parse_aggregate_mapping(value: object, value_type: str) -> dict[str, float]:
+    """Validate and normalize one untyped persisted aggregate mapping."""
 
     if not isinstance(value, Mapping):
         raise TypeError(f"observation snapshot {value_type}s must be a mapping")
@@ -204,7 +205,13 @@ def _freeze_aggregate_mapping(value: object, value_type: str) -> Mapping[str, fl
                 f"observation snapshot {value_type} names normalize to the same key: {name!r}"
             )
         parsed[normalized_name] = float(aggregate)
-    return MappingProxyType(dict(sorted(parsed.items())))
+    return dict(sorted(parsed.items()))
+
+
+def _freeze_aggregate_mapping(value: object, value_type: str) -> Mapping[str, float]:
+    """Validate, normalize, and freeze one aggregate mapping."""
+
+    return MappingProxyType(_parse_aggregate_mapping(value, value_type))
 
 
 def _validate_snapshot_value(name: str, value: float, value_type: str) -> str:
