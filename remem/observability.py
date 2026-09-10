@@ -104,9 +104,9 @@ class ObservationCollector:
         if not isfinite(duration_seconds) or duration_seconds < 0.0:
             raise ValueError("duration must be finite and non-negative")
         with self._lock:
-            self._durations_seconds[normalized_name] = self._durations_seconds.get(
-                normalized_name, 0.0
-            ) + duration_seconds
+            self._durations_seconds[normalized_name] = (
+                self._durations_seconds.get(normalized_name, 0.0) + duration_seconds
+            )
 
     def snapshot(self) -> ObservationSnapshot:
         """Return an isolated snapshot suitable for serialization or reporting."""
