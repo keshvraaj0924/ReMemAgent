@@ -17,6 +17,16 @@ def test_paired_cohens_dz_returns_none_for_zero_variance() -> None:
     assert paired_cohens_dz((1.0, 1.0, 1.0)) is None
 
 
+def test_paired_cohens_dz_returns_none_for_floating_point_zero_variance() -> None:
+    deltas = (
+        0.3 - 0.2,
+        0.4 - 0.3,
+        0.2 - 0.1,
+    )
+
+    assert paired_cohens_dz(deltas) is None
+
+
 def test_paired_cohens_dz_preserves_negative_direction() -> None:
     effect_size = paired_cohens_dz((-1.0, -2.0, -3.0))
     assert effect_size is not None
