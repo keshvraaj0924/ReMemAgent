@@ -260,10 +260,7 @@ def _validate_disjoint_episode_seed_ranges(seeds: tuple[int, ...], episode_count
     if episode_count == 0 or len(seeds) < 2:
         return
 
-    seed_ranges = sorted(
-        (seed, seed + episode_count - 1, seed)
-        for seed in seeds
-    )
+    seed_ranges = sorted((seed, seed + episode_count - 1, seed) for seed in seeds)
     previous_start, previous_end, previous_seed = seed_ranges[0]
     for current_start, current_end, current_seed in seed_ranges[1:]:
         if current_start <= previous_end:
