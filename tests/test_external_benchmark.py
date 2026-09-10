@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 
@@ -53,6 +53,11 @@ def make_broken_close_environment(seed: int) -> BrokenCloseEnvironment:
 def make_policy(seed: int, store: MemoryStore):
     del store
     return lambda state: f"act-{seed}"
+
+
+def make_memory_policy(seed: int, store: MemoryStore) -> Callable[[str], str]:
+    del store
+    return lambda state: f"memory-act-{seed}"
 
 
 def make_invalid_policy(seed: int, store: MemoryStore):
