@@ -243,7 +243,9 @@ def test_compare_benchmark_reports_rejects_ambiguous_condition_labels() -> None:
 
     reports = (_report(1, 0.0, False),)
     try:
-        compare_benchmark_reports(reports, reports, baseline_label="Memory", treatment_label=" memory ")
+        compare_benchmark_reports(
+            reports, reports, baseline_label="Memory", treatment_label=" memory "
+        )
     except ValueError as exc:
         assert "distinct conditions" in str(exc)
     else:
