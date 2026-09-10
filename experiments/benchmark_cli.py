@@ -124,11 +124,11 @@ def main() -> int:
         return 0
     if getattr(arguments, "runtime_preflight", False):
         _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
-        report = validate_external_benchmark_runtime(
+        preflight_report = validate_external_benchmark_runtime(
             spec,
             probe_action=getattr(arguments, "probe_action", None),
         )
-        mode = "step" if report.step_result is not None else "reset"
+        mode = "step" if preflight_report.step_result is not None else "reset"
         print(f"benchmark runtime preflight succeeded ({mode} probe)")
         return 0
 
