@@ -261,16 +261,25 @@ def test_run_external_benchmark_passes_seed_to_factories() -> None:
 
 def test_run_repeated_external_benchmarks_rejects_invalid_seed_type() -> None:
     with pytest.raises(TypeError, match="only integers"):
-        run_repeated_external_benchmarks(_build_spec(), (7, "11"))  # type: ignore[arg-type]
+        run_repeated_external_benchmarks(_build_spec(seed=None), (7, "11"))  # type: ignore[arg-type]
 
 
 def test_run_repeated_external_benchmarks_rejects_boolean_seed() -> None:
     with pytest.raises(TypeError, match="only integers"):
-        run_repeated_external_benchmarks(_build_spec(), (True,))  # type: ignore[arg-type]
+        run_repeated_external_benchmarks(_build_spec(seed=None), (True,))  # type: ignore[arg-type]
+
+
+def test_run_repeated_external_benchmarks_rejects_single_seed_on_spec() -> None:
+    CLOSED_SEEDS.clear()
+
+    with pytest.raises(ValueError, match="spec.seed must be None"):
+        run_repeated_external_benchmarks(_build_spec(seed=7), (23, 7))
+
+    assert CLOSED_SEEDS == []
 
 
 def test_run_repeated_external_benchmarks_preserves_seed_order() -> None:
-    reports = run_repeated_external_benchmarks(_build_spec(), (23, 7))
+    reports = run_repeated_external_benchmarks(_build_spec(seed=None), (23, 7))
 
     assert [report.seed for report in reports] == [23, 7]
 
