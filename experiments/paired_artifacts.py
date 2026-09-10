@@ -1,4 +1,4 @@
-"""Persistence adapter for complete paired benchmark execution results.
+"""Persistence and verification for complete paired benchmark execution results.
 
 This module keeps temporal execution provenance attached to the measured paired
 result instead of reconstructing it later from seed order. The lower-level
@@ -75,6 +75,78 @@ def save_paired_execution_result(
     return output_path
 
 
+def validate_persisted_paired_execution_provenance(payload: Mapping[str, Any]) -> None:
+    """Verify paired execution trace semantics and its persisted SHA-256 digest.
+
+    Artifacts without an ``execution_order`` field are treated as legacy paired
+    artifacts and are left to the generic benchmark-artifact validator. Once the
+    field is present, all paired execution provenance fields are mandatory and
+    validated fail-closed.
+    """
+
+    if "execution_order" not in payload:
+        return
+
+    raw_seeds = payload.get("seeds")
+    if not isinstance(raw_seeds, list) or any(
+        not isinstance(seed, int) or isinstance(seed, bool) for seed in raw_seeds
+    ):
+        raise ValueError("paired execution artifact seeds must be a list of integers")
+
+    raw_execution_order = payload["execution_order"]
+    if not isinstance(raw_execution_order, list):
+        raise ValueError("execution_order must be a list")
+    if len(raw_execution_order) != len(raw_seeds):
+        raise ValueError("execution_order must contain exactly one entry per paired seed")
+
+    normalized_entries: list[PairedSeedExecution] = []
+    for seed_index, raw_entry in enumerate(raw_execution_order):
+        if not isinstance(raw_entry, Mapping):
+            raise ValueError("execution_order entries must be JSON objects")
+        if set(raw_entry) != {"seed", "first_condition", "second_condition"}:
+            raise ValueError("execution_order entries must use the exact persisted schema")
+
+        seed = raw_entry["seed"]
+        first_condition = raw_entry["first_condition"]
+        second_condition = raw_entry["second_condition"]
+        if not isinstance(seed, int) or isinstance(seed, bool):
+            raise ValueError("execution_order seed must be an integer")
+        if not isinstance(first_condition, str) or not isinstance(second_condition, str):
+            raise ValueError("execution_order conditions must be strings")
+        if seed != raw_seeds[seed_index]:
+            raise ValueError("execution_order seeds must exactly match artifact seeds")
+
+        expected_conditions = (
+            ("baseline", "treatment")
+            if seed_index % 2 == 0
+            else ("treatment", "baseline")
+        )
+        if (first_condition, second_condition) != expected_conditions:
+            raise ValueError(
+                "execution_order must match the deterministic counterbalanced condition plan"
+            )
+        normalized_entries.append(
+            PairedSeedExecution(
+                seed=seed,
+                first_condition=first_condition,
+                second_condition=second_condition,
+            )
+        )
+
+    runtime_provenance = payload.get("runtime_provenance")
+    if not isinstance(runtime_provenance, Mapping):
+        raise ValueError("paired execution artifact requires runtime_provenance")
+    stored_digest = runtime_provenance.get(PAIRED_EXECUTION_ORDER_PROVENANCE_KEY)
+    if not isinstance(stored_digest, str):
+        raise ValueError(
+            f"runtime_provenance requires {PAIRED_EXECUTION_ORDER_PROVENANCE_KEY!r}"
+        )
+
+    expected_digest = _execution_order_fingerprint(tuple(normalized_entries))
+    if stored_digest != expected_digest:
+        raise ValueError("paired execution order provenance digest does not match execution_order")
+
+
 def _validate_execution_order(
     result: PairedBenchmarkResult,
 ) -> tuple[PairedSeedExecution, ...]:
@@ -129,4 +201,5 @@ def _write_json_file(payload: Mapping[str, Any], output_path: Path) -> None:
 __all__ = [
     "PAIRED_EXECUTION_ORDER_PROVENANCE_KEY",
     "save_paired_execution_result",
+    "validate_persisted_paired_execution_provenance",
 ]
