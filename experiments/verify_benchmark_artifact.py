@@ -1,15 +1,19 @@
-"""Verify a persisted benchmark report against its exact-byte integrity manifest."""
+"""Verify a persisted benchmark report against its integrity and identity contracts."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from experiments.benchmark_manifest import (
     load_benchmark_artifact_manifest,
     verify_benchmark_artifact,
 )
+from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,13 +30,27 @@ def parse_args() -> argparse.Namespace:
 
 
 def verify_report_artifact(report_path: Path, manifest_path: Path | None = None) -> None:
-    """Verify report bytes against a persisted benchmark artifact manifest."""
+    """Verify exact report bytes and any embedded configuration identities."""
 
     selected_manifest_path = manifest_path or report_path.with_suffix(
         report_path.suffix + ".manifest.json"
     )
     manifest = load_benchmark_artifact_manifest(selected_manifest_path)
     verify_benchmark_artifact(report_path, manifest)
+    payload = _load_report_payload(report_path)
+    validate_persisted_benchmark_artifact(payload)
+
+
+def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
+    """Load a persisted benchmark JSON object after byte-integrity verification."""
+
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("benchmark artifact must contain valid JSON") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError("benchmark artifact root must be a JSON object")
+    return payload
 
 
 def main() -> int:
@@ -45,7 +63,7 @@ def main() -> int:
         print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
         return 1
 
-    print(f"benchmark artifact integrity verified: {arguments.report}")
+    print(f"benchmark artifact integrity and identity verified: {arguments.report}")
     return 0
 
 
