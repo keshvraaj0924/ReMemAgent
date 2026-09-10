@@ -2,6 +2,8 @@ from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport, Bench
 from remem.benchmark_artifacts import (
     benchmark_run_artifact,
     validate_benchmark_run_artifact,
+    validate_persisted_benchmark_artifact,
+    validate_serialized_benchmark_run_artifact,
 )
 from remem.environments.base import StepResult
 
@@ -89,3 +91,41 @@ def test_benchmark_run_artifact_requires_configuration_provenance() -> None:
         assert "configuration provenance" in str(exc)
     else:
         raise AssertionError("artifact creation must require configuration provenance")
+
+
+def test_serialized_artifact_validation_accepts_matching_configuration() -> None:
+    artifact = benchmark_run_artifact(_build_report())
+
+    validate_serialized_benchmark_run_artifact(artifact)
+
+
+def test_serialized_artifact_validation_rejects_configuration_tampering() -> None:
+    artifact = benchmark_run_artifact(_build_report())
+    configuration = artifact["configuration"]
+    configuration["max_steps"] = 2
+
+    try:
+        validate_serialized_benchmark_run_artifact(artifact)
+    except ValueError as exc:
+        assert "digest mismatch" in str(exc)
+    else:
+        raise AssertionError("configuration tampering must be rejected")
+
+
+def test_persisted_artifact_validation_checks_repeated_run_payloads() -> None:
+    artifact = benchmark_run_artifact(_build_report())
+    repeated_artifact = {"reports": [artifact]}
+
+    validate_persisted_benchmark_artifact(repeated_artifact)
+
+    artifact["configuration_manifest"]["configuration_digest"] = "0" * 64
+    try:
+        validate_persisted_benchmark_artifact(repeated_artifact)
+    except ValueError as exc:
+        assert "digest mismatch" in str(exc)
+    else:
+        raise AssertionError("nested manifest tampering must be rejected")
+
+
+def test_persisted_artifact_validation_allows_legacy_unprovenanced_payload() -> None:
+    validate_persisted_benchmark_artifact({"schema_version": 1, "episodes": []})
