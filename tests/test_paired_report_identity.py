@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 import json
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 from experiments.benchmark_report import save_paired_benchmark_result
 from experiments.benchmark_statistics import compare_benchmark_reports
 from experiments.external_benchmark import ExternalBenchmarkSpec, run_repeated_external_benchmarks
+from remem.memory.store import MemoryStore
 
 
 def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
@@ -19,6 +21,13 @@ def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
         success_evaluator="tests.test_external_benchmark:evaluate_success",
         seed=None,
     )
+
+
+def make_alternate_policy(seed: int, store: MemoryStore) -> Callable[[str], str]:
+    """Provide a second valid policy identity for paired provenance tests."""
+
+    del store
+    return lambda state: f"alternate-act-{seed}"
 
 
 def _save_pair(tmp_path: Path, treatment_policy: str, filename: str) -> dict[str, object]:
@@ -50,7 +59,7 @@ def test_paired_identity_changes_when_only_treatment_policy_changes(tmp_path: Pa
     )
     second = _save_pair(
         tmp_path,
-        "tests.test_external_benchmark:make_invalid_policy",
+        "tests.test_paired_report_identity:make_alternate_policy",
         "second.json",
     )
 
@@ -65,6 +74,12 @@ def test_paired_protocol_validation_ignores_policy_identity(tmp_path: Path) -> N
     treatment = run_repeated_external_benchmarks(
         _spec("tests.test_external_benchmark:make_memory_policy"), (7, 11)
     )
+    comparison = compare_benchmark_reports(
+        baseline,
+        treatment,
+        baseline_label="baseline",
+        treatment_label="treatment",
+    )
     drifted_treatment = tuple(
         replace(
             report,
@@ -73,12 +88,6 @@ def test_paired_protocol_validation_ignores_policy_identity(tmp_path: Path) -> N
             else None,
         )
         for report in treatment
-    )
-    comparison = compare_benchmark_reports(
-        baseline,
-        drifted_treatment,
-        baseline_label="baseline",
-        treatment_label="treatment",
     )
 
     try:
@@ -107,7 +116,7 @@ def test_paired_persistence_rejects_policy_drift_within_one_condition(tmp_path: 
             treatment[1],
             configuration=replace(
                 treatment[1].configuration,
-                policy_factory="tests.test_external_benchmark:make_invalid_policy",
+                policy_factory="tests.test_paired_report_identity:make_alternate_policy",
             )
             if treatment[1].configuration is not None
             else None,
