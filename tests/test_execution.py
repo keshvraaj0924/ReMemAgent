@@ -1,7 +1,5 @@
 """Tests for generic benchmark episode execution."""
 
-from collections.abc import Callable
-
 import pytest
 
 from remem.environments.base import StepResult
