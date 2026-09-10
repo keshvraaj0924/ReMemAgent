@@ -14,4 +14,10 @@ The full validated trace is serialized under `execution_order`. A canonical SHA-
 
 Artifact replacement remains atomic: serialization is completed on a private temporary file and the final path is replaced only after the paired report and execution provenance have both been written successfully.
 
+## Verification
+
+`remem-verify-benchmark` now performs semantic verification of persisted paired execution provenance after byte-integrity and generic configuration checks. For artifacts carrying `execution_order`, verification requires an exact seed-by-seed trace schema, exact agreement with the artifact seed list, the expected deterministic AB/BA counterbalancing plan, and a matching `paired_execution_order_sha256` value in runtime provenance.
+
+This closes a gap where a byte-valid artifact with a newly generated sidecar manifest could otherwise carry a malformed or stale temporal trace. Legacy artifacts that predate `execution_order` remain verifiable under their existing byte/configuration contracts and are not retroactively assigned temporal provenance they never recorded.
+
 The trace is execution provenance only. It does not imply that warm-up, throttling, cache state, or other temporal effects have been eliminated, and it does not establish benchmark improvement or statistical significance. Real ALFWorld/WebShop effectiveness claims still require controlled measured runs across independent seeds.
