@@ -52,9 +52,9 @@ def paired_cohens_dz(deltas: Sequence[float]) -> float | None:
         return None
 
     mean_delta = sum(normalized_deltas) / len(normalized_deltas)
-    sample_variance = sum(
-        (delta - mean_delta) ** 2 for delta in normalized_deltas
-    ) / (len(normalized_deltas) - 1)
+    sample_variance = sum((delta - mean_delta) ** 2 for delta in normalized_deltas) / (
+        len(normalized_deltas) - 1
+    )
     sample_stddev = sqrt(sample_variance)
     if sample_stddev == 0.0:
         return None
