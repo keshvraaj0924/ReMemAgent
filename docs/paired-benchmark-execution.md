@@ -16,7 +16,11 @@ ReMemAgent provides `experiments.paired_benchmark` for controlled baseline-versu
 
 The policy specification is intentionally allowed to differ. This is the expected baseline-versus-memory comparison: both conditions execute the same evaluation protocol while using different policies.
 
-Each condition is executed independently for every requested seed through the existing repeated external benchmark runner. The resulting reports are passed to `compare_benchmark_reports`, which aligns the conditions by explicit seed and computes descriptive treatment-minus-baseline deltas.
+Measured execution is counterbalanced by seed position. For even positions the baseline condition runs first; for odd positions the treatment condition runs first. Each condition still owns the identical requested seed and produces one report for that seed. Returned baseline and treatment collections preserve the caller-provided seed order regardless of which condition executed first. This deterministic alternation reduces systematic warm-up, throttling, cache, or temporal-drift bias that would otherwise arise from running every baseline seed before every treatment seed.
+
+Counterbalancing does not make the experiment immune to external nondeterminism. Third-party services, model endpoints, benchmark installations, hardware, and caller-owned factories must still be versioned and controlled separately. It also does not replace randomization or a more sophisticated crossover design when those are scientifically required.
+
+The resulting reports are passed to `compare_benchmark_reports`, which aligns the conditions by explicit seed and computes descriptive treatment-minus-baseline deltas.
 
 ## CLI execution
 
@@ -75,6 +79,7 @@ The paired runner also does not load models, tokenize prompts, or own third-part
 
 `tests/test_paired_benchmark.py` covers:
 
+- deterministic seed-level counterbalancing while preserving paired report order;
 - shared-seed execution for both conditions;
 - rejection of evaluation configuration drift before execution;
 - independent preflight of both conditions;
