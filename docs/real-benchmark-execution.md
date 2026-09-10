@@ -31,7 +31,7 @@ python -m experiments.benchmark_cli \
   --probe-action "<valid action>"
 ```
 
-For multi-seed experiments, use `--repeated-runtime-preflight --seeds ...` before measured execution. A failed seed probe must prevent the measured run from being treated as evidence.
+For multi-seed experiments, use `--repeated-runtime-preflight --seeds ...` before measured execution. A failed seed probe must prevent the measured run from being treated as evidence. Programmatic repeated-run callers must leave `ExternalBenchmarkSpec.seed` as `None` and provide all independent seeds through the repeated-run `seeds` argument; the framework rejects a simultaneously configured single seed rather than silently overriding provenance.
 
 ## 2. Run paired conditions when evaluating transfer
 
