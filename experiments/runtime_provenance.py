@@ -170,11 +170,11 @@ def _package_version() -> str:
 def _dependency_versions() -> dict[str, str]:
     """Return installed distribution versions in deterministic name order."""
 
-    dependency_versions = {
-        distribution.metadata["Name"]: distribution.version
-        for distribution in distributions()
-        if distribution.metadata.get("Name")
-    }
+    dependency_versions: dict[str, str] = {}
+    for distribution in distributions():
+        package_name = distribution.metadata["Name"]
+        if package_name:
+            dependency_versions[package_name] = distribution.version
     return dict(sorted(dependency_versions.items(), key=lambda item: item[0].lower()))
 
 
@@ -188,21 +188,22 @@ def _dependency_fingerprint(dependency_versions: Mapping[str, str]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _require_non_empty_string(field_name: str, value: object) -> None:
-    """Reject values that cannot serve as stable textual provenance fields."""
+def _require_non_empty_string(field_name: str, value: object) -> str:
+    """Return a validated string suitable for stable provenance fields."""
 
     if not isinstance(value, str):
         raise TypeError(f"{field_name} must be a string")
     if not value:
         raise ValueError(f"{field_name} must not be empty")
+    return value
 
 
 def _validate_sha256(field_name: str, value: object) -> None:
     """Validate a canonical lowercase-or-uppercase SHA-256 hexadecimal digest."""
 
-    _require_non_empty_string(field_name, value)
-    is_hex = all(character in "0123456789abcdefABCDEF" for character in value)
-    if len(value) != SHA256_HEX_LENGTH or not is_hex:
+    normalized_value = _require_non_empty_string(field_name, value)
+    is_hex = all(character in "0123456789abcdefABCDEF" for character in normalized_value)
+    if len(normalized_value) != SHA256_HEX_LENGTH or not is_hex:
         raise ValueError(f"{field_name} must be a 64-character hexadecimal SHA-256 digest")
 
 
