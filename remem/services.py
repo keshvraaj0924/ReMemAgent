@@ -25,6 +25,23 @@ class EpisodeExecutionResult:
     episode_success: bool
 
 
+def evaluate_episode_success(
+    success_evaluator: SuccessEvaluator,
+    episode: EpisodeResult,
+) -> bool:
+    """Evaluate episode success while enforcing the strict boolean contract.
+
+    Scientific benchmark accounting must not silently reinterpret truthy values.
+    Returning anything other than an actual ``bool`` is therefore treated as an
+    evaluator contract violation rather than coerced with ``bool(...)``.
+    """
+
+    result = success_evaluator(episode)
+    if not isinstance(result, bool):
+        raise TypeError("success_evaluator must return a bool")
+    return result
+
+
 class EpisodeExecutionService:
     """Compose execution and memory ingestion without benchmark-specific policy."""
 
@@ -62,7 +79,7 @@ class EpisodeExecutionService:
             max_steps=max_steps,
             reset_kwargs=reset_kwargs,
         )
-        episode_success = bool(success_evaluator(episode))
+        episode_success = evaluate_episode_success(success_evaluator, episode)
         ingestion = self.ingestor.ingest(
             store,
             episode_id=normalized_episode_id,

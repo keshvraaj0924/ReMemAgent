@@ -69,6 +69,25 @@ def test_service_preserves_failed_episode_attribution() -> None:
     assert memory.failures == 1
 
 
+def test_service_rejects_non_boolean_success_evaluator_result() -> None:
+    store = MemoryStore()
+
+    def malformed_success_evaluator(_episode: object) -> bool:
+        return "false"  # type: ignore[return-value]
+
+    with pytest.raises(TypeError, match="success_evaluator must return a bool"):
+        EpisodeExecutionService().execute_and_ingest(
+            FakeEnvironment(),
+            lambda _: "stop",
+            store,
+            episode_id="malformed-evaluator",
+            max_steps=1,
+            success_evaluator=malformed_success_evaluator,
+        )
+
+    assert store.all() == ()
+
+
 def test_service_rejects_blank_episode_id_before_execution() -> None:
     with pytest.raises(ValueError, match="episode_id"):
         EpisodeExecutionService().execute_and_ingest(
