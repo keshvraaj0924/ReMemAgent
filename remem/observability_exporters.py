@@ -130,9 +130,7 @@ class ObservationExportSession:
                 raise ValueError("initial_snapshot and checkpoint_store are mutually exclusive")
             checkpoint = checkpoint_store.load()
         else:
-            checkpoint = initial_snapshot or ObservationSnapshot(
-                counters={}, durations_seconds={}
-            )
+            checkpoint = initial_snapshot or ObservationSnapshot(counters={}, durations_seconds={})
         self._exporter = exporter
         self._checkpoint_store = checkpoint_store
         self._checkpoint = checkpoint
