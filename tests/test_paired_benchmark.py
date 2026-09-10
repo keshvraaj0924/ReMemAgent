@@ -102,6 +102,24 @@ def test_run_paired_external_benchmarks_rejects_evaluation_drift(monkeypatch) ->
         run_paired_external_benchmarks(baseline, treatment, (11, 17))
 
 
+def test_run_paired_external_benchmarks_rejects_identical_policy_configuration(
+    monkeypatch,
+) -> None:
+    baseline = _spec("tests.test_external_benchmark:make_policy")
+    treatment = _spec("tests.test_external_benchmark:make_policy")
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.validate_external_benchmark",
+        lambda *args, **kwargs: pytest.fail("callable validation must not start"),
+    )
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.run_repeated_external_benchmarks",
+        lambda *args, **kwargs: pytest.fail("execution must not start"),
+    )
+
+    with pytest.raises(ValueError, match="distinct policy configurations"):
+        run_paired_external_benchmarks(baseline, treatment, (11, 17))
+
+
 def test_preflight_paired_external_benchmarks_checks_both_conditions(monkeypatch) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")

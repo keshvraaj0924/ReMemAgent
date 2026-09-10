@@ -114,7 +114,7 @@ def _validate_paired_specs(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
 ) -> None:
-    """Ensure paired conditions differ only in policy implementation."""
+    """Ensure paired conditions share evaluation settings but differ in policy."""
 
     fields = (
         "benchmark_name",
@@ -135,6 +135,19 @@ def _validate_paired_specs(
         raise ValueError(
             f"paired benchmark specifications must share evaluation configuration: {joined_fields}"
         )
+
+    if _policy_identity(baseline_spec) == _policy_identity(treatment_spec):
+        raise ValueError("paired benchmark specifications must use distinct policy configurations")
+
+
+def _policy_identity(spec: ExternalBenchmarkSpec) -> tuple[str, str]:
+    """Return the configured policy boundary and callable identity for one condition."""
+
+    if spec.policy_factory is not None:
+        return ("policy_factory", spec.policy_factory)
+    if spec.action_policy_factory is not None:
+        return ("action_policy_factory", spec.action_policy_factory)
+    raise ValueError("one of policy_factory or action_policy_factory is required")
 
 
 __all__ = [
