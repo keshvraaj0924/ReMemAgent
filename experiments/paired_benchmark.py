@@ -40,16 +40,17 @@ def run_paired_external_benchmarks(
     """Run two policy conditions on the same independent seed set.
 
     All callable, pairing, repeated-seed, and condition-label contracts are
-    validated before either condition starts. Measured execution is then
-    counterbalanced by seed: baseline runs first for even seed positions and
-    treatment runs first for odd positions. This prevents one condition from
-    always being measured later than the other while preserving identical seed
-    ownership for both conditions.
+    validated before either condition starts. The seed set is canonicalized to
+    ascending order before measured execution, so equivalent seed sets receive
+    identical counterbalancing regardless of caller ordering. Baseline runs
+    first for even canonical seed positions and treatment runs first for odd
+    positions. This prevents one condition from always being measured later
+    while preserving identical seed ownership for both conditions.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
     _validate_condition_labels(baseline_label, treatment_label)
-    selected_seeds = validate_seed_sequence(seeds)
+    selected_seeds = _canonicalize_paired_seeds(seeds)
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
@@ -110,13 +111,14 @@ def preflight_paired_external_benchmarks(
     Paired preflight can construct one real environment per seed and condition.
     Validate repeated-seed ownership and resolve every configured callable first
     so a broken treatment specification cannot waste baseline environment/model
-    setup before failing. Runtime probes are then counterbalanced by seed using
-    the same deterministic order as measured execution, avoiding a systematic
-    condition-first warm-up immediately before measurement.
+    setup before failing. The seed set is canonicalized before runtime probes,
+    and probes are counterbalanced using the same deterministic order as
+    measured execution. This avoids both systematic condition-first warm-up and
+    caller-order-dependent execution plans.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
-    selected_seeds = validate_seed_sequence(seeds)
+    selected_seeds = _canonicalize_paired_seeds(seeds)
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
@@ -126,6 +128,12 @@ def preflight_paired_external_benchmarks(
         selected_seeds,
         probe_action=probe_action,
     )
+
+
+def _canonicalize_paired_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
+    """Return one deterministic ordering for an otherwise unordered paired seed set."""
+
+    return tuple(sorted(validate_seed_sequence(seeds)))
 
 
 def _run_counterbalanced_preflight_pairs(
@@ -159,12 +167,13 @@ def _run_counterbalanced_pairs(
     treatment_spec: ExternalBenchmarkSpec,
     seeds: tuple[int, ...],
 ) -> tuple[tuple[BenchmarkRunReport, ...], tuple[BenchmarkRunReport, ...]]:
-    """Execute matched seeds with deterministic alternating condition order.
+    """Execute canonical matched seeds with deterministic alternating condition order.
 
-    The output remains ordered by the caller-provided seed sequence regardless
-    of which condition executes first for an individual seed. Each one-seed run
-    therefore contributes exactly one report to each paired collection while
-    reducing systematic warm-up, throttling, or temporal-drift bias.
+    The output uses the canonical seed sequence. Each one-seed run therefore
+    contributes exactly one report to each paired collection while reducing
+    systematic warm-up, throttling, or temporal-drift bias. Because callers are
+    canonicalized before this function is invoked, equivalent seed sets always
+    produce the same condition-first assignment.
     """
 
     baseline_reports: list[BenchmarkRunReport] = []
