@@ -26,6 +26,7 @@ def _build_report(
     seed: int | None = None,
     max_steps: int = 1,
     minimum_trust: float = 0.0,
+    policy_factory: str = "tests.test_benchmark_report:make_policy",
 ) -> BenchmarkRunReport:
     episode = EpisodeResult(
         initial_observation="start",
@@ -65,10 +66,20 @@ def _build_report(
             max_steps=max_steps,
             seed=seed,
             environment_factory="tests.test_benchmark_report:make_environment",
-            policy_factory="tests.test_benchmark_report:make_policy",
+            policy_factory=policy_factory,
             success_evaluator="tests.test_benchmark_report:evaluate_success",
             minimum_trust=minimum_trust,
         ),
+    )
+
+
+def _build_treatment_report(*, seed: int, max_steps: int = 1) -> BenchmarkRunReport:
+    """Build a measured-equivalent report with a distinct treatment policy identity."""
+
+    return _build_report(
+        seed=seed,
+        max_steps=max_steps,
+        policy_factory="tests.test_benchmark_report:make_treatment_policy",
     )
 
 
@@ -97,7 +108,14 @@ def make_environment(seed: int) -> object:
 
 
 def make_policy(seed: int, store: MemoryStore) -> Callable[[str], str]:
-    """Provide an importable policy factory for provenance metadata tests."""
+    """Provide an importable baseline policy factory for provenance metadata tests."""
+
+    del seed, store
+    return lambda state: "look"
+
+
+def make_treatment_policy(seed: int, store: MemoryStore) -> Callable[[str], str]:
+    """Provide an importable treatment policy identity for paired metadata tests."""
 
     del seed, store
     return lambda state: "look"
@@ -300,7 +318,7 @@ def test_save_repeated_reports_allows_seed_only_configuration_difference(tmp_pat
 
 def test_save_paired_benchmark_result_serializes_ordered_conditions(tmp_path) -> None:
     baseline = (_build_report(seed=17), _build_report(seed=3))
-    treatment = (_build_report(seed=17), _build_report(seed=3))
+    treatment = (_build_treatment_report(seed=17), _build_treatment_report(seed=3))
 
     output_path = save_paired_benchmark_result(
         baseline,
@@ -329,13 +347,13 @@ def test_save_paired_benchmark_result_is_byte_deterministic_for_input_order(tmp_
     comparison = _build_comparison()
     first_path = save_paired_benchmark_result(
         (_build_report(seed=17), _build_report(seed=3)),
-        (_build_report(seed=17), _build_report(seed=3)),
+        (_build_treatment_report(seed=17), _build_treatment_report(seed=3)),
         comparison,
         tmp_path / "first.json",
     )
     second_path = save_paired_benchmark_result(
         (_build_report(seed=3), _build_report(seed=17)),
-        (_build_report(seed=3), _build_report(seed=17)),
+        (_build_treatment_report(seed=3), _build_treatment_report(seed=17)),
         comparison,
         tmp_path / "second.json",
     )
@@ -362,7 +380,7 @@ def test_save_paired_benchmark_result_rejects_stale_comparison(tmp_path) -> None
     with pytest.raises(ValueError, match="exactly match"):
         save_paired_benchmark_result(
             (_build_report(seed=3), _build_report(seed=17)),
-            (_build_report(seed=3), _build_report(seed=17)),
+            (_build_treatment_report(seed=3), _build_treatment_report(seed=17)),
             stale_comparison,
             tmp_path / "paired.json",
         )
@@ -372,7 +390,7 @@ def test_save_paired_benchmark_result_rejects_mismatched_comparison_seeds(tmp_pa
     with pytest.raises(ValueError, match="comparison seeds"):
         save_paired_benchmark_result(
             (_build_report(seed=3), _build_report(seed=17)),
-            (_build_report(seed=3), _build_report(seed=17)),
+            (_build_treatment_report(seed=3), _build_treatment_report(seed=17)),
             _build_comparison(seeds=(3, 19)),
             tmp_path / "paired.json",
         )
@@ -380,7 +398,10 @@ def test_save_paired_benchmark_result_rejects_mismatched_comparison_seeds(tmp_pa
 
 def test_save_paired_benchmark_result_rejects_protocol_drift(tmp_path) -> None:
     baseline = (_build_report(seed=3, max_steps=1), _build_report(seed=17, max_steps=1))
-    treatment = (_build_report(seed=3, max_steps=2), _build_report(seed=17, max_steps=2))
+    treatment = (
+        _build_treatment_report(seed=3, max_steps=2),
+        _build_treatment_report(seed=17, max_steps=2),
+    )
 
     with pytest.raises(ValueError, match="configuration apart from the seed and policy"):
         save_paired_benchmark_result(
@@ -393,7 +414,7 @@ def test_save_paired_benchmark_result_rejects_protocol_drift(tmp_path) -> None:
 
 def test_save_paired_benchmark_result_requires_explicit_configuration(tmp_path) -> None:
     baseline_report = _build_report(seed=3)
-    treatment_report = _build_report(seed=3)
+    treatment_report = _build_treatment_report(seed=3)
     baseline = (baseline_report,)
     treatment = (
         BenchmarkRunReport(
