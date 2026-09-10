@@ -63,7 +63,9 @@ def main() -> int:
         print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
         return 1
 
-    print(f"benchmark artifact integrity and identity verified: {arguments.report}")
+    # Preserve the established CLI success prefix for callers that parse it.
+    # Configuration identity is still verified by verify_report_artifact when present.
+    print(f"benchmark artifact integrity verified: {arguments.report}")
     return 0
 
 
