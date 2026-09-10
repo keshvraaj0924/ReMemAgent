@@ -32,6 +32,23 @@ Snapshot mappings are detached from caller-owned dictionaries and exposed as rea
 
 The merge operation deliberately does not invent event ordering, timestamps, percentiles, or cross-process trace relationships. It is therefore appropriate for additive research metrics such as call counts and total elapsed time, while richer telemetry remains an optional deployment concern.
 
+## External exporter boundary
+
+`remem.observability_exporters` provides a dependency-free protocol for handing validated snapshots to caller-owned operational telemetry systems. ReMemAgent does not import Prometheus, OpenTelemetry, Datadog, or other vendor SDKs; an application can implement `ObservationExporter` directly or adapt an existing payload callback through `CallbackObservationExporter`.
+
+```python
+from remem.observability_exporters import CallbackObservationExporter
+
+exporter = CallbackObservationExporter(send_to_metrics_backend)
+exporter.export(collector.snapshot())
+```
+
+The callback receives a detached, versioned JSON-compatible payload produced by `ObservationSnapshot.to_dict()`. Mutating that callback payload cannot mutate the original research snapshot.
+
+`CompositeObservationExporter` supports deterministic ordered fan-out to multiple backends. Export is deliberately fail-fast: if one backend raises, the exception is preserved and later exporters are not invoked. This prevents a partially failed telemetry path from being silently reported as fully successful. Applications that need retry, buffering, asynchronous delivery, or best-effort fan-out should implement those policies outside the deterministic research core.
+
+The convenience function `export_observation_snapshot(snapshot, exporters)` applies the same ordered contract without requiring applications to retain a composite object.
+
 ## Benchmark integration
 
 `BenchmarkSuiteRunner` accepts an optional `ObservationCollector`. When supplied, it records suite starts, episode starts/completions, successful episodes, attributed memory transfers, and aggregate episode duration. The instrumentation is deliberately additive: benchmark reports and memory behavior are unchanged when no collector is supplied.
@@ -46,4 +63,4 @@ This distinction matters because a valid commit SHA alone does not prove that th
 
 ## Current limitation
 
-The collector aggregates counters and total durations only. It does not provide histograms, distributed traces, or external exporters. Those concerns should remain optional integrations rather than becoming dependencies of the deterministic research core. Snapshot persistence and additive multi-worker merging are available for local artifacts, but exporting to Prometheus, OpenTelemetry, or another operational backend remains deployment-specific.
+The collector aggregates counters and total durations only. It does not provide histograms or distributed traces. External snapshot export now has an explicit vendor-neutral boundary, but backend-specific metric translation, authentication, retries, batching, buffering, sampling, and trace correlation remain deployment-specific and are intentionally not dependencies of the deterministic research core.
