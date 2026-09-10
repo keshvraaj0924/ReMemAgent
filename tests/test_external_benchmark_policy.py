@@ -8,6 +8,7 @@ from experiments.external_benchmark import (
     _resolve_policy_factory,
     run_external_benchmark,
 )
+from remem.environments.base import StepResult
 from remem.memory.policy import MemoryGuidedPolicy
 from remem.memory.store import MemoryStore
 
@@ -85,8 +86,14 @@ class _FakeEnvironment:
     def reset(self) -> str:
         return "initial"
 
-    def step(self, action: str) -> tuple[str, float, bool, dict[str, object]]:
-        return "done", 1.0, True, {"action": action}
+    def step(self, action: str) -> StepResult:
+        return StepResult(
+            observation="done",
+            reward=1.0,
+            terminated=True,
+            truncated=False,
+            info={"action": action},
+        )
 
     def close(self) -> None:
         return None
