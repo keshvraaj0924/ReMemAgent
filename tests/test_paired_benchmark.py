@@ -14,7 +14,7 @@ from experiments.paired_benchmark import (
 
 def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
     return ExternalBenchmarkSpec(
-        benchmark_name="synthetic-eval",
+        benchmark_name="alfworld",
         episode_count=2,
         max_steps=4,
         environment_factory="tests.test_external_benchmark:make_environment",
