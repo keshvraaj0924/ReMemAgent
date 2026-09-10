@@ -24,7 +24,7 @@ def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
     )
 
 
-def test_run_paired_external_benchmarks_uses_same_seeds(monkeypatch) -> None:
+def test_run_paired_external_benchmarks_counterbalances_same_seed_execution(monkeypatch) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")
     calls: list[tuple[str, tuple[int, ...]]] = []
@@ -34,10 +34,17 @@ def test_run_paired_external_benchmarks_uses_same_seeds(monkeypatch) -> None:
 
     def fake_run(spec: ExternalBenchmarkSpec, seeds: tuple[int, ...]):
         calls.append((spec.policy_factory or "", seeds))
-        return tuple()
+        return ((spec.policy_factory, seeds[0]),)
 
     def fake_compare(baseline_reports, treatment_reports, *, baseline_label, treatment_label):
-        assert baseline_reports == treatment_reports == ()
+        assert baseline_reports == (
+            ("tests.test_external_benchmark:make_policy", 11),
+            ("tests.test_external_benchmark:make_policy", 17),
+        )
+        assert treatment_reports == (
+            ("tests.test_external_benchmark:make_memory_policy", 11),
+            ("tests.test_external_benchmark:make_memory_policy", 17),
+        )
         return (baseline_label, treatment_label)
 
     monkeypatch.setattr("experiments.paired_benchmark.validate_external_benchmark", fake_validate)
@@ -55,8 +62,10 @@ def test_run_paired_external_benchmarks_uses_same_seeds(monkeypatch) -> None:
     assert calls == [
         ("validate:tests.test_external_benchmark:make_policy", ()),
         ("validate:tests.test_external_benchmark:make_memory_policy", ()),
-        ("tests.test_external_benchmark:make_policy", (11, 17)),
-        ("tests.test_external_benchmark:make_memory_policy", (11, 17)),
+        ("tests.test_external_benchmark:make_policy", (11,)),
+        ("tests.test_external_benchmark:make_memory_policy", (11,)),
+        ("tests.test_external_benchmark:make_memory_policy", (17,)),
+        ("tests.test_external_benchmark:make_policy", (17,)),
     ]
     assert result.comparison == ("no-memory", "memory")
 
