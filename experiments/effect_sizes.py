@@ -7,8 +7,11 @@ cannot influence the research policy itself.
 
 from __future__ import annotations
 
-from math import isfinite, sqrt
+from math import isclose, isfinite, sqrt
 from typing import Sequence
+
+ZERO_VARIANCE_REL_TOLERANCE = 1e-12
+ZERO_VARIANCE_ABS_TOLERANCE = 1e-15
 
 
 def paired_cohens_dz(deltas: Sequence[float]) -> float | None:
@@ -17,9 +20,9 @@ def paired_cohens_dz(deltas: Sequence[float]) -> float | None:
     ``d_z`` is the mean paired difference divided by the sample standard
     deviation of the paired differences. It is undefined when fewer than two
     independent paired observations are available or when all paired
-    differences are identical, because the denominator is zero. In those
-    cases this function returns ``None`` rather than reporting an infinite or
-    otherwise misleading effect size.
+    differences are numerically identical. The latter check intentionally
+    absorbs floating-point subtraction noise so an effectively zero denominator
+    cannot produce a misleading enormous effect size.
 
     Args:
         deltas: One treatment-minus-baseline metric delta per independent seed.
@@ -45,6 +48,8 @@ def paired_cohens_dz(deltas: Sequence[float]) -> float | None:
         raise ValueError("deltas must contain only finite values")
     if len(normalized_deltas) < 2:
         return None
+    if _has_numerically_zero_variance(normalized_deltas):
+        return None
 
     mean_delta = sum(normalized_deltas) / len(normalized_deltas)
     sample_variance = sum(
@@ -54,6 +59,19 @@ def paired_cohens_dz(deltas: Sequence[float]) -> float | None:
     if sample_stddev == 0.0:
         return None
     return mean_delta / sample_stddev
+
+
+def _has_numerically_zero_variance(deltas: tuple[float, ...]) -> bool:
+    """Return whether all deltas are equal within floating-point noise."""
+
+    minimum_delta = min(deltas)
+    maximum_delta = max(deltas)
+    return isclose(
+        minimum_delta,
+        maximum_delta,
+        rel_tol=ZERO_VARIANCE_REL_TOLERANCE,
+        abs_tol=ZERO_VARIANCE_ABS_TOLERANCE,
+    )
 
 
 __all__ = ["paired_cohens_dz"]
