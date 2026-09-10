@@ -36,6 +36,30 @@ def test_huggingface_policy_factory_loads_pipeline_lazily_and_parses_action() ->
     assert second_policy("open the drawer") == "open drawer"
 
 
+def test_huggingface_policy_factory_includes_memory_guidance_in_prompt_input() -> None:
+    prompts: list[str] = []
+
+    def loader(*args: Any, **kwargs: Any) -> Any:
+        def generate(prompt: str, **generation_kwargs: Any) -> list[dict[str, str]]:
+            prompts.append(prompt)
+            return [{"generated_text": "open drawer"}]
+
+        return generate
+
+    factory = build_huggingface_text_action_policy_factory(
+        "test-model",
+        prompt_builder=str,
+        pipeline_loader=loader,
+    )
+
+    action = factory(1)("drawer is closed", "Previous success: pull the handle first")
+
+    assert action == "open drawer"
+    assert prompts == [
+        "drawer is closed\n\nMemory guidance:\nPrevious success: pull the handle first"
+    ]
+
+
 def test_huggingface_policy_factory_supports_custom_action_parser() -> None:
     def loader(*args: Any, **kwargs: Any) -> Any:
         return lambda prompt, **generation_kwargs: [{"generated_text": "Action: take apple"}]
