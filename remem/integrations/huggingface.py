@@ -59,8 +59,8 @@ def build_huggingface_text_action_policy_factory(
     }
     generator: TextGenerator | None = None
 
-    def create_action_policy(seed: int) -> Callable[[str], str]:
-        """Create an action policy for one benchmark episode seed."""
+    def create_action_policy(seed: int) -> Callable[[str, str], str]:
+        """Create a memory-guided action policy for one benchmark episode seed."""
 
         if isinstance(seed, bool) or not isinstance(seed, int):
             raise TypeError("seed must be an integer")
@@ -79,12 +79,15 @@ def build_huggingface_text_action_policy_factory(
         if selected_generator is None:
             raise RuntimeError("text-generation pipeline failed to initialize")
 
-        def select_action(observation: str) -> str:
-            """Generate and parse one action from a normalized observation."""
+        def select_action(observation: str, guidance: str = "") -> str:
+            """Generate one action from current observation and memory guidance."""
 
             if not isinstance(observation, str) or not observation.strip():
                 raise ValueError("observation must be a non-empty string")
-            prompt = prompt_builder(observation)
+            if not isinstance(guidance, str):
+                raise TypeError("guidance must be a string")
+            prompt_input = _compose_prompt_input(observation, guidance)
+            prompt = prompt_builder(prompt_input)
             if not isinstance(prompt, str) or not prompt.strip():
                 raise ValueError("prompt_builder must return a non-empty string")
             generated_text = _generate_text(selected_generator, prompt, selected_generation_kwargs)
@@ -96,6 +99,16 @@ def build_huggingface_text_action_policy_factory(
         return select_action
 
     return create_action_policy
+
+
+def _compose_prompt_input(observation: str, guidance: str) -> str:
+    """Attach reconstructed memory guidance without coupling to benchmark prompts."""
+
+    normalized_observation = observation.strip()
+    normalized_guidance = guidance.strip()
+    if not normalized_guidance:
+        return normalized_observation
+    return f"{normalized_observation}\n\nMemory guidance:\n{normalized_guidance}"
 
 
 def _load_huggingface_pipeline(*args: Any, **kwargs: Any) -> Any:
