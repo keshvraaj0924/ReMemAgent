@@ -21,11 +21,21 @@ from remem.benchmark import BenchmarkRunReport
 
 
 @dataclass(frozen=True, slots=True)
+class PairedSeedExecution:
+    """Condition execution order for one paired benchmark seed."""
+
+    seed: int
+    first_condition: str
+    second_condition: str
+
+
+@dataclass(frozen=True, slots=True)
 class PairedBenchmarkResult:
-    """Measured reports and paired descriptive comparison for two conditions."""
+    """Measured reports, execution provenance, and paired descriptive comparison."""
 
     baseline_reports: tuple[BenchmarkRunReport, ...]
     treatment_reports: tuple[BenchmarkRunReport, ...]
+    execution_order: tuple[PairedSeedExecution, ...]
     comparison: BenchmarkConditionComparison
 
 
@@ -45,7 +55,9 @@ def run_paired_external_benchmarks(
     identical counterbalancing regardless of caller ordering. Baseline runs
     first for even canonical seed positions and treatment runs first for odd
     positions. This prevents one condition from always being measured later
-    while preserving identical seed ownership for both conditions.
+    while preserving identical seed ownership for both conditions. The returned
+    result records the exact condition order used for every seed so temporal
+    execution provenance is not left implicit in runner implementation details.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
@@ -54,7 +66,7 @@ def run_paired_external_benchmarks(
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
-    baseline_reports, treatment_reports = _run_counterbalanced_pairs(
+    baseline_reports, treatment_reports, execution_order = _run_counterbalanced_pairs(
         baseline_spec,
         treatment_spec,
         selected_seeds,
@@ -68,6 +80,7 @@ def run_paired_external_benchmarks(
     return PairedBenchmarkResult(
         baseline_reports=baseline_reports,
         treatment_reports=treatment_reports,
+        execution_order=execution_order,
         comparison=comparison,
     )
 
@@ -136,6 +149,22 @@ def _canonicalize_paired_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
     return tuple(sorted(validate_seed_sequence(seeds)))
 
 
+def _execution_order_for_seed(seed_index: int, seed: int) -> PairedSeedExecution:
+    """Return the deterministic condition order for one canonical seed position."""
+
+    if seed_index % 2 == 0:
+        return PairedSeedExecution(
+            seed=seed,
+            first_condition="baseline",
+            second_condition="treatment",
+        )
+    return PairedSeedExecution(
+        seed=seed,
+        first_condition="treatment",
+        second_condition="baseline",
+    )
+
+
 def _run_counterbalanced_preflight_pairs(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
@@ -146,7 +175,8 @@ def _run_counterbalanced_preflight_pairs(
     """Probe matched seeds while alternating which condition is constructed first."""
 
     for seed_index, seed in enumerate(seeds):
-        if seed_index % 2 == 0:
+        execution_order = _execution_order_for_seed(seed_index, seed)
+        if execution_order.first_condition == "baseline":
             first_spec, second_spec = baseline_spec, treatment_spec
         else:
             first_spec, second_spec = treatment_spec, baseline_spec
@@ -166,21 +196,29 @@ def _run_counterbalanced_pairs(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
     seeds: tuple[int, ...],
-) -> tuple[tuple[BenchmarkRunReport, ...], tuple[BenchmarkRunReport, ...]]:
+) -> tuple[
+    tuple[BenchmarkRunReport, ...],
+    tuple[BenchmarkRunReport, ...],
+    tuple[PairedSeedExecution, ...],
+]:
     """Execute canonical matched seeds with deterministic alternating condition order.
 
     The output uses the canonical seed sequence. Each one-seed run therefore
     contributes exactly one report to each paired collection while reducing
     systematic warm-up, throttling, or temporal-drift bias. Because callers are
     canonicalized before this function is invoked, equivalent seed sets always
-    produce the same condition-first assignment.
+    produce the same condition-first assignment. The exact assignment is
+    returned as structured provenance alongside the reports.
     """
 
     baseline_reports: list[BenchmarkRunReport] = []
     treatment_reports: list[BenchmarkRunReport] = []
+    execution_order: list[PairedSeedExecution] = []
 
     for seed_index, seed in enumerate(seeds):
-        if seed_index % 2 == 0:
+        seed_execution = _execution_order_for_seed(seed_index, seed)
+        execution_order.append(seed_execution)
+        if seed_execution.first_condition == "baseline":
             baseline_report = run_repeated_external_benchmarks(baseline_spec, (seed,))[0]
             treatment_report = run_repeated_external_benchmarks(treatment_spec, (seed,))[0]
         else:
@@ -189,7 +227,7 @@ def _run_counterbalanced_pairs(
         baseline_reports.append(baseline_report)
         treatment_reports.append(treatment_report)
 
-    return tuple(baseline_reports), tuple(treatment_reports)
+    return tuple(baseline_reports), tuple(treatment_reports), tuple(execution_order)
 
 
 def _validate_paired_repeated_requests(
@@ -261,6 +299,7 @@ def _policy_identity(spec: ExternalBenchmarkSpec) -> tuple[str, str]:
 
 __all__ = [
     "PairedBenchmarkResult",
+    "PairedSeedExecution",
     "preflight_paired_external_benchmarks",
     "run_paired_external_benchmarks",
     "run_paired_external_benchmarks_with_preflight",
