@@ -94,6 +94,23 @@ def validate_seed_sequence(seeds: Sequence[int]) -> tuple[int, ...]:
     return selected_seeds
 
 
+def validate_repeated_benchmark_request(
+    spec: ExternalBenchmarkSpec,
+    seeds: Sequence[int],
+) -> tuple[int, ...]:
+    """Validate a repeated-run request without silently overriding ``spec.seed``.
+
+    A repeated experiment owns its independent seed set through ``seeds``. A
+    simultaneously configured single-run seed is ambiguous provenance and must
+    therefore fail closed instead of being discarded by ``dataclasses.replace``.
+    """
+
+    selected_seeds = validate_seed_sequence(seeds)
+    if spec.seed is not None:
+        raise ValueError("spec.seed must be None when repeated seeds are provided")
+    return selected_seeds
+
+
 def validate_external_benchmark(spec: ExternalBenchmarkSpec) -> None:
     """Resolve every configured callable without constructing an environment."""
 
@@ -204,9 +221,9 @@ def run_repeated_external_benchmarks(
     *,
     runner: BenchmarkSuiteRunner | None = None,
 ) -> tuple[BenchmarkRunReport, ...]:
-    """Execute each seed through the same runner and optional telemetry sink."""
+    """Execute each explicit seed without accepting ambiguous single-seed state."""
 
-    selected_seeds = validate_seed_sequence(seeds)
+    selected_seeds = validate_repeated_benchmark_request(spec, seeds)
     selected_runner = runner or BenchmarkSuiteRunner()
     return tuple(
         run_external_benchmark(replace(spec, seed=seed), runner=selected_runner)
