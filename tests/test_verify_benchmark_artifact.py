@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
+from experiments.paired_artifacts import PAIRED_EXECUTION_ORDER_PROVENANCE_KEY
 from experiments.verify_benchmark_artifact import main, verify_report_artifact
 
 
@@ -48,6 +50,38 @@ def test_verify_report_artifact_rejects_missing_manifest(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="invalid benchmark artifact manifest"):
         verify_report_artifact(report_path)
+
+
+def test_verify_report_artifact_rejects_invalid_paired_execution_provenance(
+    tmp_path: Path,
+) -> None:
+    """Byte-valid paired artifacts must still satisfy temporal provenance semantics."""
+
+    report_path = tmp_path / "paired.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "episodes": [],
+                "seeds": [11],
+                "execution_order": [
+                    {
+                        "seed": 11,
+                        "first_condition": "treatment",
+                        "second_condition": "baseline",
+                    }
+                ],
+                "runtime_provenance": {
+                    PAIRED_EXECUTION_ORDER_PROVENANCE_KEY: "0" * 64,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = save_benchmark_artifact_manifest(report_path)
+
+    with pytest.raises(ValueError, match="deterministic counterbalanced"):
+        verify_report_artifact(report_path, manifest_path)
 
 
 def test_main_returns_nonzero_and_writes_diagnostic_for_invalid_artifact(
