@@ -55,5 +55,6 @@ def test_external_benchmark_smoke_report_preserves_provenance(tmp_path: Path) ->
     assert configuration["benchmark_name"] == "alfworld-smoke"
     assert configuration["seed"] == 0
     assert configuration["environment_factory"] == SMOKE_ENVIRONMENT_FACTORY
-    assert configuration["policy_factory"] == SMOKE_ACTION_POLICY_FACTORY
+    assert configuration["policy_factory"] is None
+    assert configuration["action_policy_factory"] == SMOKE_ACTION_POLICY_FACTORY
     assert configuration["success_evaluator"] == SMOKE_SUCCESS_EVALUATOR
