@@ -92,3 +92,69 @@ def test_paired_protocol_validation_ignores_policy_identity(tmp_path: Path) -> N
         assert "share configuration apart from the seed and policy" in str(exc)
     else:
         raise AssertionError("protocol drift must be rejected")
+
+
+def test_paired_persistence_rejects_policy_drift_within_one_condition(tmp_path: Path) -> None:
+    baseline = run_repeated_external_benchmarks(
+        _spec("tests.test_external_benchmark:make_policy"), (7, 11)
+    )
+    treatment = run_repeated_external_benchmarks(
+        _spec("tests.test_external_benchmark:make_memory_policy"), (7, 11)
+    )
+    drifted_treatment = (
+        treatment[0],
+        replace(
+            treatment[1],
+            configuration=replace(
+                treatment[1].configuration,
+                policy_factory="tests.test_external_benchmark:make_invalid_policy",
+            )
+            if treatment[1].configuration is not None
+            else None,
+        ),
+    )
+    comparison = compare_benchmark_reports(
+        baseline,
+        drifted_treatment,
+        baseline_label="baseline",
+        treatment_label="treatment",
+    )
+
+    try:
+        save_paired_benchmark_result(
+            baseline,
+            drifted_treatment,
+            comparison,
+            tmp_path / "policy-drift.json",
+        )
+    except ValueError as exc:
+        assert "treatment reports must use one policy configuration across all seeds" in str(exc)
+    else:
+        raise AssertionError("within-condition policy drift must be rejected")
+
+
+def test_paired_persistence_rejects_identical_condition_policies(tmp_path: Path) -> None:
+    baseline = run_repeated_external_benchmarks(
+        _spec("tests.test_external_benchmark:make_policy"), (7, 11)
+    )
+    treatment = run_repeated_external_benchmarks(
+        _spec("tests.test_external_benchmark:make_policy"), (7, 11)
+    )
+    comparison = compare_benchmark_reports(
+        baseline,
+        treatment,
+        baseline_label="baseline",
+        treatment_label="treatment",
+    )
+
+    try:
+        save_paired_benchmark_result(
+            baseline,
+            treatment,
+            comparison,
+            tmp_path / "identical-policies.json",
+        )
+    except ValueError as exc:
+        assert "must use distinct policy configurations" in str(exc)
+    else:
+        raise AssertionError("identical paired policies must be rejected")
