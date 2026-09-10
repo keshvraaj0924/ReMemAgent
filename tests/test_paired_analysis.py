@@ -124,12 +124,8 @@ def test_analyze_paired_reports_preserves_zero_variance_effect_size_as_none() ->
 def test_analyze_paired_reports_rejects_unpaired_seed_sets() -> None:
     """Inferential analysis must retain the strict paired-seed contract."""
 
-    baseline = [
-        _run(1, successful_episode_count=5, reward_offset=0.0, policy_name="baseline")
-    ]
-    treatment = [
-        _run(2, successful_episode_count=6, reward_offset=0.0, policy_name="treatment")
-    ]
+    baseline = [_run(1, successful_episode_count=5, reward_offset=0.0, policy_name="baseline")]
+    treatment = [_run(2, successful_episode_count=6, reward_offset=0.0, policy_name="treatment")]
 
     with pytest.raises(ValueError, match="same seed set"):
         analyze_paired_benchmark_reports(baseline, treatment)
