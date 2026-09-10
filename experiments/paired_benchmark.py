@@ -110,7 +110,9 @@ def preflight_paired_external_benchmarks(
     Paired preflight can construct one real environment per seed and condition.
     Validate repeated-seed ownership and resolve every configured callable first
     so a broken treatment specification cannot waste baseline environment/model
-    setup before failing.
+    setup before failing. Runtime probes are then counterbalanced by seed using
+    the same deterministic order as measured execution, avoiding a systematic
+    condition-first warm-up immediately before measurement.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
@@ -118,16 +120,38 @@ def preflight_paired_external_benchmarks(
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
     validate_external_benchmark(treatment_spec)
-    validate_repeated_external_benchmark_runtime(
+    _run_counterbalanced_preflight_pairs(
         baseline_spec,
-        selected_seeds,
-        probe_action=probe_action,
-    )
-    validate_repeated_external_benchmark_runtime(
         treatment_spec,
         selected_seeds,
         probe_action=probe_action,
     )
+
+
+def _run_counterbalanced_preflight_pairs(
+    baseline_spec: ExternalBenchmarkSpec,
+    treatment_spec: ExternalBenchmarkSpec,
+    seeds: tuple[int, ...],
+    *,
+    probe_action: str | None,
+) -> None:
+    """Probe matched seeds while alternating which condition is constructed first."""
+
+    for seed_index, seed in enumerate(seeds):
+        if seed_index % 2 == 0:
+            first_spec, second_spec = baseline_spec, treatment_spec
+        else:
+            first_spec, second_spec = treatment_spec, baseline_spec
+        validate_repeated_external_benchmark_runtime(
+            first_spec,
+            (seed,),
+            probe_action=probe_action,
+        )
+        validate_repeated_external_benchmark_runtime(
+            second_spec,
+            (seed,),
+            probe_action=probe_action,
+        )
 
 
 def _run_counterbalanced_pairs(
