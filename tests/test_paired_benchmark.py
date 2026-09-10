@@ -151,8 +151,10 @@ def test_preflight_paired_external_benchmarks_checks_both_conditions(monkeypatch
     )
 
     assert calls == [
-        ("tests.test_external_benchmark:make_policy", (3, 5), "look"),
-        ("tests.test_external_benchmark:make_memory_policy", (3, 5), "look"),
+        ("tests.test_external_benchmark:make_policy", (3,), "look"),
+        ("tests.test_external_benchmark:make_memory_policy", (3,), "look"),
+        ("tests.test_external_benchmark:make_memory_policy", (5,), "look"),
+        ("tests.test_external_benchmark:make_policy", (5,), "look"),
     ]
 
 
