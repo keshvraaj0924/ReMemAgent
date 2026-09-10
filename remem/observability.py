@@ -188,6 +188,50 @@ def merge_observation_snapshots(
     return ObservationSnapshot(counters=counters, durations_seconds=durations_seconds)
 
 
+def observation_snapshot_delta(
+    previous: ObservationSnapshot,
+    current: ObservationSnapshot,
+) -> ObservationSnapshot:
+    """Return interval increments between two cumulative snapshots.
+
+    Cumulative collector snapshots are monotonic. A metric that decreases or
+    disappears therefore indicates that snapshots came from different collector
+    lifecycles or were supplied in the wrong order, so this boundary fails closed
+    instead of exporting misleading increments.
+    """
+
+    return ObservationSnapshot(
+        counters=_aggregate_delta(previous.counters, current.counters, "counter"),
+        durations_seconds=_aggregate_delta(
+            previous.durations_seconds,
+            current.durations_seconds,
+            "duration",
+        ),
+    )
+
+
+def _aggregate_delta(
+    previous: Mapping[str, float],
+    current: Mapping[str, float],
+    value_type: str,
+) -> dict[str, float]:
+    """Compute one deterministic aggregate delta and reject regressions."""
+
+    delta: dict[str, float] = {}
+    for name in sorted(previous.keys() | current.keys()):
+        previous_value = previous.get(name, 0.0)
+        current_value = current.get(name, 0.0)
+        if current_value < previous_value:
+            raise ValueError(
+                f"{value_type} aggregate regressed for {name!r}: "
+                f"previous={previous_value}, current={current_value}"
+            )
+        increment = current_value - previous_value
+        if increment > 0.0:
+            delta[name] = increment
+    return delta
+
+
 def _parse_aggregate_mapping(value: object, value_type: str) -> dict[str, float]:
     """Validate and normalize one untyped persisted aggregate mapping."""
 
@@ -275,5 +319,6 @@ __all__ = [
     "ObservationOperation",
     "ObservationSnapshot",
     "merge_observation_snapshots",
+    "observation_snapshot_delta",
     "write_observation_snapshot",
 ]
