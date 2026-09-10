@@ -126,7 +126,9 @@ def test_benchmark_report_to_dict_adds_configuration_fingerprint() -> None:
     assert payload["configuration_fingerprint"] == benchmark_configuration_fingerprint(
         report.configuration
     )
-    assert payload["configuration_manifest"] == benchmark_configuration_manifest(report.configuration)
+    assert payload["configuration_manifest"] == benchmark_configuration_manifest(
+        report.configuration
+    )
 
 
 def test_benchmark_report_to_dict_rejects_invalid_report() -> None:
@@ -178,7 +180,9 @@ def test_save_benchmark_report_writes_json(tmp_path) -> None:
     assert persisted["schema_version"] == BENCHMARK_REPORT_SCHEMA_VERSION
     assert persisted["final_memory_count"] == 1
     assert persisted["episodes"][0]["transfer_outcomes"] == []
-    assert persisted["configuration_manifest"] == benchmark_configuration_manifest(report.configuration)
+    assert persisted["configuration_manifest"] == benchmark_configuration_manifest(
+        report.configuration
+    )
     assert persisted["experiment_identity"]
     assert persisted["runtime_provenance"] == {}
 
