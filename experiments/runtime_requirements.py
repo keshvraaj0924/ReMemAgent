@@ -97,11 +97,11 @@ class RuntimeRequirements:
         if set(payload) != expected_fields:
             raise ValueError("runtime requirements payload must use the exact persisted schema")
         schema_version = payload["schema_version"]
-        if isinstance(schema_version, bool) or schema_version != RUNTIME_REQUIREMENTS_SCHEMA_VERSION:
-            raise ValueError(
-                "unsupported runtime requirements schema version: "
-                f"{schema_version!r}"
-            )
+        if (
+            isinstance(schema_version, bool)
+            or schema_version != RUNTIME_REQUIREMENTS_SCHEMA_VERSION
+        ):
+            raise ValueError(f"unsupported runtime requirements schema version: {schema_version!r}")
         return cls(
             expected_code_revision=payload["expected_code_revision"],
             require_clean_working_tree=payload["require_clean_working_tree"],
