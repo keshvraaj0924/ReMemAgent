@@ -20,46 +20,111 @@ _ALFWORLD_RANDOM_LOCK = threading.Lock()
 _WEBSHOP_RANDOM_LOCK = threading.Lock()
 
 
+class _EpisodeRandomState:
+    """Own a deterministic Python/NumPy RNG stream for one benchmark episode.
+
+    ALFWorld and WebShop contain legacy code paths that consume module-level RNG
+    state during both reset and step. This object swaps an episode-owned stream
+    into those globals only for an upstream operation, records the advanced
+    stream afterward, and restores the caller's exact global RNG state.
+    """
+
+    def __init__(self, seed: int) -> None:
+        _validate_seed(seed)
+        self._seed = seed
+        self._python_state: object
+        self._numpy_state: object | None
+        self._restart()
+
+    @contextmanager
+    def activate(self, *, restart: bool = False) -> Iterator[None]:
+        """Temporarily activate the episode RNG stream and preserve its progress."""
+
+        if restart:
+            self._restart()
+
+        caller_python_state = random.getstate()
+        numpy_module = _load_numpy_if_available()
+        caller_numpy_state = (
+            numpy_module.random.get_state() if numpy_module is not None else None
+        )
+
+        random.setstate(self._python_state)
+        if numpy_module is not None and self._numpy_state is not None:
+            numpy_module.random.set_state(self._numpy_state)
+        try:
+            yield
+        finally:
+            self._python_state = random.getstate()
+            if numpy_module is not None:
+                self._numpy_state = numpy_module.random.get_state()
+            random.setstate(caller_python_state)
+            if numpy_module is not None and caller_numpy_state is not None:
+                numpy_module.random.set_state(caller_numpy_state)
+
+    def _restart(self) -> None:
+        """Reset the owned stream to the configured episode seed."""
+
+        with _scoped_random_seed(self._seed):
+            self._python_state = random.getstate()
+            numpy_module = _load_numpy_if_available()
+            self._numpy_state = (
+                numpy_module.random.get_state() if numpy_module is not None else None
+            )
+
+
 class _SeededAlfWorldEnvironment:
-    """Preserve an episode seed while adapting ALFWorld's global RNG API."""
+    """Preserve an isolated episode RNG stream around ALFWorld operations."""
 
     def __init__(self, environment: Any, seed: int) -> None:
         _validate_seed(seed)
         self._environment = environment
-        self._seed = seed
+        self._random_state = _EpisodeRandomState(seed)
 
     def reset(self, *args: Any, **kwargs: Any) -> Any:
         """Reset ALFWorld deterministically without leaking global RNG state."""
 
         if "seed" in kwargs:
             raise TypeError("ALFWorld adapter owns the reset seed; do not pass seed explicitly")
-        with _ALFWORLD_RANDOM_LOCK, _scoped_random_seed(self._seed):
+        with _ALFWORLD_RANDOM_LOCK, self._random_state.activate(restart=True):
             return self._environment.reset(*args, **kwargs)
 
+    def step(self, *args: Any, **kwargs: Any) -> Any:
+        """Advance ALFWorld under the episode-owned RNG stream."""
+
+        with _ALFWORLD_RANDOM_LOCK, self._random_state.activate():
+            return self._environment.step(*args, **kwargs)
+
     def __getattr__(self, name: str) -> Any:
-        """Delegate non-reset operations to the upstream environment."""
+        """Delegate non-reset/step operations to the upstream environment."""
 
         return getattr(self._environment, name)
 
 
 class _SeededWebShopEnvironment:
-    """Scope WebShop's module-level RNGs to each benchmark reset."""
+    """Preserve an isolated episode RNG stream around WebShop operations."""
 
     def __init__(self, environment: Any, seed: int) -> None:
         _validate_seed(seed)
         self._environment = environment
-        self._seed = seed
+        self._random_state = _EpisodeRandomState(seed)
 
     def reset(self, *args: Any, **kwargs: Any) -> Any:
         """Reset WebShop under the configured episode seed."""
 
         if "seed" in kwargs:
             raise TypeError("WebShop adapter owns the reset seed; do not pass seed explicitly")
-        with _WEBSHOP_RANDOM_LOCK, _scoped_random_seed(self._seed):
+        with _WEBSHOP_RANDOM_LOCK, self._random_state.activate(restart=True):
             return self._environment.reset(*args, **kwargs)
 
+    def step(self, *args: Any, **kwargs: Any) -> Any:
+        """Advance WebShop under the episode-owned RNG stream."""
+
+        with _WEBSHOP_RANDOM_LOCK, self._random_state.activate():
+            return self._environment.step(*args, **kwargs)
+
     def __getattr__(self, name: str) -> Any:
-        """Delegate non-reset operations to the upstream environment."""
+        """Delegate non-reset/step operations to the upstream environment."""
 
         return getattr(self._environment, name)
 
