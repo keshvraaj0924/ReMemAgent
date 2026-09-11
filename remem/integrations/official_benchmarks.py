@@ -34,7 +34,7 @@ class _EpisodeRandomState:
     def __init__(self, seed: int) -> None:
         _validate_seed(seed)
         self._seed = seed
-        self._python_state: object
+        self._python_state: tuple[Any, ...]
         self._numpy_state: object | None
         self._restart()
 
