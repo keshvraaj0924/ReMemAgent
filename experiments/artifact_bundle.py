@@ -86,9 +86,7 @@ def _validate_artifacts(artifacts: tuple[PreparedArtifact, ...]) -> None:
             raise ValueError(f"duplicate artifact destination: {artifact.destination_path}")
         destinations.add(resolved_destination)
         if not artifact.temporary_path.is_file():
-            raise FileNotFoundError(
-                f"prepared artifact does not exist: {artifact.temporary_path}"
-            )
+            raise FileNotFoundError(f"prepared artifact does not exist: {artifact.temporary_path}")
 
 
 def _publish_prepared_artifact(artifact: PreparedArtifact, *, overwrite: bool) -> None:
