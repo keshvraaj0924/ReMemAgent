@@ -82,6 +82,7 @@ def main() -> int:
             result,
             output_path,
             runtime_provenance=runtime_provenance,
+            overwrite=arguments.overwrite,
         )
         if manifest_path is not None:
             manifest_output = save_benchmark_artifact_manifest(output_path, manifest_path)
