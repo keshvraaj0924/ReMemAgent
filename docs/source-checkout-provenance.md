@@ -48,8 +48,33 @@ validate_source_checkout_requirements(
 
 The placeholder revision above is intentional; ReMemAgent does not invent or bless a WebShop revision on behalf of an experiment.
 
+## Controlled external preflight
+
+Single-run and repeated external preflight now accept source-checkout paths and requirements as one admission contract. Both mappings must be supplied together. ReMemAgent collects and validates the declared checkout state before constructing the first third-party benchmark environment, so revision or cleanliness drift cannot create probe or measured-execution side effects.
+
+```python
+from pathlib import Path
+
+from experiments.external_preflight import run_repeated_external_benchmarks_with_preflight
+from experiments.source_checkouts import SourceCheckoutRequirement
+
+reports = run_repeated_external_benchmarks_with_preflight(
+    spec,
+    seeds=(11, 17, 23),
+    source_checkout_paths={"WebShop": Path("/opt/benchmarks/webshop")},
+    source_checkout_requirements={
+        "WebShop": SourceCheckoutRequirement(
+            expected_revision="<exact-webshop-git-sha>",
+            require_clean_working_tree=True,
+        )
+    },
+)
+```
+
+Source-checkout collection occurs once before repeated environment probes; it is not repeated independently for every seed.
+
 ## Evidence boundary
 
-This layer provides real source-state collection and validation, but it is not yet automatically threaded through the paired benchmark CLI or persisted into the identity-bound runtime contract. Until that wiring is added, callers must invoke it explicitly before measurement and must not treat source-checkout validation as part of the persisted experiment identity.
+Source-checkout state is now part of controlled external preflight, but it is not yet exposed by the paired benchmark CLI or persisted into experiment identity. Therefore this gate prevents execution under the wrong source revision, but the resulting artifact does not yet cryptographically prove which external checkout contract was admitted.
 
-The next integration step is to bind validated source-checkout requirements and observations into controlled preflight and artifact identity without breaking verification of existing runtime-requirement artifacts.
+The next integration step is to carry the exact validated source-checkout snapshot through paired execution and bind its canonical contract and observation fingerprint into artifact identity without breaking verification of existing runtime-requirement artifacts.
