@@ -120,9 +120,7 @@ def _publish_manifest(temporary_path: Path, destination: Path, *, overwrite: boo
     try:
         os.link(temporary_path, destination)
     except FileExistsError as exc:
-        raise FileExistsError(
-            f"benchmark artifact manifest already exists: {destination}"
-        ) from exc
+        raise FileExistsError(f"benchmark artifact manifest already exists: {destination}") from exc
     temporary_path.unlink()
 
 
