@@ -2,17 +2,21 @@
 
 Package metadata is insufficient for research dependencies that are installed
 from source or executed directly from a checkout. This module records the exact
-Git revision and working-tree state for named external repositories and validates
-those observations against explicit requirements before measurement.
+Git revision and working-tree state for named external repositories, validates
+those observations against explicit requirements before measurement, and
+provides canonical fingerprints for persisted reproducibility evidence.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
+from typing import Any
 
 from experiments.runtime_provenance import (
     CLEAN_STATE,
@@ -20,6 +24,9 @@ from experiments.runtime_provenance import (
     UNKNOWN_VALUE,
     VALID_WORKING_TREE_STATES,
 )
+
+SOURCE_CHECKOUT_REQUIREMENTS_SCHEMA_VERSION = 1
+SOURCE_CHECKOUT_PROVENANCE_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +42,28 @@ class SourceCheckoutRequirement:
         _require_non_empty_string("expected_revision", self.expected_revision)
         if not isinstance(self.require_clean_working_tree, bool):
             raise TypeError("require_clean_working_tree must be a boolean")
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a detached JSON-compatible requirement representation."""
+
+        return {
+            "expected_revision": self.expected_revision,
+            "require_clean_working_tree": self.require_clean_working_tree,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> SourceCheckoutRequirement:
+        """Reconstruct one requirement from its exact persisted schema."""
+
+        if not isinstance(payload, Mapping):
+            raise TypeError("source checkout requirement must be a mapping")
+        expected_fields = {"expected_revision", "require_clean_working_tree"}
+        if set(payload) != expected_fields:
+            raise ValueError("source checkout requirement must use the exact persisted schema")
+        return cls(
+            expected_revision=payload["expected_revision"],
+            require_clean_working_tree=payload["require_clean_working_tree"],
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +89,20 @@ class SourceCheckoutProvenance:
             "revision": self.revision,
             "working_tree_state": self.working_tree_state,
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> SourceCheckoutProvenance:
+        """Reconstruct one observed checkout from its exact persisted schema."""
+
+        if not isinstance(payload, Mapping):
+            raise TypeError("source checkout provenance must be a mapping")
+        expected_fields = {"revision", "working_tree_state"}
+        if set(payload) != expected_fields:
+            raise ValueError("source checkout provenance must use the exact persisted schema")
+        return cls(
+            revision=payload["revision"],
+            working_tree_state=payload["working_tree_state"],
+        )
 
 
 def collect_source_checkout_provenance(
@@ -134,11 +177,99 @@ def validate_source_checkout_requirements(
             )
 
 
+def source_checkout_requirements_to_dict(
+    requirements: Mapping[str, SourceCheckoutRequirement],
+) -> dict[str, object]:
+    """Return the canonical schema-versioned source admission contract."""
+
+    normalized = _normalize_requirements(requirements)
+    repositories = {
+        normalized_name: requirement.to_dict()
+        for normalized_name, (_, requirement) in sorted(normalized.items())
+    }
+    return {
+        "schema_version": SOURCE_CHECKOUT_REQUIREMENTS_SCHEMA_VERSION,
+        "repositories": repositories,
+    }
+
+
+def source_checkout_requirements_from_dict(
+    payload: Mapping[str, Any],
+) -> Mapping[str, SourceCheckoutRequirement]:
+    """Reconstruct an immutable source admission contract from persisted JSON."""
+
+    repositories = _validated_persisted_repository_mapping(
+        payload,
+        expected_schema_version=SOURCE_CHECKOUT_REQUIREMENTS_SCHEMA_VERSION,
+        field_name="source checkout requirements",
+    )
+    restored: dict[str, SourceCheckoutRequirement] = {}
+    for repository_name, requirement_payload in repositories.items():
+        normalized_name = _validated_repository_name(repository_name).lower()
+        if normalized_name in restored:
+            raise ValueError("persisted source checkout requirement names must be unique")
+        restored[normalized_name] = SourceCheckoutRequirement.from_dict(requirement_payload)
+    return MappingProxyType(dict(sorted(restored.items())))
+
+
+def source_checkout_provenance_to_dict(
+    provenance: Mapping[str, SourceCheckoutProvenance],
+) -> dict[str, object]:
+    """Return a canonical schema-versioned observed source snapshot."""
+
+    normalized = _normalize_provenance(provenance)
+    repositories = {
+        normalized_name: source_state.to_dict()
+        for normalized_name, source_state in sorted(normalized.items())
+    }
+    return {
+        "schema_version": SOURCE_CHECKOUT_PROVENANCE_SCHEMA_VERSION,
+        "repositories": repositories,
+    }
+
+
+def source_checkout_provenance_from_dict(
+    payload: Mapping[str, Any],
+) -> Mapping[str, SourceCheckoutProvenance]:
+    """Reconstruct an immutable observed source snapshot from persisted JSON."""
+
+    repositories = _validated_persisted_repository_mapping(
+        payload,
+        expected_schema_version=SOURCE_CHECKOUT_PROVENANCE_SCHEMA_VERSION,
+        field_name="source checkout provenance",
+    )
+    restored: dict[str, SourceCheckoutProvenance] = {}
+    for repository_name, provenance_payload in repositories.items():
+        normalized_name = _validated_repository_name(repository_name).lower()
+        if normalized_name in restored:
+            raise ValueError("persisted source checkout provenance names must be unique")
+        restored[normalized_name] = SourceCheckoutProvenance.from_dict(provenance_payload)
+    return MappingProxyType(dict(sorted(restored.items())))
+
+
+def source_checkout_requirements_sha256(
+    requirements: Mapping[str, SourceCheckoutRequirement],
+) -> str:
+    """Return a deterministic SHA-256 digest for a source admission contract."""
+
+    return _canonical_sha256(source_checkout_requirements_to_dict(requirements))
+
+
+def source_checkout_provenance_sha256(
+    provenance: Mapping[str, SourceCheckoutProvenance],
+) -> str:
+    """Return a deterministic SHA-256 digest for an observed source snapshot."""
+
+    return _canonical_sha256(source_checkout_provenance_to_dict(provenance))
+
+
 def _normalize_provenance(
     provenance: Mapping[str, SourceCheckoutProvenance],
 ) -> dict[str, SourceCheckoutProvenance]:
     """Validate and normalize observed checkout names for comparison."""
 
+    if not isinstance(provenance, Mapping):
+        raise TypeError("provenance must be a mapping")
     normalized: dict[str, SourceCheckoutProvenance] = {}
     for repository_name, source_state in provenance.items():
         validated_name = _validated_repository_name(repository_name)
@@ -160,6 +291,8 @@ def _normalize_requirements(
 ) -> dict[str, tuple[str, SourceCheckoutRequirement]]:
     """Validate and normalize source requirement names for comparison."""
 
+    if not isinstance(requirements, Mapping):
+        raise TypeError("requirements must be a mapping")
     normalized: dict[str, tuple[str, SourceCheckoutRequirement]] = {}
     for repository_name, requirement in requirements.items():
         validated_name = _validated_repository_name(repository_name)
@@ -174,6 +307,45 @@ def _normalize_requirements(
             )
         normalized[normalized_name] = (validated_name, requirement)
     return normalized
+
+
+def _validated_persisted_repository_mapping(
+    payload: Mapping[str, Any],
+    *,
+    expected_schema_version: int,
+    field_name: str,
+) -> Mapping[str, Mapping[str, Any]]:
+    """Validate the shared schema envelope used by persisted source metadata."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{field_name} must be a mapping")
+    if set(payload) != {"schema_version", "repositories"}:
+        raise ValueError(f"{field_name} must use the exact persisted schema")
+    if payload["schema_version"] != expected_schema_version:
+        raise ValueError(f"unsupported {field_name} schema version")
+    repositories = payload["repositories"]
+    if not isinstance(repositories, Mapping):
+        raise TypeError(f"{field_name} repositories must be a mapping")
+    if not repositories:
+        raise ValueError(f"{field_name} repositories must not be empty")
+    for repository_name, repository_payload in repositories.items():
+        _validated_repository_name(repository_name)
+        if not isinstance(repository_payload, Mapping):
+            raise TypeError(f"{field_name} repository entries must be mappings")
+    return repositories
+
+
+def _canonical_sha256(payload: Mapping[str, object]) -> str:
+    """Return a deterministic SHA-256 digest for JSON-compatible source metadata."""
+
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _git_revision(repository_path: Path) -> str:
@@ -229,8 +401,16 @@ def _require_non_empty_string(field_name: str, value: object) -> str:
 
 
 __all__ = [
+    "SOURCE_CHECKOUT_PROVENANCE_SCHEMA_VERSION",
+    "SOURCE_CHECKOUT_REQUIREMENTS_SCHEMA_VERSION",
     "SourceCheckoutProvenance",
     "SourceCheckoutRequirement",
     "collect_source_checkout_provenance",
+    "source_checkout_provenance_from_dict",
+    "source_checkout_provenance_sha256",
+    "source_checkout_provenance_to_dict",
+    "source_checkout_requirements_from_dict",
+    "source_checkout_requirements_sha256",
+    "source_checkout_requirements_to_dict",
     "validate_source_checkout_requirements",
 ]
