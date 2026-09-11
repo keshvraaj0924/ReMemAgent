@@ -15,6 +15,10 @@ Every subsequent `step()` uses the same isolation boundary without reseeding. Th
 
 The lock is deliberately shared with WebShop because both integrations swap the same process-global Python and NumPy RNG objects. Separate per-benchmark locks would still allow an ALFWorld operation and a WebShop operation to overlap and corrupt one another's temporary RNG state. Episode-state initialization and restart use the same re-entrant lock, so wrapper construction cannot race with reset or step either.
 
+## Seed domain
+
+The concrete bridge accepts integer seeds from `0` through `4294967295` inclusive. This is the domain supported by the legacy NumPy `RandomState` API used by the isolation layer. Boolean values, negative integers, integers above that range, and non-integer values are rejected at the ReMemAgent boundary before environment construction begins. Keeping this validation independent of whether NumPy happens to be installed prevents the same experiment configuration from failing differently across runtime environments.
+
 ## Evidence boundary
 
 This improves deterministic isolation for upstream code that uses Python's or NumPy's legacy module-level RNG APIs during reset and step. It does **not** establish complete ALFWorld determinism. TextWorld behavior, filesystem ordering, package versions, dataset contents, native-library behavior, and caller-owned model policies remain external reproducibility inputs and must be pinned or recorded for scientific runs.
