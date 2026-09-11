@@ -24,9 +24,11 @@ from experiments.benchmark_report import (
 )
 from experiments.experiment_identity import verify_paired_experiment_identity
 from experiments.paired_benchmark import PairedBenchmarkResult, PairedSeedExecution
+from experiments.runtime_requirements import RuntimeRequirements
 from remem.benchmark import BenchmarkRunConfiguration
 
 PAIRED_EXECUTION_ORDER_PROVENANCE_KEY = "paired_execution_order_sha256"
+RUNTIME_REQUIREMENTS_PROVENANCE_KEY = "runtime_requirements_sha256"
 
 
 def save_paired_execution_result(
@@ -34,16 +36,17 @@ def save_paired_execution_result(
     output_path: Path,
     *,
     runtime_provenance: Mapping[str, object] | None = None,
+    runtime_requirements: RuntimeRequirements | None = None,
     overwrite: bool = False,
 ) -> Path:
     """Persist a complete paired result including validated temporal provenance.
 
     The execution-order digest is injected into runtime provenance before the
-    lower-level serializer constructs the experiment identity. Consequently, a
-    different temporal condition plan cannot share the same experiment identity
-    even when policies, seeds, and benchmark protocol are otherwise identical.
-    The full order is then written into the final artifact for human inspection
-    and downstream verification.
+    lower-level serializer constructs the experiment identity. When a controlled
+    runtime contract admitted the experiment, its canonical SHA-256 digest is
+    injected into that same provenance and the full contract is persisted beside
+    the report. The experiment identity therefore binds both the observed runtime
+    and the declared admission contract.
 
     Publication is race-safe. With ``overwrite=False`` an artifact created after
     an earlier CLI preflight check is preserved and persistence fails closed.
@@ -57,6 +60,15 @@ def save_paired_execution_result(
     provenance[PAIRED_EXECUTION_ORDER_PROVENANCE_KEY] = _execution_order_fingerprint(
         execution_order
     )
+
+    if runtime_requirements is not None:
+        if not isinstance(runtime_requirements, RuntimeRequirements):
+            raise TypeError("runtime_requirements must be a RuntimeRequirements instance")
+        if RUNTIME_REQUIREMENTS_PROVENANCE_KEY in provenance:
+            raise ValueError(
+                f"runtime_provenance reserves {RUNTIME_REQUIREMENTS_PROVENANCE_KEY!r}"
+            )
+        provenance[RUNTIME_REQUIREMENTS_PROVENANCE_KEY] = runtime_requirements.sha256
 
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"paired benchmark artifact already exists: {output_path}")
@@ -79,6 +91,8 @@ def save_paired_execution_result(
         )
         payload = json.loads(temporary_path.read_text(encoding="utf-8"))
         payload["execution_order"] = [asdict(entry) for entry in execution_order]
+        if runtime_requirements is not None:
+            payload["runtime_requirements"] = runtime_requirements.to_dict()
         _write_json_file(payload, temporary_path)
         _publish_artifact(temporary_path, output_path, overwrite=overwrite)
     except Exception:
@@ -88,17 +102,17 @@ def save_paired_execution_result(
 
 
 def validate_persisted_paired_artifact(payload: Mapping[str, Any]) -> None:
-    """Verify paired protocol identity plus optional temporal execution provenance.
+    """Verify paired protocol identity plus optional controlled-runtime metadata.
 
     This validator is intended to run after the generic per-run artifact checks.
-    Temporal execution provenance is validated whenever present, including on
-    legacy/minimal artifacts that predate the complete paired-condition payload.
-    Top-level paired identity checks are applied only when condition collections
-    are present. Legacy paired artifacts without an experiment identity remain
-    readable but do not gain an identity guarantee retroactively.
+    Temporal execution provenance is validated whenever present. Controlled
+    runtime contracts are also checked whenever either their full persisted form
+    or their identity-bound digest is present. Legacy paired artifacts without
+    these fields remain readable but do not gain those guarantees retroactively.
     """
 
     validate_persisted_paired_execution_provenance(payload)
+    validate_persisted_runtime_requirements(payload)
 
     if "baseline" not in payload and "treatment" not in payload:
         return
@@ -135,6 +149,38 @@ def validate_persisted_paired_artifact(payload: Mapping[str, Any]) -> None:
         seeds,
         runtime_provenance,
     )
+
+
+def validate_persisted_runtime_requirements(payload: Mapping[str, Any]) -> None:
+    """Verify the persisted controlled-runtime contract against its bound digest."""
+
+    raw_requirements = payload.get("runtime_requirements")
+    runtime_provenance = payload.get("runtime_provenance")
+    stored_digest = (
+        runtime_provenance.get(RUNTIME_REQUIREMENTS_PROVENANCE_KEY)
+        if isinstance(runtime_provenance, Mapping)
+        else None
+    )
+
+    if raw_requirements is None and stored_digest is None:
+        return
+    if raw_requirements is None:
+        raise ValueError("runtime requirement digest requires persisted runtime_requirements")
+    if not isinstance(raw_requirements, Mapping):
+        raise ValueError("runtime_requirements must be a mapping")
+    if not isinstance(runtime_provenance, Mapping):
+        raise ValueError("runtime_requirements require runtime_provenance")
+    if not isinstance(stored_digest, str):
+        raise ValueError(
+            f"runtime_provenance requires {RUNTIME_REQUIREMENTS_PROVENANCE_KEY!r}"
+        )
+
+    try:
+        requirements = RuntimeRequirements.from_dict(raw_requirements)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("runtime_requirements contain an invalid persisted contract") from exc
+    if not hmac.compare_digest(stored_digest, requirements.sha256):
+        raise ValueError("runtime requirement digest does not match runtime_requirements")
 
 
 def validate_persisted_paired_execution_provenance(payload: Mapping[str, Any]) -> None:
@@ -318,7 +364,9 @@ def _write_json_file(payload: Mapping[str, Any], output_path: Path) -> None:
 
 __all__ = [
     "PAIRED_EXECUTION_ORDER_PROVENANCE_KEY",
+    "RUNTIME_REQUIREMENTS_PROVENANCE_KEY",
     "save_paired_execution_result",
     "validate_persisted_paired_artifact",
     "validate_persisted_paired_execution_provenance",
+    "validate_persisted_runtime_requirements",
 ]
