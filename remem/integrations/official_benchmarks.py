@@ -45,9 +45,7 @@ class _EpisodeRandomState:
 
         caller_python_state = random.getstate()
         numpy_module = _load_numpy_if_available()
-        caller_numpy_state = (
-            numpy_module.random.get_state() if numpy_module is not None else None
-        )
+        caller_numpy_state = numpy_module.random.get_state() if numpy_module is not None else None
 
         random.setstate(self._python_state)
         if numpy_module is not None and self._numpy_state is not None:
