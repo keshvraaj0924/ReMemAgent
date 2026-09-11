@@ -160,8 +160,7 @@ def test_save_paired_execution_result_binds_runtime_requirement_contract(
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
     assert persisted["runtime_requirements"] == requirements.to_dict()
     assert (
-        persisted["runtime_provenance"][RUNTIME_REQUIREMENTS_PROVENANCE_KEY]
-        == requirements.sha256
+        persisted["runtime_provenance"][RUNTIME_REQUIREMENTS_PROVENANCE_KEY] == requirements.sha256
     )
     validate_persisted_runtime_requirements(persisted)
 
