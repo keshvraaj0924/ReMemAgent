@@ -128,6 +128,34 @@ def test_save_and_load_benchmark_artifact_manifest_round_trip(tmp_path: Path) ->
     verify_benchmark_artifact(report_path, loaded_manifest)
 
 
+def test_save_benchmark_artifact_manifest_preserves_existing_file_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "report.json"
+    manifest_path = tmp_path / "report.manifest.json"
+    _write_valid_report(report_path)
+    manifest_path.write_text("claimed-by-another-process\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="manifest already exists"):
+        save_benchmark_artifact_manifest(report_path, manifest_path, overwrite=False)
+
+    assert manifest_path.read_text(encoding="utf-8") == "claimed-by-another-process\n"
+    assert list(tmp_path.glob(f".{manifest_path.name}.*")) == []
+
+
+def test_save_benchmark_artifact_manifest_replaces_existing_file_with_overwrite(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "report.json"
+    manifest_path = tmp_path / "report.manifest.json"
+    _write_valid_report(report_path)
+    manifest_path.write_text("stale\n", encoding="utf-8")
+
+    save_benchmark_artifact_manifest(report_path, manifest_path, overwrite=True)
+
+    verify_benchmark_artifact(report_path, load_benchmark_artifact_manifest(manifest_path))
+
+
 def test_load_benchmark_artifact_manifest_rejects_unsupported_schema(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(
