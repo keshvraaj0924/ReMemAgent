@@ -27,9 +27,7 @@ def _build_spec() -> ExternalBenchmarkSpec:
 def test_source_checkout_mismatch_prevents_environment_construction(monkeypatch) -> None:
     CLOSED_SEEDS.clear()
     checkout_paths = {"WebShop": Path("/benchmarks/webshop")}
-    requirements = {
-        "WebShop": SourceCheckoutRequirement(expected_revision="required-revision")
-    }
+    requirements = {"WebShop": SourceCheckoutRequirement(expected_revision="required-revision")}
     observed = {
         "WebShop": SourceCheckoutProvenance(
             revision="actual-revision",
@@ -58,9 +56,7 @@ def test_source_checkout_contract_is_validated_once_before_seed_probes(monkeypat
     CLOSED_SEEDS.clear()
     events: list[str] = []
     checkout_paths = {"WebShop": Path("/benchmarks/webshop")}
-    requirements = {
-        "WebShop": SourceCheckoutRequirement(expected_revision="expected-revision")
-    }
+    requirements = {"WebShop": SourceCheckoutRequirement(expected_revision="expected-revision")}
     observed = {
         "WebShop": SourceCheckoutProvenance(
             revision="expected-revision",
@@ -131,9 +127,7 @@ def test_empty_source_checkout_requirement_contract_is_rejected() -> None:
 
 def test_measured_repeated_execution_forwards_source_checkout_contract(monkeypatch) -> None:
     checkout_paths = {"WebShop": Path("/benchmarks/webshop")}
-    requirements = {
-        "WebShop": SourceCheckoutRequirement(expected_revision="expected-revision")
-    }
+    requirements = {"WebShop": SourceCheckoutRequirement(expected_revision="expected-revision")}
     captured: dict[str, object] = {}
 
     def fake_preflight(*args, **kwargs):
