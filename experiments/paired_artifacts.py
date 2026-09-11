@@ -25,10 +25,23 @@ from experiments.benchmark_report import (
 from experiments.experiment_identity import verify_paired_experiment_identity
 from experiments.paired_benchmark import PairedBenchmarkResult, PairedSeedExecution
 from experiments.runtime_requirements import RuntimeRequirements
+from experiments.source_checkouts import (
+    SourceCheckoutProvenance,
+    SourceCheckoutRequirement,
+    source_checkout_provenance_from_dict,
+    source_checkout_provenance_sha256,
+    source_checkout_provenance_to_dict,
+    source_checkout_requirements_from_dict,
+    source_checkout_requirements_sha256,
+    source_checkout_requirements_to_dict,
+    validate_source_checkout_requirements,
+)
 from remem.benchmark import BenchmarkRunConfiguration
 
 PAIRED_EXECUTION_ORDER_PROVENANCE_KEY = "paired_execution_order_sha256"
 RUNTIME_REQUIREMENTS_PROVENANCE_KEY = "runtime_requirements_sha256"
+SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY = "source_checkout_requirements_sha256"
+SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY = "source_checkout_snapshot_sha256"
 
 
 def save_paired_execution_result(
@@ -37,16 +50,17 @@ def save_paired_execution_result(
     *,
     runtime_provenance: Mapping[str, object] | None = None,
     runtime_requirements: RuntimeRequirements | None = None,
+    source_checkout_provenance: Mapping[str, SourceCheckoutProvenance] | None = None,
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement] | None = None,
     overwrite: bool = False,
 ) -> Path:
     """Persist a complete paired result including validated temporal provenance.
 
-    The execution-order digest is injected into runtime provenance before the
-    lower-level serializer constructs the experiment identity. When a controlled
-    runtime contract admitted the experiment, its canonical SHA-256 digest is
-    injected into that same provenance and the full contract is persisted beside
-    the report. The experiment identity therefore binds both the observed runtime
-    and the declared admission contract.
+    Execution-order, runtime-contract, source-contract, and observed source-state
+    digests are injected into runtime provenance before the lower-level serializer
+    constructs the experiment identity. Controlled source metadata is persisted
+    in full beside the report so artifact verification can reconstruct and check
+    the exact admission evidence rather than trusting digests in isolation.
 
     Publication is race-safe. With ``overwrite=False`` an artifact created after
     an earlier CLI preflight check is preserved and persistence fails closed.
@@ -67,6 +81,25 @@ def save_paired_execution_result(
         if RUNTIME_REQUIREMENTS_PROVENANCE_KEY in provenance:
             raise ValueError(f"runtime_provenance reserves {RUNTIME_REQUIREMENTS_PROVENANCE_KEY!r}")
         provenance[RUNTIME_REQUIREMENTS_PROVENANCE_KEY] = runtime_requirements.sha256
+
+    source_metadata = _validated_source_metadata(
+        source_checkout_provenance,
+        source_checkout_requirements,
+    )
+    if source_metadata is not None:
+        observed_source, required_source = source_metadata
+        for reserved_key in (
+            SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY,
+            SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY,
+        ):
+            if reserved_key in provenance:
+                raise ValueError(f"runtime_provenance reserves {reserved_key!r}")
+        provenance[SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY] = (
+            source_checkout_requirements_sha256(required_source)
+        )
+        provenance[SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY] = source_checkout_provenance_sha256(
+            observed_source
+        )
 
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"paired benchmark artifact already exists: {output_path}")
@@ -91,6 +124,14 @@ def save_paired_execution_result(
         payload["execution_order"] = [asdict(entry) for entry in execution_order]
         if runtime_requirements is not None:
             payload["runtime_requirements"] = runtime_requirements.to_dict()
+        if source_metadata is not None:
+            observed_source, required_source = source_metadata
+            payload["source_checkout_requirements"] = source_checkout_requirements_to_dict(
+                required_source
+            )
+            payload["source_checkout_provenance"] = source_checkout_provenance_to_dict(
+                observed_source
+            )
         _write_json_file(payload, temporary_path)
         _publish_artifact(temporary_path, output_path, overwrite=overwrite)
     except Exception:
@@ -102,15 +143,16 @@ def save_paired_execution_result(
 def validate_persisted_paired_artifact(payload: Mapping[str, Any]) -> None:
     """Verify paired protocol identity plus optional controlled-runtime metadata.
 
-    This validator is intended to run after the generic per-run artifact checks.
     Temporal execution provenance is validated whenever present. Controlled
-    runtime contracts are also checked whenever either their full persisted form
-    or their identity-bound digest is present. Legacy paired artifacts without
-    these fields remain readable but do not gain those guarantees retroactively.
+    runtime and source-checkout contracts are also checked whenever their full
+    persisted forms or identity-bound digests are present. Legacy paired
+    artifacts without these fields remain readable but do not gain those
+    guarantees retroactively.
     """
 
     validate_persisted_paired_execution_provenance(payload)
     validate_persisted_runtime_requirements(payload)
+    validate_persisted_source_checkouts(payload)
 
     if "baseline" not in payload and "treatment" not in payload:
         return
@@ -177,6 +219,61 @@ def validate_persisted_runtime_requirements(payload: Mapping[str, Any]) -> None:
         raise ValueError("runtime_requirements contain an invalid persisted contract") from exc
     if not hmac.compare_digest(stored_digest, requirements.sha256):
         raise ValueError("runtime requirement digest does not match runtime_requirements")
+
+
+def validate_persisted_source_checkouts(payload: Mapping[str, Any]) -> None:
+    """Verify persisted source admission and observation metadata plus both digests."""
+
+    raw_requirements = payload.get("source_checkout_requirements")
+    raw_provenance = payload.get("source_checkout_provenance")
+    runtime_provenance = payload.get("runtime_provenance")
+    stored_requirement_digest = (
+        runtime_provenance.get(SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY)
+        if isinstance(runtime_provenance, Mapping)
+        else None
+    )
+    stored_snapshot_digest = (
+        runtime_provenance.get(SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY)
+        if isinstance(runtime_provenance, Mapping)
+        else None
+    )
+
+    source_fields = (
+        raw_requirements,
+        raw_provenance,
+        stored_requirement_digest,
+        stored_snapshot_digest,
+    )
+    if all(field is None for field in source_fields):
+        return
+    if any(field is None for field in source_fields):
+        raise ValueError(
+            "source checkout evidence requires persisted requirements, provenance, and both digests"
+        )
+    if not isinstance(raw_requirements, Mapping):
+        raise ValueError("source_checkout_requirements must be a mapping")
+    if not isinstance(raw_provenance, Mapping):
+        raise ValueError("source_checkout_provenance must be a mapping")
+    if not isinstance(runtime_provenance, Mapping):
+        raise ValueError("source checkout evidence requires runtime_provenance")
+    if not isinstance(stored_requirement_digest, str):
+        raise ValueError("source checkout requirement digest must be a string")
+    if not isinstance(stored_snapshot_digest, str):
+        raise ValueError("source checkout snapshot digest must be a string")
+
+    try:
+        requirements = source_checkout_requirements_from_dict(raw_requirements)
+        observed = source_checkout_provenance_from_dict(raw_provenance)
+        validate_source_checkout_requirements(observed, requirements)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("source checkout evidence contains invalid persisted metadata") from exc
+
+    expected_requirement_digest = source_checkout_requirements_sha256(requirements)
+    if not hmac.compare_digest(stored_requirement_digest, expected_requirement_digest):
+        raise ValueError("source checkout requirement digest does not match persisted requirements")
+    expected_snapshot_digest = source_checkout_provenance_sha256(observed)
+    if not hmac.compare_digest(stored_snapshot_digest, expected_snapshot_digest):
+        raise ValueError("source checkout snapshot digest does not match persisted provenance")
 
 
 def validate_persisted_paired_execution_provenance(payload: Mapping[str, Any]) -> None:
@@ -249,6 +346,29 @@ def validate_persisted_paired_execution_provenance(payload: Mapping[str, Any]) -
     expected_digest = _execution_order_fingerprint(tuple(normalized_entries))
     if not hmac.compare_digest(stored_digest, expected_digest):
         raise ValueError("paired execution order provenance digest does not match execution_order")
+
+
+def _validated_source_metadata(
+    provenance: Mapping[str, SourceCheckoutProvenance] | None,
+    requirements: Mapping[str, SourceCheckoutRequirement] | None,
+) -> tuple[
+    Mapping[str, SourceCheckoutProvenance],
+    Mapping[str, SourceCheckoutRequirement],
+] | None:
+    """Validate that source evidence is complete and satisfies its admission contract."""
+
+    if provenance is None and requirements is None:
+        return None
+    if provenance is None or requirements is None:
+        raise ValueError(
+            "source_checkout_provenance and source_checkout_requirements must be provided together"
+        )
+    if not provenance:
+        raise ValueError("source_checkout_provenance must not be empty")
+    if not requirements:
+        raise ValueError("source_checkout_requirements must not be empty")
+    validate_source_checkout_requirements(provenance, requirements)
+    return provenance, requirements
 
 
 def _condition_configuration(
@@ -361,8 +481,11 @@ def _write_json_file(payload: Mapping[str, Any], output_path: Path) -> None:
 __all__ = [
     "PAIRED_EXECUTION_ORDER_PROVENANCE_KEY",
     "RUNTIME_REQUIREMENTS_PROVENANCE_KEY",
+    "SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY",
+    "SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY",
     "save_paired_execution_result",
     "validate_persisted_paired_artifact",
     "validate_persisted_paired_execution_provenance",
     "validate_persisted_runtime_requirements",
+    "validate_persisted_source_checkouts",
 ]
