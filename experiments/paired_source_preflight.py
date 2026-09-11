@@ -68,8 +68,6 @@ def run_controlled_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
         seeds,
-        baseline_label=baseline_label,
-        treatment_label=treatment_label,
         probe_action=probe_action,
         runtime_requirements=None,
     )
