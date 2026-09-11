@@ -82,9 +82,7 @@ def test_runtime_requirements_detach_dependency_mapping() -> None:
 
 def test_runtime_requirements_reject_case_insensitive_duplicate_dependencies() -> None:
     with pytest.raises(ValueError, match="unique"):
-        RuntimeRequirements(
-            dependency_versions={"ALFWorld": "0.4.2", " alfworld ": "0.4.2"}
-        )
+        RuntimeRequirements(dependency_versions={"ALFWorld": "0.4.2", " alfworld ": "0.4.2"})
 
 
 @pytest.mark.parametrize(
