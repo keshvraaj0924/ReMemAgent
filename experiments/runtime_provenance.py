@@ -4,10 +4,11 @@ import hashlib
 import json
 import platform
 import subprocess
-from dataclasses import asdict, dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, distributions, version
 from pathlib import Path
-from typing import Mapping
+from types import MappingProxyType
 
 PACKAGE_NAME = "rememagent"
 RUNTIME_PROVENANCE_SCHEMA_VERSION = 1
@@ -32,7 +33,7 @@ class RuntimeProvenance:
     dependency_versions: Mapping[str, str]
 
     def __post_init__(self) -> None:
-        """Validate and detach provenance metadata at the domain boundary."""
+        """Validate, detach, and freeze provenance metadata at the domain boundary."""
 
         if not isinstance(self.schema_version, int) or isinstance(self.schema_version, bool):
             raise TypeError("schema_version must be an integer")
@@ -76,14 +77,25 @@ class RuntimeProvenance:
         normalized_versions = dict(
             sorted(detached_versions.items(), key=lambda item: item[0].lower())
         )
-        object.__setattr__(self, "dependency_versions", normalized_versions)
+        object.__setattr__(
+            self,
+            "dependency_versions",
+            MappingProxyType(normalized_versions),
+        )
 
     def to_dict(self) -> dict[str, object]:
-        """Return a JSON-compatible representation preserving dependency metadata."""
+        """Return a detached JSON-compatible representation of provenance metadata."""
 
-        payload = asdict(self)
-        payload["dependency_versions"] = dict(self.dependency_versions)
-        return payload
+        return {
+            "schema_version": self.schema_version,
+            "code_revision": self.code_revision,
+            "working_tree_state": self.working_tree_state,
+            "python_version": self.python_version,
+            "platform": self.platform,
+            "package_version": self.package_version,
+            "dependency_fingerprint": self.dependency_fingerprint,
+            "dependency_versions": dict(self.dependency_versions),
+        }
 
 
 def collect_runtime_provenance(
