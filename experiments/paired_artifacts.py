@@ -351,10 +351,13 @@ def validate_persisted_paired_execution_provenance(payload: Mapping[str, Any]) -
 def _validated_source_metadata(
     provenance: Mapping[str, SourceCheckoutProvenance] | None,
     requirements: Mapping[str, SourceCheckoutRequirement] | None,
-) -> tuple[
-    Mapping[str, SourceCheckoutProvenance],
-    Mapping[str, SourceCheckoutRequirement],
-] | None:
+) -> (
+    tuple[
+        Mapping[str, SourceCheckoutProvenance],
+        Mapping[str, SourceCheckoutRequirement],
+    ]
+    | None
+):
     """Validate that source evidence is complete and satisfies its admission contract."""
 
     if provenance is None and requirements is None:
