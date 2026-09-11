@@ -89,6 +89,37 @@ def test_runtime_requirements_dependency_mapping_is_immutable() -> None:
     assert requirements.dependency_versions == {"ALFWorld": "0.4.2"}
 
 
+def test_runtime_requirements_round_trip_canonical_contract() -> None:
+    requirements = RuntimeRequirements(
+        expected_code_revision="abc123",
+        require_clean_working_tree=True,
+        dependency_versions={"Transformers": "5.0.0", "ALFWorld": "0.4.2"},
+    )
+
+    payload = requirements.to_dict()
+    restored = RuntimeRequirements.from_dict(payload)
+
+    assert restored == requirements
+    assert restored.sha256 == requirements.sha256
+    assert len(requirements.sha256) == 64
+
+
+def test_runtime_requirements_fingerprint_changes_with_admission_contract() -> None:
+    baseline = RuntimeRequirements(dependency_versions={"ALFWorld": "0.4.2"})
+    changed = RuntimeRequirements(dependency_versions={"ALFWorld": "0.4.3"})
+
+    assert baseline.sha256 != changed.sha256
+
+
+def test_runtime_requirements_rejects_invalid_persisted_schema() -> None:
+    requirements = RuntimeRequirements()
+    payload = requirements.to_dict()
+    payload["schema_version"] = 999
+
+    with pytest.raises(ValueError, match="unsupported runtime requirements schema"):
+        RuntimeRequirements.from_dict(payload)
+
+
 def test_runtime_requirements_reject_case_insensitive_duplicate_dependencies() -> None:
     with pytest.raises(ValueError, match="unique"):
         RuntimeRequirements(dependency_versions={"ALFWorld": "0.4.2", " alfworld ": "0.4.2"})
