@@ -4,7 +4,7 @@ The upstream ALFWorld text environment exposes legacy code paths that can consum
 
 For every reset, the wrapper:
 
-1. acquires a process-local lock;
+1. acquires the process-wide legacy RNG lock shared by the ALFWorld and WebShop bridges;
 2. restarts the episode-owned Python and NumPy RNG streams from the benchmark episode seed;
 3. temporarily swaps those states into the module-level RNGs;
 4. calls the upstream `reset()`;
@@ -13,7 +13,7 @@ For every reset, the wrapper:
 
 Every subsequent `step()` uses the same isolation boundary without reseeding. The episode-owned streams therefore advance naturally from reset through the action trajectory instead of replaying the same random draw on each step. This prevents stochastic step-time behavior from depending on unrelated random-number consumption elsewhere in the host process while avoiding permanent mutation of caller RNG state.
 
-The process-local lock is intentional. ALFWorld's legacy global RNG usage cannot be safely swapped concurrently inside one process; without serialization, parallel benchmark workers could interleave global state changes and invalidate the seed contract.
+The lock is deliberately shared with WebShop because both integrations swap the same process-global Python and NumPy RNG objects. Separate per-benchmark locks would still allow an ALFWorld operation and a WebShop operation to overlap and corrupt one another's temporary RNG state. Episode-state initialization and restart use the same re-entrant lock, so wrapper construction cannot race with reset or step either.
 
 ## Evidence boundary
 
