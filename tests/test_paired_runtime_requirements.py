@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from argparse import Namespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -36,6 +37,32 @@ def _provenance(*, revision: str = "actual") -> RuntimeProvenance:
         package_version="0.1.0",
         dependency_fingerprint="0" * 64,
         dependency_versions={"alfworld": "0.4.2"},
+    )
+
+
+def _cli_arguments(tmp_path: Path) -> Namespace:
+    return Namespace(
+        benchmark="alfworld",
+        episodes=1,
+        max_steps=3,
+        seeds="11,17",
+        environment_factory="tests.test_external_benchmark:make_environment",
+        success_evaluator="tests.test_external_benchmark:evaluate_success",
+        transfer_success_evaluator=None,
+        baseline_policy_factory="tests.test_external_benchmark:make_policy",
+        baseline_action_policy_factory=None,
+        treatment_policy_factory="tests.test_external_benchmark:make_memory_policy",
+        treatment_action_policy_factory=None,
+        minimum_trust=0.0,
+        baseline_label="baseline",
+        treatment_label="treatment",
+        output=tmp_path / "paired.json",
+        manifest=None,
+        overwrite=False,
+        probe_action=None,
+        require_code_revision="abc123",
+        require_clean_working_tree=True,
+        require_dependency_version=["alfworld==0.4.2"],
     )
 
 
@@ -78,11 +105,12 @@ def test_paired_runtime_requirements_are_validated_once_before_seed_probes(monke
     )
     provenance_calls = 0
     probe_calls = 0
+    expected_provenance = _provenance()
 
     def collect_provenance() -> RuntimeProvenance:
         nonlocal provenance_calls
         provenance_calls += 1
-        return _provenance()
+        return expected_provenance
 
     def validate_probe(spec, seeds, *, probe_action):
         nonlocal probe_calls
@@ -93,15 +121,43 @@ def test_paired_runtime_requirements_are_validated_once_before_seed_probes(monke
         paired_benchmark, "validate_repeated_external_benchmark_runtime", validate_probe
     )
 
-    paired_benchmark.preflight_paired_external_benchmarks(
+    actual_provenance = paired_benchmark.preflight_paired_external_benchmarks(
         baseline,
         treatment,
         (11, 17),
         runtime_requirements=requirements,
     )
 
+    assert actual_provenance is expected_provenance
     assert provenance_calls == 1
     assert probe_calls == 4
+
+
+def test_controlled_paired_run_carries_exact_preflight_runtime_snapshot(monkeypatch) -> None:
+    baseline = _spec("tests.test_external_benchmark:make_policy")
+    treatment = _spec("tests.test_external_benchmark:make_memory_policy")
+    requirements = RuntimeRequirements(expected_code_revision="actual")
+    expected_provenance = _provenance()
+
+    monkeypatch.setattr(
+        paired_benchmark,
+        "collect_runtime_provenance",
+        lambda: expected_provenance,
+    )
+    monkeypatch.setattr(
+        paired_benchmark,
+        "validate_repeated_external_benchmark_runtime",
+        lambda spec, seeds, *, probe_action: None,
+    )
+
+    result = paired_benchmark.run_paired_external_benchmarks_with_preflight(
+        baseline,
+        treatment,
+        (11,),
+        runtime_requirements=requirements,
+    )
+
+    assert result.runtime_provenance is expected_provenance
 
 
 def test_paired_cli_builds_exact_runtime_requirements() -> None:
@@ -124,29 +180,7 @@ def test_paired_cli_forwards_runtime_requirements_to_controlled_preflight(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    arguments = Namespace(
-        benchmark="alfworld",
-        episodes=1,
-        max_steps=3,
-        seeds="11,17",
-        environment_factory="tests.test_external_benchmark:make_environment",
-        success_evaluator="tests.test_external_benchmark:evaluate_success",
-        transfer_success_evaluator=None,
-        baseline_policy_factory="tests.test_external_benchmark:make_policy",
-        baseline_action_policy_factory=None,
-        treatment_policy_factory="tests.test_external_benchmark:make_memory_policy",
-        treatment_action_policy_factory=None,
-        minimum_trust=0.0,
-        baseline_label="baseline",
-        treatment_label="treatment",
-        output=tmp_path / "paired.json",
-        manifest=None,
-        overwrite=False,
-        probe_action=None,
-        require_code_revision="abc123",
-        require_clean_working_tree=True,
-        require_dependency_version=["alfworld==0.4.2"],
-    )
+    arguments = _cli_arguments(tmp_path)
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(paired_cli, "parse_args", lambda: arguments)
@@ -174,6 +208,38 @@ def test_paired_cli_forwards_runtime_requirements_to_controlled_preflight(
     assert requirements.expected_code_revision == "abc123"
     assert requirements.require_clean_working_tree is True
     assert requirements.dependency_versions == {"alfworld": "0.4.2"}
+
+
+def test_paired_cli_persists_exact_validated_runtime_snapshot(monkeypatch, tmp_path: Path) -> None:
+    arguments = _cli_arguments(tmp_path)
+    expected_provenance = _provenance(revision="abc123")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(paired_cli, "parse_args", lambda: arguments)
+    monkeypatch.setattr(
+        paired_cli,
+        "run_paired_external_benchmarks_with_preflight",
+        lambda *args, **kwargs: SimpleNamespace(runtime_provenance=expected_provenance),
+    )
+    monkeypatch.setattr(
+        paired_cli,
+        "collect_runtime_provenance",
+        lambda **kwargs: pytest.fail("controlled CLI must not recollect runtime provenance"),
+    )
+
+    def save_result(result, output_path, *, runtime_provenance, overwrite):
+        captured["runtime_provenance"] = runtime_provenance
+        return output_path
+
+    monkeypatch.setattr(paired_cli, "save_paired_execution_result", save_result)
+
+    assert paired_cli.main() == 0
+
+    persisted_provenance = captured["runtime_provenance"]
+    assert isinstance(persisted_provenance, dict)
+    assert persisted_provenance["code_revision"] == "abc123"
+    assert persisted_provenance["working_tree_state"] == "clean"
+    assert persisted_provenance[paired_cli.PAIRED_PREFLIGHT_STATUS_KEY] == "completed"
 
 
 def test_paired_cli_rejects_duplicate_dependency_names_ignoring_case() -> None:
