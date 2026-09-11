@@ -23,7 +23,14 @@ def test_repeated_launch_preflights_all_seeds_before_execution(monkeypatch) -> N
 
     events: list[tuple[str, tuple[int, ...]]] = []
 
-    def fake_validate(spec, seeds, *, probe_action=None):
+    def fake_validate(
+        spec,
+        seeds,
+        *,
+        probe_action=None,
+        runtime_requirements=None,
+    ):
+        assert runtime_requirements is None
         selected_seeds = tuple(seeds)
         events.append(("preflight", selected_seeds))
         return tuple(object() for _ in selected_seeds)
@@ -59,7 +66,14 @@ def test_repeated_launch_does_not_execute_when_preflight_fails(monkeypatch) -> N
 
     run_called = False
 
-    def fake_validate(spec, seeds, *, probe_action=None):
+    def fake_validate(
+        spec,
+        seeds,
+        *,
+        probe_action=None,
+        runtime_requirements=None,
+    ):
+        assert runtime_requirements is None
         raise RuntimeError("seed 17 is not loadable")
 
     def fake_run(spec, seeds, *, runner=None):
