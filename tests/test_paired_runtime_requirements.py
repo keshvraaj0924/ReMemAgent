@@ -236,10 +236,14 @@ def test_paired_cli_persists_exact_validated_runtime_snapshot_and_contract(
         *,
         runtime_provenance,
         runtime_requirements,
+        source_checkout_provenance,
+        source_checkout_requirements,
         overwrite,
     ):
         captured["runtime_provenance"] = runtime_provenance
         captured["runtime_requirements"] = runtime_requirements
+        captured["source_checkout_provenance"] = source_checkout_provenance
+        captured["source_checkout_requirements"] = source_checkout_requirements
         return output_path
 
     monkeypatch.setattr(paired_cli, "save_paired_execution_result", save_result)
@@ -257,6 +261,8 @@ def test_paired_cli_persists_exact_validated_runtime_snapshot_and_contract(
     assert persisted_requirements.expected_code_revision == "abc123"
     assert persisted_requirements.require_clean_working_tree is True
     assert persisted_requirements.dependency_versions == {"alfworld": "0.4.2"}
+    assert captured["source_checkout_provenance"] is None
+    assert captured["source_checkout_requirements"] is None
 
 
 def test_paired_cli_rejects_duplicate_dependency_names_ignoring_case() -> None:
