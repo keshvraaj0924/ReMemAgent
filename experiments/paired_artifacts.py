@@ -65,9 +65,7 @@ def save_paired_execution_result(
         if not isinstance(runtime_requirements, RuntimeRequirements):
             raise TypeError("runtime_requirements must be a RuntimeRequirements instance")
         if RUNTIME_REQUIREMENTS_PROVENANCE_KEY in provenance:
-            raise ValueError(
-                f"runtime_provenance reserves {RUNTIME_REQUIREMENTS_PROVENANCE_KEY!r}"
-            )
+            raise ValueError(f"runtime_provenance reserves {RUNTIME_REQUIREMENTS_PROVENANCE_KEY!r}")
         provenance[RUNTIME_REQUIREMENTS_PROVENANCE_KEY] = runtime_requirements.sha256
 
     if output_path.exists() and not overwrite:
@@ -171,9 +169,7 @@ def validate_persisted_runtime_requirements(payload: Mapping[str, Any]) -> None:
     if not isinstance(runtime_provenance, Mapping):
         raise ValueError("runtime_requirements require runtime_provenance")
     if not isinstance(stored_digest, str):
-        raise ValueError(
-            f"runtime_provenance requires {RUNTIME_REQUIREMENTS_PROVENANCE_KEY!r}"
-        )
+        raise ValueError(f"runtime_provenance requires {RUNTIME_REQUIREMENTS_PROVENANCE_KEY!r}")
 
     try:
         requirements = RuntimeRequirements.from_dict(raw_requirements)
