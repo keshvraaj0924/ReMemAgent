@@ -95,7 +95,10 @@ def main() -> int:
             probe_action=arguments.probe_action,
             runtime_requirements=runtime_requirements,
         )
-        runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
+        if result.runtime_provenance is not None:
+            runtime_provenance = result.runtime_provenance.to_dict()
+        else:
+            runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
         runtime_provenance.update(_paired_preflight_provenance(arguments.probe_action))
         output_path = save_paired_execution_result(
             result,
