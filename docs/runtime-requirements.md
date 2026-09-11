@@ -118,6 +118,33 @@ reports = run_repeated_external_benchmarks_with_preflight(
 )
 ```
 
-The runtime requirement gate protects the benchmark CLI plus single-run and repeated external preflight orchestration through `experiments.external_preflight`. Direct calls to the lower-level execution functions in `experiments.external_benchmark` remain caller-owned and intentionally do not collect runtime provenance implicitly.
+## Paired baseline-versus-memory experiments
+
+`remem-paired-benchmark` and `run_paired_external_benchmarks_with_preflight(...)` accept the same runtime contract. The contract is validated once before either condition resolves callables or constructs a benchmark environment. The exact `RuntimeProvenance` instance that passed that gate is attached to `PairedBenchmarkResult.runtime_provenance` and is reused when the CLI persists the paired artifact.
+
+This provenance handoff is deliberate: controlled paired artifacts record the runtime snapshot admitted **before measurement**, rather than re-collecting repository and dependency state after the experiment and potentially binding the artifact to a different state.
+
+A paired CLI run can therefore pin both conditions to one controlled runtime:
+
+```bash
+remem-paired-benchmark \
+  --benchmark alfworld \
+  --episodes 20 \
+  --max-steps 50 \
+  --seeds 100,200,300 \
+  --environment-factory my_runtime:make_alfworld_environment \
+  --success-evaluator my_runtime:evaluate_success \
+  --baseline-policy-factory my_runtime:make_baseline_policy \
+  --treatment-policy-factory my_runtime:make_memory_policy \
+  --require-code-revision <full-commit-sha> \
+  --require-clean-working-tree \
+  --require-dependency-version alfworld==<pinned-version> \
+  --require-dependency-version transformers==<pinned-version> \
+  --output artifacts/alfworld-paired.json
+```
+
+Runs without a declared runtime contract retain the legacy behavior of collecting provenance for artifact persistence after execution. Controlled runs should declare explicit requirements so admission and persisted provenance share the same pre-measurement snapshot.
+
+The runtime requirement gate protects the benchmark CLI plus single-run, repeated, and paired external preflight orchestration. Direct calls to the lower-level execution functions in `experiments.external_benchmark` remain caller-owned and intentionally do not collect runtime provenance implicitly.
 
 This validation is an engineering reproducibility gate, not evidence of benchmark effectiveness. Real ALFWorld/WebShop results still require measured multi-seed execution with the exact declared environment and model-policy runtime.
