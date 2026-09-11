@@ -14,9 +14,44 @@ Exact version equality is intentional. This layer is for reproducible measuremen
 
 A clean-worktree requirement rejects both `dirty` and `unknown` states. Likewise, an expected code revision rejects `unknown` or any other revision. Missing required dependencies and dependency version drift fail closed.
 
+## Single external benchmark preflight
+
+`validate_controlled_external_benchmark_runtime(...)` and `run_external_benchmark_with_preflight(...)` apply the runtime requirement gate to one external benchmark run. Runtime provenance is collected and validated before the configured ALFWorld/WebShop environment is resolved or constructed. A failed revision, working-tree, or dependency check therefore cannot create benchmark probe side effects or start measured execution.
+
+Example:
+
+```python
+from experiments.external_benchmark import ExternalBenchmarkSpec
+from experiments.external_preflight import run_external_benchmark_with_preflight
+from experiments.runtime_requirements import RuntimeRequirements
+
+spec = ExternalBenchmarkSpec(
+    benchmark_name="alfworld",
+    episode_count=20,
+    max_steps=50,
+    environment_factory="my_runtime:make_alfworld_environment",
+    policy_factory="my_runtime:make_policy",
+    success_evaluator="my_runtime:evaluate_success",
+    seed=100,
+)
+requirements = RuntimeRequirements(
+    expected_code_revision="<full-commit-sha>",
+    require_clean_working_tree=True,
+    dependency_versions={
+        "alfworld": "<pinned-version>",
+        "transformers": "<pinned-version>",
+    },
+)
+
+report = run_external_benchmark_with_preflight(
+    spec,
+    runtime_requirements=requirements,
+)
+```
+
 ## Repeated external benchmark preflight
 
-`validate_repeated_external_benchmark_runtime(...)` and `run_repeated_external_benchmarks_with_preflight(...)` now accept an optional `runtime_requirements` argument. When supplied, ReMemAgent collects runtime provenance and validates the declared requirements **before constructing the first ALFWorld/WebShop environment**.
+`validate_repeated_external_benchmark_runtime(...)` and `run_repeated_external_benchmarks_with_preflight(...)` accept the same optional `runtime_requirements` argument. When supplied, ReMemAgent collects runtime provenance and validates the declared requirements **before constructing the first ALFWorld/WebShop environment**.
 
 This ordering matters for controlled measurement: a wrong commit, dirty checkout, missing benchmark package, or dependency-version drift cannot create probe environments or start measured runs. Runtime validation is performed once for the repeated preflight, then each independent seed is probed through the existing environment and policy contract boundary.
 
@@ -53,6 +88,6 @@ reports = run_repeated_external_benchmarks_with_preflight(
 
 The version strings above are deliberately placeholders in documentation. ReMemAgent does not invent or prescribe benchmark/model package versions; the experiment owner must pin the versions actually selected for the controlled run.
 
-The runtime requirement gate currently protects the repeated external preflight execution path. Direct low-level calls that bypass `experiments.external_preflight` remain caller-owned and must validate runtime requirements explicitly before constructing benchmark environments.
+The runtime requirement gate now protects both single-run and repeated external preflight orchestration through `experiments.external_preflight`. Direct calls to the lower-level execution functions in `experiments.external_benchmark` remain caller-owned and intentionally do not collect runtime provenance implicitly.
 
 This validation is an engineering reproducibility gate, not evidence of benchmark effectiveness. Real ALFWorld/WebShop results still require measured multi-seed execution with the exact declared environment and model-policy runtime.
