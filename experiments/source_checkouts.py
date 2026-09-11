@@ -50,8 +50,7 @@ class SourceCheckoutProvenance:
         _require_non_empty_string("revision", self.revision)
         if self.working_tree_state not in VALID_WORKING_TREE_STATES:
             raise ValueError(
-                "working_tree_state must be one of: "
-                f"{', '.join(sorted(VALID_WORKING_TREE_STATES))}"
+                f"working_tree_state must be one of: {', '.join(sorted(VALID_WORKING_TREE_STATES))}"
             )
 
     def to_dict(self) -> dict[str, str]:
