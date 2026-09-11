@@ -104,6 +104,7 @@ def main() -> int:
             result,
             output_path,
             runtime_provenance=runtime_provenance,
+            runtime_requirements=runtime_requirements,
             overwrite=arguments.overwrite,
         )
         if manifest_path is not None:
