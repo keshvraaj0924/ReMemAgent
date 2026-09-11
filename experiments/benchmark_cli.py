@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
@@ -136,20 +138,18 @@ def main() -> int:
     if probe_action is not None and not getattr(arguments, "preflight_before_run", False):
         raise ValueError("--probe-action requires a runtime preflight or --preflight-before-run")
 
-    output_path = _prepare_output_path(
-        arguments.output,
-        overwrite=getattr(arguments, "overwrite", False),
-    )
+    overwrite = getattr(arguments, "overwrite", False)
+    output_path = _prepare_output_path(arguments.output, overwrite=overwrite)
     manifest_path = getattr(arguments, "manifest", None)
     selected_manifest_path = _prepare_manifest_path(
         output_path,
         manifest_path,
-        overwrite=getattr(arguments, "overwrite", False),
+        overwrite=overwrite,
     )
     observability_path = _prepare_optional_artifact_path(
         getattr(arguments, "observability_output", None),
         artifact_name="observability snapshot",
-        overwrite=getattr(arguments, "overwrite", False),
+        overwrite=overwrite,
         reserved_paths=(output_path, selected_manifest_path),
     )
     runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
@@ -167,10 +167,14 @@ def main() -> int:
                 probe_action=probe_action,
             )
         report = run_external_benchmark(spec, runner=benchmark_runner)
-        output_path = save_benchmark_report(
-            report,
+        output_path = _persist_benchmark_report(
             output_path,
-            runtime_provenance=runtime_provenance,
+            overwrite=overwrite,
+            writer=lambda temporary_path: save_benchmark_report(
+                report,
+                temporary_path,
+                runtime_provenance=runtime_provenance,
+            ),
         )
     else:
         if getattr(arguments, "preflight_before_run", False):
@@ -187,11 +191,15 @@ def main() -> int:
                 runner=benchmark_runner,
             )
         statistics = summarize_benchmark_reports(reports).to_dict()
-        output_path = save_repeated_benchmark_reports(
-            reports,
+        output_path = _persist_benchmark_report(
             output_path,
-            runtime_provenance=runtime_provenance,
-            statistics=statistics,
+            overwrite=overwrite,
+            writer=lambda temporary_path: save_repeated_benchmark_reports(
+                reports,
+                temporary_path,
+                runtime_provenance=runtime_provenance,
+                statistics=statistics,
+            ),
         )
 
     if selected_manifest_path is not None:
@@ -202,6 +210,52 @@ def main() -> int:
         print(f"saved benchmark observability snapshot: {observability_path}")
     print(f"saved benchmark report: {output_path}")
     return 0
+
+
+def _persist_benchmark_report(
+    output_path: Path,
+    *,
+    overwrite: bool,
+    writer: Callable[[Path], object],
+) -> Path:
+    """Publish a fully written benchmark report without a check-then-replace race."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=output_path.parent,
+        prefix=f".{output_path.name}.",
+        suffix=".publish.tmp",
+    )
+    os.close(file_descriptor)
+    temporary_path = Path(temporary_name)
+    try:
+        writer(temporary_path)
+        _publish_benchmark_report(temporary_path, output_path, overwrite=overwrite)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
+    return output_path
+
+
+def _publish_benchmark_report(
+    temporary_path: Path,
+    output_path: Path,
+    *,
+    overwrite: bool,
+) -> None:
+    """Atomically publish one prepared report while honoring overwrite policy."""
+
+    if overwrite:
+        os.replace(temporary_path, output_path)
+        return
+
+    try:
+        os.link(temporary_path, output_path)
+    except FileExistsError as exc:
+        raise FileExistsError(
+            f"benchmark artifact already exists: {output_path}; pass --overwrite to replace it"
+        ) from exc
+    temporary_path.unlink()
 
 
 def _prepare_output_path(path: Path, *, overwrite: bool) -> Path:
