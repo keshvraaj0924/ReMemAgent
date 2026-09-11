@@ -1,10 +1,9 @@
-"""Reusable preflight orchestration for repeated external benchmark runs.
+"""Reusable preflight orchestration for external benchmark runs.
 
-The measured benchmark runner owns execution. This module validates the
-same configured environment and policy boundary for every independent seed
-before a multi-seed experiment is launched. Controlled runs can additionally
-require an exact repository/runtime state before any third-party environment is
-constructed.
+The measured benchmark runner owns execution. This module validates the same
+configured environment and policy boundary before measurement begins. Controlled
+runs can additionally require an exact repository/runtime state before any
+third-party environment is constructed.
 """
 
 from __future__ import annotations
@@ -17,12 +16,47 @@ from remem.environments import EnvironmentContractReport
 
 from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
+    run_external_benchmark,
     run_repeated_external_benchmarks,
     validate_external_benchmark_runtime,
     validate_repeated_benchmark_request,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements, validate_runtime_requirements
+
+
+def validate_controlled_external_benchmark_runtime(
+    spec: ExternalBenchmarkSpec,
+    *,
+    probe_action: str | None = None,
+    runtime_requirements: RuntimeRequirements | None = None,
+) -> EnvironmentContractReport:
+    """Validate runtime requirements before probing one external benchmark.
+
+    The controlled runtime gate runs before callable resolution or environment
+    construction. A revision, working-tree, or dependency mismatch therefore
+    cannot trigger third-party benchmark side effects.
+    """
+
+    _validate_controlled_runtime(runtime_requirements)
+    return validate_external_benchmark_runtime(spec, probe_action=probe_action)
+
+
+def run_external_benchmark_with_preflight(
+    spec: ExternalBenchmarkSpec,
+    *,
+    probe_action: str | None = None,
+    runner: BenchmarkSuiteRunner | None = None,
+    runtime_requirements: RuntimeRequirements | None = None,
+) -> BenchmarkRunReport:
+    """Preflight one external benchmark and only then launch measurement."""
+
+    validate_controlled_external_benchmark_runtime(
+        spec,
+        probe_action=probe_action,
+        runtime_requirements=runtime_requirements,
+    )
+    return run_external_benchmark(spec, runner=runner)
 
 
 def validate_repeated_external_benchmark_runtime(
@@ -97,6 +131,8 @@ def _validate_controlled_runtime(runtime_requirements: RuntimeRequirements | Non
 
 
 __all__ = [
+    "run_external_benchmark_with_preflight",
     "run_repeated_external_benchmarks_with_preflight",
+    "validate_controlled_external_benchmark_runtime",
     "validate_repeated_external_benchmark_runtime",
 ]
