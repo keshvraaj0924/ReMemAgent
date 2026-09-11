@@ -1,25 +1,28 @@
 # WebShop deterministic seeding
 
-The upstream WebShop text environment uses Python's module-level `random` state when creating session identifiers and selecting tasks. Its `reset()` API does not accept a Gym-style `seed` argument. The official ReMemAgent factory therefore adds a small seed-scoped boundary around the real upstream environment.
+The upstream WebShop text environment uses legacy module-level random state during environment setup and task/session behavior. Its `reset()` API does not provide a modern Gym-style episode RNG contract, so ReMemAgent wraps the upstream environment with an episode-owned Python/NumPy RNG stream.
 
 For each benchmark episode, the wrapper:
 
 1. acquires a process-local lock;
-2. saves Python's global RNG state;
-3. seeds it with the requested episode seed;
-4. calls the upstream `reset()`;
-5. restores the previous RNG state in `finally`.
+2. restarts an episode-owned RNG stream from the requested seed before `reset()`;
+3. temporarily swaps that stream into Python's and NumPy's module-level RNGs;
+4. calls the upstream operation;
+5. records the advanced episode RNG state;
+6. restores the caller's exact global RNG states in `finally`.
 
-The factory also isolates environment-construction side effects from the caller's RNG state. This matters because the upstream `WebAgentTextEnv` constructor performs an eager reset and its simulator initialization mutates Python's global random state.
+Subsequent `step()` calls continue from the RNG state produced by the preceding reset or step. They are isolated in the same way but are **not** reseeded on every action, so stochastic trajectories preserve normal RNG progression while remaining independent from unrelated host-process random-number consumption.
 
-This gives ReMemAgent a deterministic reset boundary without permanently perturbing unrelated application code. The lock prevents concurrent benchmark workers in the same process from interleaving global RNG state changes.
+The factory also isolates environment-construction side effects from the caller's RNG state. This matters because upstream WebShop initialization can perform eager setup/reset behavior that mutates module-level randomness.
+
+The process-local lock prevents concurrent benchmark workers in the same process from interleaving global RNG swaps. Cross-process workers remain independently isolated by their own interpreter state.
 
 ## Evidence boundary
 
-This is a reproducibility boundary, not a claim of complete WebShop determinism. The upstream environment depends on its installed package versions, local product/instruction data, search index, and caller-owned policy. The seed contract only controls Python's RNG around environment construction and explicit episode reset.
+This is a reproducibility boundary, not a claim of complete WebShop determinism. It controls Python and NumPy legacy module-level RNG usage around construction, reset, and step, but the upstream environment also depends on installed package versions, local product/instruction data, search-index contents, native libraries, and the caller-owned policy. Those inputs must still be pinned or recorded for scientific runs.
 
-The original WebShop project documents `WebAgentTextEnv-v0` as a Gym environment and exposes `reset(session=None, instruction_text=None)`, so ReMemAgent does not pretend that a `reset(seed=...)` API exists where the benchmark does not provide one.
+The original WebShop environment exposes `WebAgentTextEnv-v0` through Gym and does not provide a reliable `reset(seed=...)` contract for this integration, so ReMemAgent does not fabricate one. Instead, the adapter preserves a deterministic episode RNG stream around the actual upstream API.
 
 ## Operational consequence
 
-A repeated benchmark can now create one environment per seed, run the measured episode after the seeded reset boundary, and retain the seed in the benchmark report. If an experiment needs stronger determinism than this boundary provides, it must record and control the remaining external inputs rather than silently treating the benchmark as fully deterministic.
+A repeated benchmark can create one environment per seed and execute the complete measured trajectory without allowing unrelated module-level RNG consumption in the same process to perturb that episode's Python/NumPy random stream. Stronger determinism still requires controlling the remaining external inputs rather than treating the seed boundary as sufficient scientific evidence by itself.
