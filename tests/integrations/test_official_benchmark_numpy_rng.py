@@ -86,6 +86,13 @@ def test_scoped_random_seed_does_not_require_numpy(monkeypatch: Any) -> None:
     assert random.random() == expected_next
 
 
+def test_official_benchmarks_share_one_legacy_rng_lock() -> None:
+    """ALFWorld and WebShop must not swap the same global RNGs concurrently."""
+
+    assert official_benchmarks._ALFWORLD_RANDOM_LOCK is official_benchmarks._LEGACY_RANDOM_LOCK
+    assert official_benchmarks._WEBSHOP_RANDOM_LOCK is official_benchmarks._LEGACY_RANDOM_LOCK
+
+
 @pytest.mark.parametrize(
     "wrapper_type",
     [
