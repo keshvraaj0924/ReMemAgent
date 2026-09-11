@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import argparse
 import os
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
+from experiments.artifact_bundle import (
+    PreparedArtifact,
+    create_private_artifact_path,
+    publish_artifact_bundle,
+)
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
 from experiments.benchmark_report import save_benchmark_report, save_repeated_benchmark_reports
 from experiments.benchmark_statistics import summarize_benchmark_reports
@@ -25,7 +29,7 @@ from experiments.external_preflight import (
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 from remem.benchmark import BenchmarkSuiteRunner
-from remem.observability import ObservationCollector, write_observation_snapshot
+from remem.observability import ObservationCollector, ObservationSnapshot, write_observation_snapshot
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
@@ -167,14 +171,10 @@ def main() -> int:
                 probe_action=probe_action,
             )
         report = run_external_benchmark(spec, runner=benchmark_runner)
-        output_path = _persist_benchmark_report(
-            output_path,
-            overwrite=overwrite,
-            writer=lambda temporary_path: save_benchmark_report(
-                report,
-                temporary_path,
-                runtime_provenance=runtime_provenance,
-            ),
+        report_writer = lambda temporary_path: save_benchmark_report(
+            report,
+            temporary_path,
+            runtime_provenance=runtime_provenance,
         )
     else:
         if getattr(arguments, "preflight_before_run", False):
@@ -191,33 +191,89 @@ def main() -> int:
                 runner=benchmark_runner,
             )
         statistics = summarize_benchmark_reports(reports).to_dict()
-        output_path = _persist_benchmark_report(
-            output_path,
-            overwrite=overwrite,
-            writer=lambda temporary_path: save_repeated_benchmark_reports(
-                reports,
-                temporary_path,
-                runtime_provenance=runtime_provenance,
-                statistics=statistics,
-            ),
+        report_writer = lambda temporary_path: save_repeated_benchmark_reports(
+            reports,
+            temporary_path,
+            runtime_provenance=runtime_provenance,
+            statistics=statistics,
         )
 
+    observation_snapshot = (
+        observation_collector.snapshot() if observation_collector is not None else None
+    )
+    output_path = _persist_benchmark_bundle(
+        output_path,
+        overwrite=overwrite,
+        writer=report_writer,
+        manifest_path=selected_manifest_path,
+        observability_path=observability_path,
+        observation_snapshot=observation_snapshot,
+    )
+
     if selected_manifest_path is not None:
-        manifest_output = save_benchmark_artifact_manifest(
-            output_path,
-            selected_manifest_path,
-            overwrite=overwrite,
-        )
-        print(f"saved benchmark artifact manifest: {manifest_output}")
-    if observation_collector is not None and observability_path is not None:
-        write_observation_snapshot(
-            observability_path,
-            observation_collector.snapshot(),
-            overwrite=overwrite,
-        )
+        print(f"saved benchmark artifact manifest: {selected_manifest_path}")
+    if observability_path is not None:
         print(f"saved benchmark observability snapshot: {observability_path}")
     print(f"saved benchmark report: {output_path}")
     return 0
+
+
+def _persist_benchmark_bundle(
+    output_path: Path,
+    *,
+    overwrite: bool,
+    writer: Callable[[Path], object],
+    manifest_path: Path | None = None,
+    observability_path: Path | None = None,
+    observation_snapshot: ObservationSnapshot | None = None,
+) -> Path:
+    """Stage and publish one benchmark artifact bundle with rollback semantics."""
+
+    if (observability_path is None) != (observation_snapshot is None):
+        raise ValueError(
+            "observability_path and observation_snapshot must either both be provided or both omitted"
+        )
+
+    prepared_artifacts: list[PreparedArtifact] = []
+    report_temporary_path = create_private_artifact_path(output_path)
+    report_artifact = PreparedArtifact(report_temporary_path, output_path)
+    prepared_artifacts.append(report_artifact)
+    try:
+        writer(report_temporary_path)
+
+        ordered_artifacts: list[PreparedArtifact] = []
+        if observability_path is not None and observation_snapshot is not None:
+            observability_temporary_path = create_private_artifact_path(observability_path)
+            observability_artifact = PreparedArtifact(
+                observability_temporary_path,
+                observability_path,
+            )
+            prepared_artifacts.append(observability_artifact)
+            write_observation_snapshot(
+                observability_temporary_path,
+                observation_snapshot,
+                overwrite=True,
+            )
+            ordered_artifacts.append(observability_artifact)
+
+        if manifest_path is not None:
+            manifest_temporary_path = create_private_artifact_path(manifest_path)
+            manifest_artifact = PreparedArtifact(manifest_temporary_path, manifest_path)
+            prepared_artifacts.append(manifest_artifact)
+            save_benchmark_artifact_manifest(
+                report_temporary_path,
+                manifest_temporary_path,
+                overwrite=True,
+            )
+            ordered_artifacts.append(manifest_artifact)
+
+        ordered_artifacts.append(report_artifact)
+        publish_artifact_bundle(tuple(ordered_artifacts), overwrite=overwrite)
+    except BaseException:
+        for artifact in prepared_artifacts:
+            artifact.temporary_path.unlink(missing_ok=True)
+        raise
+    return output_path
 
 
 def _persist_benchmark_report(
@@ -228,42 +284,11 @@ def _persist_benchmark_report(
 ) -> Path:
     """Publish a fully written benchmark report without a check-then-replace race."""
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        dir=output_path.parent,
-        prefix=f".{output_path.name}.",
-        suffix=".publish.tmp",
+    return _persist_benchmark_bundle(
+        output_path,
+        overwrite=overwrite,
+        writer=writer,
     )
-    os.close(file_descriptor)
-    temporary_path = Path(temporary_name)
-    try:
-        writer(temporary_path)
-        _publish_benchmark_report(temporary_path, output_path, overwrite=overwrite)
-    except BaseException:
-        temporary_path.unlink(missing_ok=True)
-        raise
-    return output_path
-
-
-def _publish_benchmark_report(
-    temporary_path: Path,
-    output_path: Path,
-    *,
-    overwrite: bool,
-) -> None:
-    """Atomically publish one prepared report while honoring overwrite policy."""
-
-    if overwrite:
-        os.replace(temporary_path, output_path)
-        return
-
-    try:
-        os.link(temporary_path, output_path)
-    except FileExistsError as exc:
-        raise FileExistsError(
-            f"benchmark artifact already exists: {output_path}; pass --overwrite to replace it"
-        ) from exc
-    temporary_path.unlink()
 
 
 def _prepare_output_path(path: Path, *, overwrite: bool) -> Path:
