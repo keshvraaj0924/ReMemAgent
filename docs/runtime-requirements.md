@@ -8,6 +8,8 @@ Runtime provenance records the environment that executed a benchmark, but record
 - a clean working tree;
 - exact installed versions for selected benchmark, model-runtime, tokenizer, or inference packages.
 
+`RuntimeRequirements` detaches, normalizes, and freezes its dependency-version mapping at construction. A caller cannot change a validated runtime contract later by mutating either the original input dictionary or the mapping exposed by the requirements object.
+
 `validate_runtime_requirements(provenance, requirements)` compares those requirements against a collected `RuntimeProvenance` instance. Dependency names are matched case-insensitively after trimming surrounding whitespace, while versions use exact string equality.
 
 Exact version equality is intentional. This layer is for reproducible measurement rather than dependency resolution, so a broad compatible-version range would still permit an experiment to run under a different runtime than the declared protocol.
