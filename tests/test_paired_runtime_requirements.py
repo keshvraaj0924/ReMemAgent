@@ -210,7 +210,10 @@ def test_paired_cli_forwards_runtime_requirements_to_controlled_preflight(
     assert requirements.dependency_versions == {"alfworld": "0.4.2"}
 
 
-def test_paired_cli_persists_exact_validated_runtime_snapshot(monkeypatch, tmp_path: Path) -> None:
+def test_paired_cli_persists_exact_validated_runtime_snapshot_and_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     arguments = _cli_arguments(tmp_path)
     expected_provenance = _provenance(revision="abc123")
     captured: dict[str, object] = {}
@@ -227,8 +230,16 @@ def test_paired_cli_persists_exact_validated_runtime_snapshot(monkeypatch, tmp_p
         lambda **kwargs: pytest.fail("controlled CLI must not recollect runtime provenance"),
     )
 
-    def save_result(result, output_path, *, runtime_provenance, overwrite):
+    def save_result(
+        result,
+        output_path,
+        *,
+        runtime_provenance,
+        runtime_requirements,
+        overwrite,
+    ):
         captured["runtime_provenance"] = runtime_provenance
+        captured["runtime_requirements"] = runtime_requirements
         return output_path
 
     monkeypatch.setattr(paired_cli, "save_paired_execution_result", save_result)
@@ -240,6 +251,12 @@ def test_paired_cli_persists_exact_validated_runtime_snapshot(monkeypatch, tmp_p
     assert persisted_provenance["code_revision"] == "abc123"
     assert persisted_provenance["working_tree_state"] == "clean"
     assert persisted_provenance[paired_cli.PAIRED_PREFLIGHT_STATUS_KEY] == "completed"
+
+    persisted_requirements = captured["runtime_requirements"]
+    assert isinstance(persisted_requirements, RuntimeRequirements)
+    assert persisted_requirements.expected_code_revision == "abc123"
+    assert persisted_requirements.require_clean_working_tree is True
+    assert persisted_requirements.dependency_versions == {"alfworld": "0.4.2"}
 
 
 def test_paired_cli_rejects_duplicate_dependency_names_ignoring_case() -> None:
