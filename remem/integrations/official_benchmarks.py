@@ -19,6 +19,7 @@ RawEnvironmentFactory = Callable[[int], Any]
 _LEGACY_RANDOM_LOCK = threading.RLock()
 _ALFWORLD_RANDOM_LOCK = _LEGACY_RANDOM_LOCK
 _WEBSHOP_RANDOM_LOCK = _LEGACY_RANDOM_LOCK
+_MAX_LEGACY_NUMPY_SEED = (2**32) - 1
 
 
 class _EpisodeRandomState:
@@ -312,10 +313,15 @@ def _validate_webshop_gym_version(gym_module: Any) -> None:
 
 
 def _validate_seed(seed: int) -> None:
-    """Reject non-integer and boolean seeds at the external integration boundary."""
+    """Validate seeds against the legacy NumPy RandomState seed domain."""
 
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise TypeError("seed must be an integer")
+    if seed < 0 or seed > _MAX_LEGACY_NUMPY_SEED:
+        raise ValueError(
+            f"seed must be between 0 and {_MAX_LEGACY_NUMPY_SEED} inclusive "
+            "for the legacy NumPy RNG bridge"
+        )
 
 
 def _close_if_supported(environment: Any) -> None:
