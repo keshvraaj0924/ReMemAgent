@@ -32,6 +32,8 @@ from remem.memory.attribution import TransferSuccessEvaluator
 from remem.memory.store import MemoryStore
 from remem.services import SuccessEvaluator
 
+MAX_EXTERNAL_BENCHMARK_SEED = (2**32) - 1
+
 
 @dataclass(frozen=True, slots=True)
 class ExternalBenchmarkSpec:
@@ -55,10 +57,10 @@ class ExternalBenchmarkSpec:
             raise ValueError("benchmark_name must be a non-empty string")
         _validate_non_negative_integer("episode_count", self.episode_count)
         _validate_positive_integer("max_steps", self.max_steps)
-        if self.seed is not None and (
-            isinstance(self.seed, bool) or not isinstance(self.seed, int)
-        ):
-            raise TypeError("seed must be an integer or None")
+        if self.seed is not None:
+            if isinstance(self.seed, bool) or not isinstance(self.seed, int):
+                raise TypeError("seed must be an integer or None")
+            _validate_episode_seed_span(self.seed, self.episode_count)
         if self.policy_factory is None and self.action_policy_factory is None:
             raise ValueError("one of policy_factory or action_policy_factory is required")
         if self.policy_factory is not None and self.action_policy_factory is not None:
@@ -108,12 +110,15 @@ def validate_repeated_benchmark_request(
     ``run_seed + episode_index``. Distinct run seeds can therefore still reuse
     episode seeds when their integer ranges overlap. Repeated experiments reject
     that overlap so nominally independent runs cannot silently share environment
-    or policy RNG seeds.
+    or policy RNG seeds. Every derived episode seed must also remain inside the
+    legacy NumPy-compatible domain used by the supported benchmark bridges.
     """
 
     selected_seeds = validate_seed_sequence(seeds)
     if spec.seed is not None:
         raise ValueError("spec.seed must be None when repeated seeds are provided")
+    for seed in selected_seeds:
+        _validate_episode_seed_span(seed, spec.episode_count)
     _validate_disjoint_episode_seed_ranges(selected_seeds, spec.episode_count)
     return selected_seeds
 
@@ -277,6 +282,21 @@ def _validate_disjoint_episode_seed_ranges(seeds: tuple[int, ...], episode_count
         )
 
 
+def _validate_episode_seed_span(seed: int, episode_count: int) -> None:
+    """Require every derived episode seed to fit the supported RNG domain."""
+
+    if seed < 0 or seed > MAX_EXTERNAL_BENCHMARK_SEED:
+        raise ValueError(
+            f"seed must be between 0 and {MAX_EXTERNAL_BENCHMARK_SEED} inclusive"
+        )
+    final_seed = seed if episode_count == 0 else seed + episode_count - 1
+    if final_seed > MAX_EXTERNAL_BENCHMARK_SEED:
+        raise ValueError(
+            "derived episode seed range exceeds the supported benchmark RNG domain: "
+            f"[{seed}, {final_seed}] is not within [0, {MAX_EXTERNAL_BENCHMARK_SEED}]"
+        )
+
+
 def _validate_callable_specification(field_name: str, specification: str) -> None:
     """Validate that a configured callable field uses explicit import notation."""
 
@@ -326,6 +346,7 @@ def _close_environment(environment: object) -> None:
 
 __all__ = [
     "ExternalBenchmarkSpec",
+    "MAX_EXTERNAL_BENCHMARK_SEED",
     "run_external_benchmark",
     "run_repeated_external_benchmarks",
     "validate_external_benchmark",
