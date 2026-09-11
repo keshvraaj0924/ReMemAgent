@@ -110,8 +110,17 @@ def test_single_run_executes_only_after_controlled_preflight(monkeypatch) -> Non
     events: list[str] = []
     requirements = RuntimeRequirements()
 
-    def controlled_preflight(spec, *, probe_action=None, runtime_requirements=None):
+    def controlled_preflight(
+        spec,
+        *,
+        probe_action=None,
+        runtime_requirements=None,
+        source_checkout_paths=None,
+        source_checkout_requirements=None,
+    ):
         assert runtime_requirements is requirements
+        assert source_checkout_paths is None
+        assert source_checkout_requirements is None
         events.append("preflight")
         return EnvironmentContractReport(initial_observation="ready")
 
