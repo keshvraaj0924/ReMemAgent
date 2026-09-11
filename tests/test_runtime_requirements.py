@@ -80,6 +80,15 @@ def test_runtime_requirements_detach_dependency_mapping() -> None:
     assert requirements.dependency_versions == {"ALFWorld": "0.4.2"}
 
 
+def test_runtime_requirements_dependency_mapping_is_immutable() -> None:
+    requirements = RuntimeRequirements(dependency_versions={"ALFWorld": "0.4.2"})
+
+    with pytest.raises(TypeError):
+        requirements.dependency_versions["ALFWorld"] = "changed"  # type: ignore[index]
+
+    assert requirements.dependency_versions == {"ALFWorld": "0.4.2"}
+
+
 def test_runtime_requirements_reject_case_insensitive_duplicate_dependencies() -> None:
     with pytest.raises(ValueError, match="unique"):
         RuntimeRequirements(dependency_versions={"ALFWorld": "0.4.2", " alfworld ": "0.4.2"})
