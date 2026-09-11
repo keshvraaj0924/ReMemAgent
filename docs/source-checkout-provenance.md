@@ -48,9 +48,15 @@ validate_source_checkout_requirements(
 
 The placeholder revision above is intentional; ReMemAgent does not invent or bless a WebShop revision on behalf of an experiment.
 
+## Canonical persistence and fingerprints
+
+Source requirement contracts and observed checkout snapshots now have schema-versioned canonical JSON representations. Repository names are stripped, normalized case-insensitively, and sorted before serialization. Deterministic SHA-256 helpers are available for both the declared requirement contract and the observed source snapshot.
+
+Persisted forms can be reconstructed into immutable mappings. Unknown schemas, malformed entries, empty repository sets, duplicate normalized names, and invalid checkout states fail closed rather than being silently accepted.
+
 ## Controlled external preflight
 
-Single-run and repeated external preflight now accept source-checkout paths and requirements as one admission contract. Both mappings must be supplied together. ReMemAgent collects and validates the declared checkout state before constructing the first third-party benchmark environment, so revision or cleanliness drift cannot create probe or measured-execution side effects.
+Single-run and repeated external preflight accept source-checkout paths and requirements as one admission contract. Both mappings must be supplied together. ReMemAgent collects and validates the declared checkout state before constructing the first third-party benchmark environment, so revision or cleanliness drift cannot create probe or measured-execution side effects.
 
 ```python
 from pathlib import Path
@@ -73,8 +79,14 @@ reports = run_repeated_external_benchmarks_with_preflight(
 
 Source-checkout collection occurs once before repeated environment probes; it is not repeated independently for every seed.
 
-## Evidence boundary
+## Paired artifact evidence
 
-Source-checkout state is now part of controlled external preflight, but it is not yet exposed by the paired benchmark CLI or persisted into experiment identity. Therefore this gate prevents execution under the wrong source revision, but the resulting artifact does not yet cryptographically prove which external checkout contract was admitted.
+Controlled paired execution can carry the exact admitted source snapshot through measurement. `save_paired_execution_result()` accepts that snapshot together with the source requirement contract, validates the pair again, persists both canonical forms, and injects their SHA-256 fingerprints into runtime provenance before paired experiment identity is constructed.
 
-The next integration step is to carry the exact validated source-checkout snapshot through paired execution and bind its canonical contract and observation fingerprint into artifact identity without breaking verification of existing runtime-requirement artifacts.
+Artifact verification reconstructs the contract and snapshot, verifies that the observed Git state still satisfies the persisted requirements, and checks both fingerprints. Tampering with the required revision, cleanliness policy, observed revision, or working-tree state is therefore detectable and also changes experiment identity when artifacts are created correctly.
+
+## Remaining boundary
+
+Source state is now enforced during controlled Python preflight and can be cryptographically bound into paired artifacts. The remaining reproducibility gap is command-line orchestration: `remem-paired-benchmark` does not yet expose source-checkout path/revision options or automatically pass the admitted snapshot to persistence.
+
+The next integration step is to wire those source controls through the paired CLI and cover the end-to-end handoff before running real multi-seed ALFWorld/WebShop measurements as reproducible evidence.
