@@ -7,6 +7,12 @@ from experiments.external_preflight import (
     run_repeated_external_benchmarks_with_preflight,
     validate_repeated_external_benchmark_runtime,
 )
+from experiments.runtime_provenance import (
+    CLEAN_STATE,
+    RUNTIME_PROVENANCE_SCHEMA_VERSION,
+    RuntimeProvenance,
+)
+from experiments.runtime_requirements import RuntimeRequirements
 from remem.benchmark import BenchmarkSuiteRunner
 from tests.test_external_benchmark import CLOSED_SEEDS
 
@@ -20,6 +26,19 @@ def _build_spec() -> ExternalBenchmarkSpec:
         policy_factory="tests.test_external_benchmark:make_policy",
         success_evaluator="tests.test_external_benchmark:evaluate_success",
         seed=None,
+    )
+
+
+def _build_runtime_provenance(*, code_revision: str = "expected-revision") -> RuntimeProvenance:
+    return RuntimeProvenance(
+        schema_version=RUNTIME_PROVENANCE_SCHEMA_VERSION,
+        code_revision=code_revision,
+        working_tree_state=CLEAN_STATE,
+        python_version="3.12.0",
+        platform="test-platform",
+        package_version="0.0.0-test",
+        dependency_fingerprint="0" * 64,
+        dependency_versions={"alfworld": "1.0.0", "transformers": "2.0.0"},
     )
 
 
@@ -75,6 +94,68 @@ def test_repeated_runtime_preflight_rejects_boolean_seed() -> None:
         validate_repeated_external_benchmark_runtime(_build_spec(), [True])  # type: ignore[list-item]
 
 
+def test_runtime_requirement_failure_prevents_environment_construction(monkeypatch) -> None:
+    CLOSED_SEEDS.clear()
+    monkeypatch.setattr(
+        "experiments.external_preflight.collect_runtime_provenance",
+        lambda: _build_runtime_provenance(code_revision="actual-revision"),
+    )
+    requirements = RuntimeRequirements(expected_code_revision="expected-revision")
+
+    with pytest.raises(ValueError, match="runtime code revision does not match"):
+        validate_repeated_external_benchmark_runtime(
+            _build_spec(),
+            [11, 17],
+            runtime_requirements=requirements,
+        )
+
+    assert CLOSED_SEEDS == []
+
+
+def test_runtime_requirements_validate_before_seed_environment_probes(monkeypatch) -> None:
+    CLOSED_SEEDS.clear()
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        "experiments.external_preflight.collect_runtime_provenance",
+        lambda: _build_runtime_provenance(),
+    )
+
+    def record_runtime_validation(provenance, requirements) -> None:
+        calls.append("runtime")
+
+    monkeypatch.setattr(
+        "experiments.external_preflight.validate_runtime_requirements",
+        record_runtime_validation,
+    )
+
+    validate_repeated_external_benchmark_runtime(
+        _build_spec(),
+        [11, 17],
+        runtime_requirements=RuntimeRequirements(
+            expected_code_revision="expected-revision",
+            require_clean_working_tree=True,
+            dependency_versions={"alfworld": "1.0.0"},
+        ),
+    )
+
+    assert calls == ["runtime"]
+    assert CLOSED_SEEDS == [11, 17]
+
+
+def test_repeated_runtime_preflight_rejects_invalid_runtime_requirements() -> None:
+    CLOSED_SEEDS.clear()
+
+    with pytest.raises(TypeError, match="RuntimeRequirements instance or None"):
+        validate_repeated_external_benchmark_runtime(
+            _build_spec(),
+            [11, 17],
+            runtime_requirements=object(),  # type: ignore[arg-type]
+        )
+
+    assert CLOSED_SEEDS == []
+
+
 def test_preflight_failure_blocks_measured_execution(monkeypatch) -> None:
     events: list[str] = []
 
@@ -126,3 +207,29 @@ def test_preflight_repeated_execution_reuses_injected_runner(monkeypatch) -> Non
 
     assert len(reports) == 2
     assert observed == [runner]
+
+
+def test_measured_execution_forwards_runtime_requirements_to_preflight(monkeypatch) -> None:
+    observed: list[RuntimeRequirements | None] = []
+    requirements = RuntimeRequirements(expected_code_revision="expected-revision")
+
+    def fake_preflight(*args, **kwargs) -> tuple[object, ...]:
+        observed.append(kwargs.get("runtime_requirements"))
+        return ()
+
+    monkeypatch.setattr(
+        "experiments.external_preflight.validate_repeated_external_benchmark_runtime",
+        fake_preflight,
+    )
+    monkeypatch.setattr(
+        "experiments.external_preflight.run_repeated_external_benchmarks",
+        lambda *args, **kwargs: (),
+    )
+
+    run_repeated_external_benchmarks_with_preflight(
+        _build_spec(),
+        (11, 17),
+        runtime_requirements=requirements,
+    )
+
+    assert observed == [requirements]
