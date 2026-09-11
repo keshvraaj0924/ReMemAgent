@@ -4,7 +4,7 @@ The upstream WebShop text environment uses legacy module-level random state duri
 
 For each benchmark episode, the wrapper:
 
-1. acquires a process-local lock;
+1. acquires the process-wide legacy RNG lock shared by the WebShop and ALFWorld bridges;
 2. restarts an episode-owned RNG stream from the requested seed before `reset()`;
 3. temporarily swaps that stream into Python's and NumPy's module-level RNGs;
 4. calls the upstream operation;
@@ -15,7 +15,7 @@ Subsequent `step()` calls continue from the RNG state produced by the preceding 
 
 The factory also isolates environment-construction side effects from the caller's RNG state. This matters because upstream WebShop initialization can perform eager setup/reset behavior that mutates module-level randomness.
 
-The process-local lock prevents concurrent benchmark workers in the same process from interleaving global RNG swaps. Cross-process workers remain independently isolated by their own interpreter state.
+The lock is intentionally shared across WebShop and ALFWorld. Both bridges temporarily replace the same process-global Python and NumPy RNG states, so independent per-benchmark locks would permit cross-benchmark interleaving even though each benchmark appeared locally serialized. Episode-state initialization and restart use the same re-entrant lock as construction, reset, and step. Cross-process workers remain independently isolated by their own interpreter state.
 
 ## Evidence boundary
 
