@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
@@ -11,6 +12,7 @@ from experiments.external_benchmark import ExternalBenchmarkSpec, validate_seed_
 from experiments.paired_artifacts import save_paired_execution_result
 from experiments.paired_benchmark import run_paired_external_benchmarks_with_preflight
 from experiments.runtime_provenance import collect_runtime_provenance
+from experiments.runtime_requirements import RuntimeRequirements
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/paired-benchmark.json")
 PAIRED_PREFLIGHT_STATUS_KEY = "paired_runtime_preflight"
@@ -42,6 +44,21 @@ def parse_args() -> argparse.Namespace:
         help="Allow replacing an existing paired benchmark report or integrity manifest",
     )
     parser.add_argument("--probe-action")
+    parser.add_argument(
+        "--require-code-revision",
+        help="Require the exact repository revision before paired preflight or measurement",
+    )
+    parser.add_argument(
+        "--require-clean-working-tree",
+        action="store_true",
+        help="Require a clean repository working tree before paired preflight or measurement",
+    )
+    parser.add_argument(
+        "--require-dependency-version",
+        action="append",
+        metavar="PACKAGE==VERSION",
+        help="Require an exact installed package version; may be specified multiple times",
+    )
     return parser.parse_args()
 
 
@@ -61,6 +78,7 @@ def main() -> int:
             policy_factory=arguments.treatment_policy_factory,
             action_policy_factory=arguments.treatment_action_policy_factory,
         )
+        runtime_requirements = _build_runtime_requirements(arguments)
         _validate_artifact_destinations(arguments.output, arguments.manifest)
         output_path = _prepare_output_path(arguments.output, overwrite=arguments.overwrite)
         manifest_path = (
@@ -75,6 +93,7 @@ def main() -> int:
             baseline_label=arguments.baseline_label,
             treatment_label=arguments.treatment_label,
             probe_action=arguments.probe_action,
+            runtime_requirements=runtime_requirements,
         )
         runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
         runtime_provenance.update(_paired_preflight_provenance(arguments.probe_action))
@@ -124,6 +143,45 @@ def _build_spec(
         minimum_trust=arguments.minimum_trust,
         seed=None,
     )
+
+
+def _build_runtime_requirements(arguments: argparse.Namespace) -> RuntimeRequirements | None:
+    """Build fail-closed runtime requirements from optional paired CLI arguments."""
+
+    expected_revision = getattr(arguments, "require_code_revision", None)
+    require_clean_working_tree = getattr(arguments, "require_clean_working_tree", False)
+    dependency_values = getattr(arguments, "require_dependency_version", None) or ()
+    dependency_versions = _parse_dependency_requirements(dependency_values)
+    if expected_revision is None and not require_clean_working_tree and not dependency_versions:
+        return None
+    return RuntimeRequirements(
+        expected_code_revision=expected_revision,
+        require_clean_working_tree=require_clean_working_tree,
+        dependency_versions=dependency_versions,
+    )
+
+
+def _parse_dependency_requirements(values: Sequence[str]) -> dict[str, str]:
+    """Parse repeated exact dependency pins in ``PACKAGE==VERSION`` form."""
+
+    parsed: dict[str, str] = {}
+    normalized_names: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            raise TypeError("--require-dependency-version values must be strings")
+        package_name, separator, package_version = value.partition("==")
+        package_name = package_name.strip()
+        package_version = package_version.strip()
+        if not separator or not package_name or not package_version:
+            raise ValueError("--require-dependency-version must use PACKAGE==VERSION")
+        normalized_name = package_name.lower()
+        if normalized_name in normalized_names:
+            raise ValueError(
+                "--require-dependency-version package names must be unique ignoring case"
+            )
+        normalized_names.add(normalized_name)
+        parsed[package_name] = package_version
+    return parsed
 
 
 def _parse_seeds(value: str) -> tuple[int, ...]:
