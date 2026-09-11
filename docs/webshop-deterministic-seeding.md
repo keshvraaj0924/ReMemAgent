@@ -17,6 +17,10 @@ The factory also isolates environment-construction side effects from the caller'
 
 The lock is intentionally shared across WebShop and ALFWorld. Both bridges temporarily replace the same process-global Python and NumPy RNG states, so independent per-benchmark locks would permit cross-benchmark interleaving even though each benchmark appeared locally serialized. Episode-state initialization and restart use the same re-entrant lock as construction, reset, and step. Cross-process workers remain independently isolated by their own interpreter state.
 
+## Seed domain
+
+The concrete bridge accepts integer seeds from `0` through `4294967295` inclusive. That range matches the legacy NumPy `RandomState` API used by the isolation layer. Boolean values, negative integers, integers above the upper bound, and non-integer values are rejected before `gym.make()` runs. The validation is unconditional rather than dependent on NumPy import success, so benchmark configuration validity remains stable across machines.
+
 ## Evidence boundary
 
 This is a reproducibility boundary, not a claim of complete WebShop determinism. It controls Python and NumPy legacy module-level RNG usage around construction, reset, and step, but the upstream environment also depends on installed package versions, local product/instruction data, search-index contents, native libraries, and the caller-owned policy. Those inputs must still be pinned or recorded for scientific runs.
