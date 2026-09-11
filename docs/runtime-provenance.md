@@ -16,9 +16,9 @@
 
 The schema version is persisted with every record so readers can reject or migrate future incompatible provenance formats instead of silently interpreting a changed structure.
 
-`RuntimeProvenance` is also a validated domain object. Construction rejects unsupported schema versions, invalid working-tree states, empty textual fields, malformed dependency digests, and non-mapping dependency metadata. The dependency-version mapping is detached and normalized at construction so later mutation of caller-owned metadata cannot alter the provenance record.
+`RuntimeProvenance` is also a validated domain object. Construction rejects unsupported schema versions, invalid working-tree states, empty textual fields, malformed dependency digests, and non-mapping dependency metadata. The dependency-version mapping is detached, normalized, and exposed as a read-only mapping at construction, so neither mutation of caller-owned metadata nor later mutation through the provenance object can alter a validated record.
 
-`RuntimeProvenance.to_dict()` preserves the typed schema: `schema_version` is an integer, `dependency_versions` is a string-to-string mapping, and the remaining provenance fields are strings. Benchmark report persistence validates those same field types and deep-copies the dependency mapping before serialization.
+`RuntimeProvenance.to_dict()` preserves the typed schema while returning detached serialization data: `schema_version` is an integer, `dependency_versions` is a fresh mutable string-to-string dictionary, and the remaining provenance fields are strings. Mutating a serialized payload therefore cannot mutate the underlying provenance object. Benchmark report persistence validates those same field types before serialization.
 
 ## Explicit CI/container inputs
 
@@ -39,4 +39,4 @@ Benchmark CLI measured runs attach this record to their persisted report. Artifa
 
 ## Verification
 
-The unit tests cover explicit revision/state precedence, unknown Git metadata, deterministic dependency fingerprinting, clean/dirty state detection, invalid explicit states, schema-version serialization, metadata detachment, malformed provenance field rejection, and persistence of the structured provenance mapping into benchmark artifacts.
+The unit tests cover explicit revision/state precedence, unknown Git metadata, deterministic dependency fingerprinting, clean/dirty state detection, invalid explicit states, schema-version serialization, metadata detachment and immutability, detached serialization payloads, malformed provenance field rejection, and persistence of the structured provenance mapping into benchmark artifacts.
