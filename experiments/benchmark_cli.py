@@ -203,10 +203,18 @@ def main() -> int:
         )
 
     if selected_manifest_path is not None:
-        manifest_output = save_benchmark_artifact_manifest(output_path, selected_manifest_path)
+        manifest_output = save_benchmark_artifact_manifest(
+            output_path,
+            selected_manifest_path,
+            overwrite=overwrite,
+        )
         print(f"saved benchmark artifact manifest: {manifest_output}")
     if observation_collector is not None and observability_path is not None:
-        write_observation_snapshot(observability_path, observation_collector.snapshot())
+        write_observation_snapshot(
+            observability_path,
+            observation_collector.snapshot(),
+            overwrite=overwrite,
+        )
         print(f"saved benchmark observability snapshot: {observability_path}")
     print(f"saved benchmark report: {output_path}")
     return 0
