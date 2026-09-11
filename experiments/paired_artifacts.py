@@ -34,6 +34,7 @@ def save_paired_execution_result(
     output_path: Path,
     *,
     runtime_provenance: Mapping[str, object] | None = None,
+    overwrite: bool = False,
 ) -> Path:
     """Persist a complete paired result including validated temporal provenance.
 
@@ -43,6 +44,10 @@ def save_paired_execution_result(
     even when policies, seeds, and benchmark protocol are otherwise identical.
     The full order is then written into the final artifact for human inspection
     and downstream verification.
+
+    Publication is race-safe. With ``overwrite=False`` an artifact created after
+    an earlier CLI preflight check is preserved and persistence fails closed.
+    ``overwrite=True`` explicitly opts into atomic replacement.
     """
 
     execution_order = _validate_execution_order(result)
@@ -52,6 +57,9 @@ def save_paired_execution_result(
     provenance[PAIRED_EXECUTION_ORDER_PROVENANCE_KEY] = _execution_order_fingerprint(
         execution_order
     )
+
+    if output_path.exists() and not overwrite:
+        raise FileExistsError(f"paired benchmark artifact already exists: {output_path}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     file_descriptor, temporary_name = tempfile.mkstemp(
@@ -72,7 +80,7 @@ def save_paired_execution_result(
         payload = json.loads(temporary_path.read_text(encoding="utf-8"))
         payload["execution_order"] = [asdict(entry) for entry in execution_order]
         _write_json_file(payload, temporary_path)
-        os.replace(temporary_path, output_path)
+        _publish_artifact(temporary_path, output_path, overwrite=overwrite)
     except Exception:
         temporary_path.unlink(missing_ok=True)
         raise
@@ -282,6 +290,20 @@ def _execution_order_fingerprint(execution_order: tuple[PairedSeedExecution, ...
         allow_nan=False,
     ).encode("utf-8")
     return hashlib.sha256(canonical_payload).hexdigest()
+
+
+def _publish_artifact(temporary_path: Path, output_path: Path, *, overwrite: bool) -> None:
+    """Atomically publish a temporary artifact without accidental replacement."""
+
+    if overwrite:
+        os.replace(temporary_path, output_path)
+        return
+
+    try:
+        os.link(temporary_path, output_path)
+    except FileExistsError as exc:
+        raise FileExistsError(f"paired benchmark artifact already exists: {output_path}") from exc
+    temporary_path.unlink()
 
 
 def _write_json_file(payload: Mapping[str, Any], output_path: Path) -> None:
