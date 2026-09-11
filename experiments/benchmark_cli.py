@@ -29,7 +29,11 @@ from experiments.external_preflight import (
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 from remem.benchmark import BenchmarkSuiteRunner
-from remem.observability import ObservationCollector, ObservationSnapshot, write_observation_snapshot
+from remem.observability import (
+    ObservationCollector,
+    ObservationSnapshot,
+    write_observation_snapshot,
+)
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
