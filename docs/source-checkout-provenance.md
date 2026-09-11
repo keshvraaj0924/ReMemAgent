@@ -34,9 +34,7 @@ from experiments.source_checkouts import (
     validate_source_checkout_requirements,
 )
 
-observed = collect_source_checkout_provenance(
-    {"WebShop": Path("/opt/benchmarks/webshop")}
-)
+observed = collect_source_checkout_provenance({"WebShop": Path("/opt/benchmarks/webshop")})
 validate_source_checkout_requirements(
     observed,
     {
