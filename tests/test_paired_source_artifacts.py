@@ -107,14 +107,12 @@ def test_save_paired_execution_result_binds_source_contract_and_snapshot(
         requirements
     )
     assert persisted["source_checkout_provenance"] == source_checkout_provenance_to_dict(provenance)
-    assert (
-        persisted["runtime_provenance"][SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY]
-        == source_checkout_requirements_sha256(requirements)
-    )
-    assert (
-        persisted["runtime_provenance"][SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY]
-        == source_checkout_provenance_sha256(provenance)
-    )
+    assert persisted["runtime_provenance"][
+        SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY
+    ] == source_checkout_requirements_sha256(requirements)
+    assert persisted["runtime_provenance"][
+        SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY
+    ] == source_checkout_provenance_sha256(provenance)
     validate_persisted_source_checkouts(persisted)
 
 
@@ -123,12 +121,8 @@ def test_save_paired_execution_result_rejects_source_state_that_violates_contrac
         save_paired_execution_result(
             _result(),
             tmp_path / "invalid-source.json",
-            source_checkout_provenance={
-                "webshop": SourceCheckoutProvenance("actual", CLEAN_STATE)
-            },
-            source_checkout_requirements={
-                "webshop": SourceCheckoutRequirement("required")
-            },
+            source_checkout_provenance={"webshop": SourceCheckoutProvenance("actual", CLEAN_STATE)},
+            source_checkout_requirements={"webshop": SourceCheckoutRequirement("required")},
         )
 
 
