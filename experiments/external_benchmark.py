@@ -286,9 +286,7 @@ def _validate_episode_seed_span(seed: int, episode_count: int) -> None:
     """Require every derived episode seed to fit the supported RNG domain."""
 
     if seed < 0 or seed > MAX_EXTERNAL_BENCHMARK_SEED:
-        raise ValueError(
-            f"seed must be between 0 and {MAX_EXTERNAL_BENCHMARK_SEED} inclusive"
-        )
+        raise ValueError(f"seed must be between 0 and {MAX_EXTERNAL_BENCHMARK_SEED} inclusive")
     final_seed = seed if episode_count == 0 else seed + episode_count - 1
     if final_seed > MAX_EXTERNAL_BENCHMARK_SEED:
         raise ValueError(
