@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from experiments.benchmark_statistics import (
     BenchmarkConditionComparison,
@@ -17,7 +17,7 @@ from experiments.external_benchmark import (
     validate_seed_sequence,
 )
 from experiments.external_preflight import validate_repeated_external_benchmark_runtime
-from experiments.runtime_provenance import collect_runtime_provenance
+from experiments.runtime_provenance import RuntimeProvenance, collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements, validate_runtime_requirements
 from remem.benchmark import BenchmarkRunReport
 
@@ -39,6 +39,7 @@ class PairedBenchmarkResult:
     treatment_reports: tuple[BenchmarkRunReport, ...]
     execution_order: tuple[PairedSeedExecution, ...]
     comparison: BenchmarkConditionComparison
+    runtime_provenance: RuntimeProvenance | None = None
 
 
 def run_paired_external_benchmarks(
@@ -97,23 +98,32 @@ def run_paired_external_benchmarks_with_preflight(
     probe_action: str | None = None,
     runtime_requirements: RuntimeRequirements | None = None,
 ) -> PairedBenchmarkResult:
-    """Preflight both conditions before running a paired benchmark experiment."""
+    """Preflight both conditions before running a paired benchmark experiment.
+
+    When a runtime contract is declared, the exact provenance snapshot admitted
+    by that contract is attached to the returned result. Callers can therefore
+    persist the state that was actually validated before measurement instead of
+    collecting a potentially different snapshot after the experiment finishes.
+    """
 
     _validate_condition_labels(baseline_label, treatment_label)
-    preflight_paired_external_benchmarks(
+    validated_runtime_provenance = preflight_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
         seeds,
         probe_action=probe_action,
         runtime_requirements=runtime_requirements,
     )
-    return run_paired_external_benchmarks(
+    result = run_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
         seeds,
         baseline_label=baseline_label,
         treatment_label=treatment_label,
     )
+    if validated_runtime_provenance is None:
+        return result
+    return replace(result, runtime_provenance=validated_runtime_provenance)
 
 
 def preflight_paired_external_benchmarks(
@@ -123,18 +133,20 @@ def preflight_paired_external_benchmarks(
     *,
     probe_action: str | None = None,
     runtime_requirements: RuntimeRequirements | None = None,
-) -> None:
+) -> RuntimeProvenance | None:
     """Validate both conditions completely before probing either policy.
 
     Paired preflight can construct one real environment per seed and condition.
     Runtime requirements are checked once before callable resolution or any
     environment construction, so revision, working-tree, or dependency drift
-    prevents all paired probe and measurement side effects. The seed set is
-    canonicalized before runtime probes, and probes are counterbalanced using
-    the same deterministic order as measured execution.
+    prevents all paired probe and measurement side effects. The exact validated
+    runtime snapshot is returned when requirements are declared so downstream
+    persistence can bind artifacts to the admitted pre-measurement state. The
+    seed set is canonicalized before runtime probes, and probes are
+    counterbalanced using the same deterministic order as measured execution.
     """
 
-    _validate_paired_runtime_requirements(runtime_requirements)
+    validated_runtime_provenance = _validate_paired_runtime_requirements(runtime_requirements)
     _validate_paired_specs(baseline_spec, treatment_spec)
     selected_seeds = _canonicalize_paired_seeds(seeds)
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
@@ -146,18 +158,21 @@ def preflight_paired_external_benchmarks(
         selected_seeds,
         probe_action=probe_action,
     )
+    return validated_runtime_provenance
 
 
 def _validate_paired_runtime_requirements(
     runtime_requirements: RuntimeRequirements | None,
-) -> None:
-    """Fail closed on declared runtime drift before paired external side effects."""
+) -> RuntimeProvenance | None:
+    """Return the validated runtime snapshot before paired external side effects."""
 
     if runtime_requirements is None:
-        return
+        return None
     if not isinstance(runtime_requirements, RuntimeRequirements):
         raise TypeError("runtime_requirements must be a RuntimeRequirements instance or None")
-    validate_runtime_requirements(collect_runtime_provenance(), runtime_requirements)
+    runtime_provenance = collect_runtime_provenance()
+    validate_runtime_requirements(runtime_provenance, runtime_requirements)
+    return runtime_provenance
 
 
 def _canonicalize_paired_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
