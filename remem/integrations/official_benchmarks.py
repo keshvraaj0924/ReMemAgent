@@ -16,8 +16,9 @@ from typing import Any, Iterator
 
 
 RawEnvironmentFactory = Callable[[int], Any]
-_ALFWORLD_RANDOM_LOCK = threading.Lock()
-_WEBSHOP_RANDOM_LOCK = threading.Lock()
+_LEGACY_RANDOM_LOCK = threading.RLock()
+_ALFWORLD_RANDOM_LOCK = _LEGACY_RANDOM_LOCK
+_WEBSHOP_RANDOM_LOCK = _LEGACY_RANDOM_LOCK
 
 
 class _EpisodeRandomState:
@@ -61,9 +62,9 @@ class _EpisodeRandomState:
                 numpy_module.random.set_state(caller_numpy_state)
 
     def _restart(self) -> None:
-        """Reset the owned stream to the configured episode seed."""
+        """Reset the owned stream to the configured episode seed atomically."""
 
-        with _scoped_random_seed(self._seed):
+        with _LEGACY_RANDOM_LOCK, _scoped_random_seed(self._seed):
             self._python_state = random.getstate()
             numpy_module = _load_numpy_if_available()
             self._numpy_state = (
