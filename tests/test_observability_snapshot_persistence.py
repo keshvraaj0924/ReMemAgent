@@ -39,6 +39,23 @@ def test_write_observation_snapshot_replaces_existing_file(tmp_path: Path) -> No
     )
 
 
+def test_write_observation_snapshot_preserves_existing_file_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "observations.json"
+    path.write_text("claimed-by-another-process\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="observation snapshot already exists"):
+        write_observation_snapshot(
+            path,
+            ObservationSnapshot({"episodes": 1.0}, {}),
+            overwrite=False,
+        )
+
+    assert path.read_text(encoding="utf-8") == "claimed-by-another-process\n"
+    assert list(tmp_path.glob(f".{path.name}.*")) == []
+
+
 def test_write_observation_snapshot_cleans_temporary_file(tmp_path: Path) -> None:
     path = tmp_path / "observations.json"
     write_observation_snapshot(path, ObservationSnapshot({}, {}))
