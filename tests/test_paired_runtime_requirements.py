@@ -39,7 +39,9 @@ def _provenance(*, revision: str = "actual") -> RuntimeProvenance:
     )
 
 
-def test_paired_runtime_mismatch_fails_before_callable_or_environment_preflight(monkeypatch) -> None:
+def test_paired_runtime_mismatch_fails_before_callable_or_environment_preflight(
+    monkeypatch,
+) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")
     requirements = RuntimeRequirements(expected_code_revision="required")
@@ -53,7 +55,9 @@ def test_paired_runtime_mismatch_fails_before_callable_or_environment_preflight(
     monkeypatch.setattr(
         paired_benchmark,
         "validate_repeated_external_benchmark_runtime",
-        lambda *args, **kwargs: pytest.fail("environment preflight must not run after runtime mismatch"),
+        lambda *args, **kwargs: pytest.fail(
+            "environment preflight must not run after runtime mismatch"
+        ),
     )
 
     with pytest.raises(ValueError, match="runtime code revision"):
@@ -85,7 +89,9 @@ def test_paired_runtime_requirements_are_validated_once_before_seed_probes(monke
         probe_calls += 1
 
     monkeypatch.setattr(paired_benchmark, "collect_runtime_provenance", collect_provenance)
-    monkeypatch.setattr(paired_benchmark, "validate_repeated_external_benchmark_runtime", validate_probe)
+    monkeypatch.setattr(
+        paired_benchmark, "validate_repeated_external_benchmark_runtime", validate_probe
+    )
 
     paired_benchmark.preflight_paired_external_benchmarks(
         baseline,
@@ -172,6 +178,4 @@ def test_paired_cli_forwards_runtime_requirements_to_controlled_preflight(
 
 def test_paired_cli_rejects_duplicate_dependency_names_ignoring_case() -> None:
     with pytest.raises(ValueError, match="unique ignoring case"):
-        paired_cli._parse_dependency_requirements(
-            ["transformers==4.45.0", "Transformers==4.46.0"]
-        )
+        paired_cli._parse_dependency_requirements(["transformers==4.45.0", "Transformers==4.46.0"])
