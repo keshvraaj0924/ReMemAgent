@@ -62,7 +62,9 @@ def test_runtime_mismatch_blocks_source_collection_and_all_paired_side_effects(m
     monkeypatch.setattr(
         controlled_paired,
         "collect_source_checkout_provenance",
-        lambda repositories: pytest.fail("source checkout collection must not run after runtime drift"),
+        lambda repositories: pytest.fail(
+            "source checkout collection must not run after runtime drift"
+        ),
     )
     monkeypatch.setattr(
         controlled_paired,
