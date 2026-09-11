@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from experiments.runtime_provenance import CLEAN_STATE, RuntimeProvenance
 
@@ -23,7 +24,7 @@ class RuntimeRequirements:
     dependency_versions: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate and detach requirement metadata at construction time."""
+        """Validate, detach, and freeze requirement metadata at construction time."""
 
         if self.expected_code_revision is not None:
             _require_non_empty_string("expected_code_revision", self.expected_code_revision)
@@ -60,7 +61,11 @@ class RuntimeRequirements:
             display_names[name]: normalized_requirements[name]
             for name in sorted(normalized_requirements)
         }
-        object.__setattr__(self, "dependency_versions", detached_requirements)
+        object.__setattr__(
+            self,
+            "dependency_versions",
+            MappingProxyType(detached_requirements),
+        )
 
 
 def validate_runtime_requirements(
