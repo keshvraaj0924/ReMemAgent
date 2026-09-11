@@ -13,6 +13,9 @@ from experiments.paired_benchmark import run_paired_external_benchmarks_with_pre
 from experiments.runtime_provenance import collect_runtime_provenance
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/paired-benchmark.json")
+PAIRED_PREFLIGHT_STATUS_KEY = "paired_runtime_preflight"
+PAIRED_PREFLIGHT_PROBE_ACTION_KEY = "paired_runtime_preflight_probe_action"
+RESET_ONLY_PREFLIGHT_VALUE = "reset-only"
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,6 +77,7 @@ def main() -> int:
             probe_action=arguments.probe_action,
         )
         runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
+        runtime_provenance.update(_paired_preflight_provenance(arguments.probe_action))
         output_path = save_paired_execution_result(
             result,
             output_path,
@@ -151,6 +155,22 @@ def _validate_artifact_destinations(output_path: Path, manifest_path: Path | Non
         return
     if output_path.resolve(strict=False) == manifest_path.resolve(strict=False):
         raise ValueError("--manifest must resolve to a different path than --output")
+
+
+def _paired_preflight_provenance(probe_action: str | None) -> dict[str, str]:
+    """Describe the runtime preflight that completed before paired measurement.
+
+    The paired CLI always executes runtime preflight before measured episodes. This
+    metadata is added only after that call returns successfully, so persisted CLI
+    artifacts can distinguish reset-only preflight from a concrete one-step probe.
+    """
+
+    return {
+        PAIRED_PREFLIGHT_STATUS_KEY: "completed",
+        PAIRED_PREFLIGHT_PROBE_ACTION_KEY: (
+            probe_action if probe_action is not None else RESET_ONLY_PREFLIGHT_VALUE
+        ),
+    }
 
 
 if __name__ == "__main__":

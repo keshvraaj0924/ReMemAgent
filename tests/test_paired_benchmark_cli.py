@@ -8,6 +8,10 @@ import pytest
 from experiments.benchmark_cli import _parse_seeds
 from experiments.paired_benchmark_cli import _build_spec, _parse_seeds as parse_paired_seeds
 from experiments.paired_benchmark_cli import (
+    PAIRED_PREFLIGHT_PROBE_ACTION_KEY,
+    PAIRED_PREFLIGHT_STATUS_KEY,
+    RESET_ONLY_PREFLIGHT_VALUE,
+    _paired_preflight_provenance,
     _prepare_output_path,
     _validate_artifact_destinations,
     parse_args,
@@ -185,3 +189,21 @@ def test_parse_args_exposes_overwrite_flag(monkeypatch: pytest.MonkeyPatch) -> N
     arguments = parse_args()
 
     assert arguments.overwrite is True
+
+
+def test_paired_preflight_provenance_records_reset_only_validation() -> None:
+    provenance = _paired_preflight_provenance(None)
+
+    assert provenance == {
+        PAIRED_PREFLIGHT_STATUS_KEY: "completed",
+        PAIRED_PREFLIGHT_PROBE_ACTION_KEY: RESET_ONLY_PREFLIGHT_VALUE,
+    }
+
+
+def test_paired_preflight_provenance_records_concrete_probe_action() -> None:
+    provenance = _paired_preflight_provenance("look")
+
+    assert provenance == {
+        PAIRED_PREFLIGHT_STATUS_KEY: "completed",
+        PAIRED_PREFLIGHT_PROBE_ACTION_KEY: "look",
+    }
