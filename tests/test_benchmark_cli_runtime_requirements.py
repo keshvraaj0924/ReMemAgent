@@ -94,6 +94,9 @@ def test_runtime_preflight_uses_controlled_gate_when_requirements_are_declared(
         captured["requirements"] = runtime_requirements
         return EnvironmentContractReport(initial_observation="ready")
 
+    def fail_legacy_preflight(*args, **kwargs) -> None:
+        pytest.fail("legacy preflight must not bypass runtime requirements")
+
     monkeypatch.setattr(
         benchmark_cli,
         "validate_controlled_external_benchmark_runtime",
@@ -102,7 +105,7 @@ def test_runtime_preflight_uses_controlled_gate_when_requirements_are_declared(
     monkeypatch.setattr(
         benchmark_cli,
         "validate_external_benchmark_runtime",
-        lambda *args, **kwargs: pytest.fail("legacy preflight must not bypass runtime requirements"),
+        fail_legacy_preflight,
     )
 
     assert benchmark_cli.main() == 0
@@ -140,11 +143,18 @@ def test_measured_single_run_enforces_requirements_without_extra_preflight_flag(
         captured["requirements"] = runtime_requirements
         return report
 
-    monkeypatch.setattr(benchmark_cli, "run_external_benchmark_with_preflight", controlled_run)
+    def fail_direct_measurement(*args, **kwargs) -> None:
+        pytest.fail("direct measurement must not bypass runtime requirements")
+
+    monkeypatch.setattr(
+        benchmark_cli,
+        "run_external_benchmark_with_preflight",
+        controlled_run,
+    )
     monkeypatch.setattr(
         benchmark_cli,
         "run_external_benchmark",
-        lambda *args, **kwargs: pytest.fail("direct measurement must not bypass runtime requirements"),
+        fail_direct_measurement,
     )
     monkeypatch.setattr(
         benchmark_cli,
