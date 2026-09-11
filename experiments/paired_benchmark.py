@@ -17,6 +17,8 @@ from experiments.external_benchmark import (
     validate_seed_sequence,
 )
 from experiments.external_preflight import validate_repeated_external_benchmark_runtime
+from experiments.runtime_provenance import collect_runtime_provenance
+from experiments.runtime_requirements import RuntimeRequirements, validate_runtime_requirements
 from remem.benchmark import BenchmarkRunReport
 
 
@@ -93,6 +95,7 @@ def run_paired_external_benchmarks_with_preflight(
     baseline_label: str = "baseline",
     treatment_label: str = "treatment",
     probe_action: str | None = None,
+    runtime_requirements: RuntimeRequirements | None = None,
 ) -> PairedBenchmarkResult:
     """Preflight both conditions before running a paired benchmark experiment."""
 
@@ -102,6 +105,7 @@ def run_paired_external_benchmarks_with_preflight(
         treatment_spec,
         seeds,
         probe_action=probe_action,
+        runtime_requirements=runtime_requirements,
     )
     return run_paired_external_benchmarks(
         baseline_spec,
@@ -118,18 +122,19 @@ def preflight_paired_external_benchmarks(
     seeds: Sequence[int],
     *,
     probe_action: str | None = None,
+    runtime_requirements: RuntimeRequirements | None = None,
 ) -> None:
     """Validate both conditions completely before probing either policy.
 
     Paired preflight can construct one real environment per seed and condition.
-    Validate repeated-seed ownership and resolve every configured callable first
-    so a broken treatment specification cannot waste baseline environment/model
-    setup before failing. The seed set is canonicalized before runtime probes,
-    and probes are counterbalanced using the same deterministic order as
-    measured execution. This avoids both systematic condition-first warm-up and
-    caller-order-dependent execution plans.
+    Runtime requirements are checked once before callable resolution or any
+    environment construction, so revision, working-tree, or dependency drift
+    prevents all paired probe and measurement side effects. The seed set is
+    canonicalized before runtime probes, and probes are counterbalanced using
+    the same deterministic order as measured execution.
     """
 
+    _validate_paired_runtime_requirements(runtime_requirements)
     _validate_paired_specs(baseline_spec, treatment_spec)
     selected_seeds = _canonicalize_paired_seeds(seeds)
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
@@ -141,6 +146,18 @@ def preflight_paired_external_benchmarks(
         selected_seeds,
         probe_action=probe_action,
     )
+
+
+def _validate_paired_runtime_requirements(
+    runtime_requirements: RuntimeRequirements | None,
+) -> None:
+    """Fail closed on declared runtime drift before paired external side effects."""
+
+    if runtime_requirements is None:
+        return
+    if not isinstance(runtime_requirements, RuntimeRequirements):
+        raise TypeError("runtime_requirements must be a RuntimeRequirements instance or None")
+    validate_runtime_requirements(collect_runtime_provenance(), runtime_requirements)
 
 
 def _canonicalize_paired_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
