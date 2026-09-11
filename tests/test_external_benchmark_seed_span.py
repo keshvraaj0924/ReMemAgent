@@ -53,9 +53,7 @@ def test_external_benchmark_spec_rejects_derived_episode_seed_overflow() -> None
 def test_external_benchmark_accepts_maximum_seed_for_single_episode() -> None:
     CREATED_SEEDS.clear()
 
-    report = run_external_benchmark(
-        _build_spec(seed=MAX_EXTERNAL_BENCHMARK_SEED, episode_count=1)
-    )
+    report = run_external_benchmark(_build_spec(seed=MAX_EXTERNAL_BENCHMARK_SEED, episode_count=1))
 
     assert report.seed == MAX_EXTERNAL_BENCHMARK_SEED
     assert CREATED_SEEDS == [MAX_EXTERNAL_BENCHMARK_SEED]
