@@ -24,9 +24,12 @@ def _base_arguments(tmp_path: Path) -> Namespace:
         transfer_success_evaluator="example:is_transfer_success",
         output=tmp_path / "report.json",
         manifest=None,
+        observability_output=None,
         overwrite=False,
         preflight=False,
         runtime_preflight=False,
+        repeated_runtime_preflight=False,
+        preflight_before_run=False,
         probe_action=None,
         seeds=None,
     )
@@ -75,6 +78,7 @@ def test_main_builds_external_spec_and_persists_report(monkeypatch, tmp_path: Pa
     assert spec.success_evaluator == "example:is_success"
     assert spec.transfer_success_evaluator == "example:is_transfer_success"
     assert captured_provenance["code_revision"] == "abc123"
+    assert arguments.output.exists()
 
 
 def test_main_builds_memory_guided_spec(monkeypatch, tmp_path) -> None:
@@ -157,18 +161,27 @@ def test_main_persists_requested_benchmark_manifest(monkeypatch, tmp_path: Path)
     monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
     monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
-    def save_manifest(report_path: Path, requested_path: Path) -> Path:
+    def save_manifest(
+        report_path: Path,
+        requested_path: Path,
+        *,
+        overwrite: bool = True,
+    ) -> Path:
         captured["report_path"] = report_path
         captured["manifest_path"] = requested_path
+        captured["overwrite"] = overwrite
         return requested_path
 
     monkeypatch.setattr(benchmark_cli, "save_benchmark_artifact_manifest", save_manifest)
 
     assert benchmark_cli.main() == 0
-    assert captured == {
-        "report_path": arguments.output,
-        "manifest_path": manifest_path,
-    }
+    assert captured["report_path"] != arguments.output
+    assert captured["manifest_path"] != manifest_path
+    assert Path(captured["report_path"]).parent == arguments.output.parent
+    assert Path(captured["manifest_path"]).parent == manifest_path.parent
+    assert captured["overwrite"] is True
+    assert arguments.output.exists()
+    assert manifest_path.exists()
 
 
 def test_main_rejects_manifest_during_preflight(monkeypatch) -> None:
@@ -212,7 +225,9 @@ def test_main_allows_existing_output_with_overwrite(monkeypatch, tmp_path: Path)
     )
 
     assert benchmark_cli.main() == 0
-    assert captured["output"] == arguments.output
+    assert captured["output"] != arguments.output
+    assert Path(captured["output"]).parent == arguments.output.parent
+    assert arguments.output.exists()
 
 
 def test_main_rejects_existing_manifest_before_running(monkeypatch, tmp_path: Path) -> None:
@@ -276,11 +291,20 @@ def test_main_allows_existing_manifest_with_overwrite(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(benchmark_cli, "run_external_benchmark", run_external_benchmark)
     monkeypatch.setattr(benchmark_cli, "save_benchmark_report", lambda value, path, **_: path)
 
-    def save_manifest(report_path: Path, requested_path: Path) -> Path:
+    def save_manifest(
+        report_path: Path,
+        requested_path: Path,
+        *,
+        overwrite: bool = True,
+    ) -> Path:
         captured["manifest_path"] = requested_path
+        captured["overwrite"] = overwrite
         return requested_path
 
     monkeypatch.setattr(benchmark_cli, "save_benchmark_artifact_manifest", save_manifest)
 
     assert benchmark_cli.main() == 0
-    assert captured["manifest_path"] == arguments.manifest
+    assert captured["manifest_path"] != arguments.manifest
+    assert Path(captured["manifest_path"]).parent == arguments.manifest.parent
+    assert captured["overwrite"] is True
+    assert arguments.manifest.exists()
