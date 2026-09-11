@@ -16,6 +16,19 @@ from experiments.runtime_provenance import (
 VALID_DEPENDENCY_FINGERPRINT = "a" * 64
 
 
+def _runtime_provenance(dependencies: dict[str, str]) -> RuntimeProvenance:
+    return RuntimeProvenance(
+        schema_version=RUNTIME_PROVENANCE_SCHEMA_VERSION,
+        code_revision="abc123",
+        working_tree_state=CLEAN_STATE,
+        python_version="3.12.0",
+        platform="test-platform",
+        package_version="0.1.0",
+        dependency_fingerprint=VALID_DEPENDENCY_FINGERPRINT,
+        dependency_versions=dependencies,
+    )
+
+
 def test_collect_runtime_provenance_prefers_explicit_commit_and_state() -> None:
     provenance = collect_runtime_provenance(
         repository_path=Path("/missing"),
@@ -88,20 +101,31 @@ def test_collect_runtime_provenance_accepts_unknown_explicit_state() -> None:
 
 def test_runtime_provenance_detaches_dependency_versions() -> None:
     dependencies = {"zeta": "2", "alpha": "1"}
-    provenance = RuntimeProvenance(
-        schema_version=RUNTIME_PROVENANCE_SCHEMA_VERSION,
-        code_revision="abc123",
-        working_tree_state=CLEAN_STATE,
-        python_version="3.12.0",
-        platform="test-platform",
-        package_version="0.1.0",
-        dependency_fingerprint=VALID_DEPENDENCY_FINGERPRINT,
-        dependency_versions=dependencies,
-    )
+    provenance = _runtime_provenance(dependencies)
 
     dependencies["alpha"] = "changed"
 
     assert provenance.dependency_versions == {"alpha": "1", "zeta": "2"}
+
+
+def test_runtime_provenance_dependency_versions_are_immutable() -> None:
+    provenance = _runtime_provenance({"pytest": "8.0"})
+
+    with pytest.raises(TypeError):
+        provenance.dependency_versions["pytest"] = "changed"  # type: ignore[index]
+
+    assert provenance.dependency_versions == {"pytest": "8.0"}
+
+
+def test_runtime_provenance_to_dict_returns_detached_dependency_mapping() -> None:
+    provenance = _runtime_provenance({"pytest": "8.0"})
+
+    payload = provenance.to_dict()
+    dependency_versions = payload["dependency_versions"]
+    assert isinstance(dependency_versions, dict)
+    dependency_versions["pytest"] = "changed"
+
+    assert provenance.dependency_versions == {"pytest": "8.0"}
 
 
 @pytest.mark.parametrize(
