@@ -68,6 +68,8 @@ def build_benchmark_artifact_manifest(report_path: Path) -> BenchmarkArtifactMan
 def save_benchmark_artifact_manifest(
     report_path: Path,
     manifest_path: Path | None = None,
+    *,
+    overwrite: bool = True,
 ) -> Path:
     """Persist an exact-byte integrity manifest beside a benchmark report."""
 
@@ -94,7 +96,11 @@ def save_benchmark_artifact_manifest(
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary_name, selected_manifest_path)
+        _publish_manifest(
+            Path(temporary_name),
+            selected_manifest_path,
+            overwrite=overwrite,
+        )
         _sync_directory(selected_manifest_path.parent)
     except BaseException:
         try:
@@ -103,6 +109,21 @@ def save_benchmark_artifact_manifest(
             pass
         raise
     return selected_manifest_path
+
+
+def _publish_manifest(temporary_path: Path, destination: Path, *, overwrite: bool) -> None:
+    """Publish one prepared manifest while atomically honoring overwrite policy."""
+
+    if overwrite:
+        os.replace(temporary_path, destination)
+        return
+    try:
+        os.link(temporary_path, destination)
+    except FileExistsError as exc:
+        raise FileExistsError(
+            f"benchmark artifact manifest already exists: {destination}"
+        ) from exc
+    temporary_path.unlink()
 
 
 def load_benchmark_artifact_manifest(manifest_path: Path) -> BenchmarkArtifactManifest:
