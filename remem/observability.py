@@ -278,7 +278,12 @@ def _normalize_metric_name(name: str, field_name: str) -> str:
     return normalized_name
 
 
-def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) -> None:
+def write_observation_snapshot(
+    path: str | Path,
+    snapshot: ObservationSnapshot,
+    *,
+    overwrite: bool = True,
+) -> None:
     """Atomically persist one deterministic observation snapshot as JSON."""
 
     destination = Path(path)
@@ -306,10 +311,32 @@ def write_observation_snapshot(path: str | Path, snapshot: ObservationSnapshot) 
             temporary_file.write(payload)
             temporary_file.flush()
             os.fsync(temporary_file.fileno())
-            os.replace(temporary_path, destination)
+            _publish_observation_snapshot(
+                temporary_path,
+                destination,
+                overwrite=overwrite,
+            )
         finally:
             if temporary_path.exists():
                 temporary_path.unlink()
+
+
+def _publish_observation_snapshot(
+    temporary_path: Path,
+    destination: Path,
+    *,
+    overwrite: bool,
+) -> None:
+    """Publish a prepared snapshot while atomically honoring overwrite policy."""
+
+    if overwrite:
+        os.replace(temporary_path, destination)
+        return
+    try:
+        os.link(temporary_path, destination)
+    except FileExistsError as exc:
+        raise FileExistsError(f"observation snapshot already exists: {destination}") from exc
+    temporary_path.unlink()
 
 
 __all__ = [
