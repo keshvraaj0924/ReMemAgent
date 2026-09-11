@@ -57,7 +57,9 @@ class ExternalBenchmarkSpec:
             raise ValueError("benchmark_name must be a non-empty string")
         _validate_non_negative_integer("episode_count", self.episode_count)
         _validate_positive_integer("max_steps", self.max_steps)
-        if self.seed is not None and (isinstance(self.seed, bool) or not isinstance(self.seed, int)):
+        if self.seed is not None and (
+            isinstance(self.seed, bool) or not isinstance(self.seed, int)
+        ):
             raise TypeError("seed must be an integer or None")
         effective_seed = 0 if self.seed is None else self.seed
         _validate_episode_seed_span(effective_seed, self.episode_count)
