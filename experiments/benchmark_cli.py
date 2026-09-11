@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from experiments.artifact_bundle import (
@@ -20,14 +20,16 @@ from experiments.external_benchmark import (
     run_external_benchmark,
     run_repeated_external_benchmarks,
     validate_external_benchmark,
-    validate_external_benchmark_runtime,
     validate_seed_sequence,
 )
 from experiments.external_preflight import (
+    run_external_benchmark_with_preflight,
     run_repeated_external_benchmarks_with_preflight,
+    validate_controlled_external_benchmark_runtime,
     validate_repeated_external_benchmark_runtime,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
+from experiments.runtime_requirements import RuntimeRequirements
 from remem.benchmark import BenchmarkSuiteRunner
 from remem.observability import (
     ObservationCollector,
@@ -96,6 +98,21 @@ def parse_args() -> argparse.Namespace:
         "--probe-action",
         help="Optional concrete action used by runtime preflight for one step probe",
     )
+    parser.add_argument(
+        "--require-code-revision",
+        help="Require the exact repository revision before runtime preflight or measurement",
+    )
+    parser.add_argument(
+        "--require-clean-working-tree",
+        action="store_true",
+        help="Require a clean repository working tree before runtime preflight or measurement",
+    )
+    parser.add_argument(
+        "--require-dependency-version",
+        action="append",
+        metavar="PACKAGE==VERSION",
+        help="Require an exact installed package version; may be specified multiple times",
+    )
     return parser.parse_args()
 
 
@@ -115,8 +132,14 @@ def main() -> int:
         transfer_success_evaluator=getattr(arguments, "transfer_success_evaluator", None),
         seed=getattr(arguments, "seed", None),
     )
+    runtime_requirements = _build_runtime_requirements(arguments)
     if getattr(arguments, "preflight", False):
         _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
+        if runtime_requirements is not None:
+            raise ValueError(
+                "runtime requirements require --runtime-preflight, "
+                "--repeated-runtime-preflight, or a measured benchmark run"
+            )
         validate_external_benchmark(spec)
         print("benchmark callable preflight succeeded")
         return 0
@@ -129,21 +152,27 @@ def main() -> int:
             spec,
             seeds or (),
             probe_action=getattr(arguments, "probe_action", None),
+            runtime_requirements=runtime_requirements,
         )
         print(f"benchmark repeated runtime preflight succeeded ({len(seeds or ())} seeds)")
         return 0
     if getattr(arguments, "runtime_preflight", False):
         _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
-        preflight_report = validate_external_benchmark_runtime(
+        preflight_report = validate_controlled_external_benchmark_runtime(
             spec,
             probe_action=getattr(arguments, "probe_action", None),
+            runtime_requirements=runtime_requirements,
         )
         mode = "step" if preflight_report.step_result is not None else "reset"
         print(f"benchmark runtime preflight succeeded ({mode} probe)")
         return 0
 
     probe_action = getattr(arguments, "probe_action", None)
-    if probe_action is not None and not getattr(arguments, "preflight_before_run", False):
+    if (
+        probe_action is not None
+        and not getattr(arguments, "preflight_before_run", False)
+        and runtime_requirements is None
+    ):
         raise ValueError("--probe-action requires a runtime preflight or --preflight-before-run")
 
     overwrite = getattr(arguments, "overwrite", False)
@@ -169,12 +198,15 @@ def main() -> int:
         else None
     )
     if seeds is None:
-        if getattr(arguments, "preflight_before_run", False):
-            validate_external_benchmark_runtime(
+        if getattr(arguments, "preflight_before_run", False) or runtime_requirements is not None:
+            report = run_external_benchmark_with_preflight(
                 spec,
                 probe_action=probe_action,
+                runner=benchmark_runner,
+                runtime_requirements=runtime_requirements,
             )
-        report = run_external_benchmark(spec, runner=benchmark_runner)
+        else:
+            report = run_external_benchmark(spec, runner=benchmark_runner)
 
         def report_writer(temporary_path: Path) -> object:
             return save_benchmark_report(
@@ -184,12 +216,13 @@ def main() -> int:
             )
 
     else:
-        if getattr(arguments, "preflight_before_run", False):
+        if getattr(arguments, "preflight_before_run", False) or runtime_requirements is not None:
             reports = run_repeated_external_benchmarks_with_preflight(
                 spec,
                 seeds,
                 probe_action=probe_action,
                 runner=benchmark_runner,
+                runtime_requirements=runtime_requirements,
             )
         else:
             reports = run_repeated_external_benchmarks(
@@ -225,6 +258,45 @@ def main() -> int:
         print(f"saved benchmark observability snapshot: {observability_path}")
     print(f"saved benchmark report: {output_path}")
     return 0
+
+
+def _build_runtime_requirements(arguments: argparse.Namespace) -> RuntimeRequirements | None:
+    """Build fail-closed runtime requirements from optional CLI arguments."""
+
+    expected_revision = getattr(arguments, "require_code_revision", None)
+    require_clean_working_tree = getattr(arguments, "require_clean_working_tree", False)
+    dependency_values = getattr(arguments, "require_dependency_version", None) or ()
+    dependency_versions = _parse_dependency_requirements(dependency_values)
+    if expected_revision is None and not require_clean_working_tree and not dependency_versions:
+        return None
+    return RuntimeRequirements(
+        expected_code_revision=expected_revision,
+        require_clean_working_tree=require_clean_working_tree,
+        dependency_versions=dependency_versions,
+    )
+
+
+def _parse_dependency_requirements(values: Sequence[str]) -> dict[str, str]:
+    """Parse repeated exact dependency pins in ``PACKAGE==VERSION`` form."""
+
+    parsed: dict[str, str] = {}
+    normalized_names: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            raise TypeError("--require-dependency-version values must be strings")
+        package_name, separator, package_version = value.partition("==")
+        package_name = package_name.strip()
+        package_version = package_version.strip()
+        if not separator or not package_name or not package_version:
+            raise ValueError("--require-dependency-version must use PACKAGE==VERSION")
+        normalized_name = package_name.lower()
+        if normalized_name in normalized_names:
+            raise ValueError(
+                "--require-dependency-version package names must be unique ignoring case"
+            )
+        normalized_names.add(normalized_name)
+        parsed[package_name] = package_version
+    return parsed
 
 
 def _persist_benchmark_bundle(
