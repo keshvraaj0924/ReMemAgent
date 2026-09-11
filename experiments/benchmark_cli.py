@@ -175,11 +175,14 @@ def main() -> int:
                 probe_action=probe_action,
             )
         report = run_external_benchmark(spec, runner=benchmark_runner)
-        report_writer = lambda temporary_path: save_benchmark_report(
-            report,
-            temporary_path,
-            runtime_provenance=runtime_provenance,
-        )
+
+        def report_writer(temporary_path: Path) -> object:
+            return save_benchmark_report(
+                report,
+                temporary_path,
+                runtime_provenance=runtime_provenance,
+            )
+
     else:
         if getattr(arguments, "preflight_before_run", False):
             reports = run_repeated_external_benchmarks_with_preflight(
@@ -195,12 +198,14 @@ def main() -> int:
                 runner=benchmark_runner,
             )
         statistics = summarize_benchmark_reports(reports).to_dict()
-        report_writer = lambda temporary_path: save_repeated_benchmark_reports(
-            reports,
-            temporary_path,
-            runtime_provenance=runtime_provenance,
-            statistics=statistics,
-        )
+
+        def report_writer(temporary_path: Path) -> object:
+            return save_repeated_benchmark_reports(
+                reports,
+                temporary_path,
+                runtime_provenance=runtime_provenance,
+                statistics=statistics,
+            )
 
     observation_snapshot = (
         observation_collector.snapshot() if observation_collector is not None else None
