@@ -10,6 +10,8 @@ Runtime provenance records the environment that executed a benchmark, but record
 
 `RuntimeRequirements` detaches, normalizes, and freezes its dependency-version mapping at construction. A caller cannot change a validated runtime contract later by mutating either the original input dictionary or the mapping exposed by the requirements object.
 
+Each requirement contract also has a canonical persisted representation and deterministic SHA-256 digest. `RuntimeRequirements.to_dict()` emits the schema-versioned contract, `RuntimeRequirements.from_dict(...)` validates persisted contracts fail-closed, and `RuntimeRequirements.sha256` fingerprints the exact admission policy.
+
 `validate_runtime_requirements(provenance, requirements)` compares those requirements against a collected `RuntimeProvenance` instance. Dependency names are matched case-insensitively after trimming surrounding whitespace, while versions use exact string equality.
 
 Exact version equality is intentional. This layer is for reproducible measurement rather than dependency resolution, so a broad compatible-version range would still permit an experiment to run under a different runtime than the declared protocol.
@@ -123,6 +125,8 @@ reports = run_repeated_external_benchmarks_with_preflight(
 `remem-paired-benchmark` and `run_paired_external_benchmarks_with_preflight(...)` accept the same runtime contract. The contract is validated once before either condition resolves callables or constructs a benchmark environment. The exact `RuntimeProvenance` instance that passed that gate is attached to `PairedBenchmarkResult.runtime_provenance` and is reused when the CLI persists the paired artifact.
 
 This provenance handoff is deliberate: controlled paired artifacts record the runtime snapshot admitted **before measurement**, rather than re-collecting repository and dependency state after the experiment and potentially binding the artifact to a different state.
+
+Controlled paired artifacts now also persist the exact runtime admission contract under `runtime_requirements`. Its SHA-256 digest is stored in runtime provenance as `runtime_requirements_sha256` before experiment identity construction. Because experiment identity already binds runtime provenance, changing the required revision, clean-tree policy, or any dependency pin changes the experiment identity even when the observed runtime happens to be identical. Artifact verification recomputes the contract digest and rejects tampered or orphaned requirement metadata.
 
 A paired CLI run can therefore pin both conditions to one controlled runtime:
 
