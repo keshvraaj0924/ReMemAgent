@@ -16,6 +16,7 @@ from types import MappingProxyType
 
 from experiments.runtime_provenance import (
     CLEAN_STATE,
+    DIRTY_STATE,
     UNKNOWN_VALUE,
     VALID_WORKING_TREE_STATES,
 )
@@ -206,7 +207,7 @@ def _git_working_tree_state(repository_path: Path) -> str:
         )
     except (OSError, subprocess.SubprocessError):
         return UNKNOWN_VALUE
-    return "dirty" if result.stdout else CLEAN_STATE
+    return DIRTY_STATE if result.stdout else CLEAN_STATE
 
 
 def _validated_repository_name(value: object) -> str:
