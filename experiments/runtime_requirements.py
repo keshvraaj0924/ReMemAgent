@@ -8,11 +8,16 @@ before expensive external environments are constructed.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Any
 
 from experiments.runtime_provenance import CLEAN_STATE, RuntimeProvenance
+
+RUNTIME_REQUIREMENTS_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +71,55 @@ class RuntimeRequirements:
             "dependency_versions",
             MappingProxyType(detached_requirements),
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the canonical detached representation persisted with artifacts."""
+
+        return {
+            "schema_version": RUNTIME_REQUIREMENTS_SCHEMA_VERSION,
+            "expected_code_revision": self.expected_code_revision,
+            "require_clean_working_tree": self.require_clean_working_tree,
+            "dependency_versions": dict(self.dependency_versions),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> RuntimeRequirements:
+        """Reconstruct and validate a persisted runtime requirement contract."""
+
+        if not isinstance(payload, Mapping):
+            raise TypeError("runtime requirements payload must be a mapping")
+        expected_fields = {
+            "schema_version",
+            "expected_code_revision",
+            "require_clean_working_tree",
+            "dependency_versions",
+        }
+        if set(payload) != expected_fields:
+            raise ValueError("runtime requirements payload must use the exact persisted schema")
+        schema_version = payload["schema_version"]
+        if isinstance(schema_version, bool) or schema_version != RUNTIME_REQUIREMENTS_SCHEMA_VERSION:
+            raise ValueError(
+                "unsupported runtime requirements schema version: "
+                f"{schema_version!r}"
+            )
+        return cls(
+            expected_code_revision=payload["expected_code_revision"],
+            require_clean_working_tree=payload["require_clean_working_tree"],
+            dependency_versions=payload["dependency_versions"],
+        )
+
+    @property
+    def sha256(self) -> str:
+        """Return a deterministic SHA-256 digest for this admission contract."""
+
+        canonical_payload = json.dumps(
+            self.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("utf-8")
+        return hashlib.sha256(canonical_payload).hexdigest()
 
 
 def validate_runtime_requirements(
@@ -127,4 +181,8 @@ def _require_non_empty_string(field_name: str, value: object) -> str:
     return value
 
 
-__all__ = ["RuntimeRequirements", "validate_runtime_requirements"]
+__all__ = [
+    "RUNTIME_REQUIREMENTS_SCHEMA_VERSION",
+    "RuntimeRequirements",
+    "validate_runtime_requirements",
+]
