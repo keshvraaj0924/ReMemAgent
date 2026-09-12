@@ -31,6 +31,7 @@ from experiments.external_preflight import (
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements
+from experiments.source_checkouts import SourceCheckoutRequirement
 from remem.benchmark import BenchmarkSuiteRunner
 from remem.observability import (
     ObservationCollector,
@@ -114,6 +115,24 @@ def parse_args() -> argparse.Namespace:
         metavar="PACKAGE==VERSION",
         help="Require an exact installed package version; may be specified multiple times",
     )
+    parser.add_argument(
+        "--source-checkout",
+        action="append",
+        metavar="NAME=PATH",
+        help="Declare a named source checkout path; may be specified multiple times",
+    )
+    parser.add_argument(
+        "--require-source-revision",
+        action="append",
+        metavar="NAME=REVISION",
+        help="Require an exact Git revision for a named source checkout",
+    )
+    parser.add_argument(
+        "--allow-dirty-source-checkout",
+        action="append",
+        metavar="NAME",
+        help="Allow one declared source checkout to have local modifications",
+    )
     return parser.parse_args()
 
 
@@ -134,11 +153,13 @@ def main() -> int:
         seed=getattr(arguments, "seed", None),
     )
     runtime_requirements = _build_runtime_requirements(arguments)
+    source_checkout_paths, source_checkout_requirements = _build_source_checkout_contract(arguments)
+    source_controlled = source_checkout_paths is not None
     if getattr(arguments, "preflight", False):
         _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
-        if runtime_requirements is not None:
+        if runtime_requirements is not None or source_controlled:
             raise ValueError(
-                "runtime requirements require --runtime-preflight, "
+                "runtime or source-checkout requirements require --runtime-preflight, "
                 "--repeated-runtime-preflight, or a measured benchmark run"
             )
         validate_external_benchmark(spec)
@@ -149,7 +170,7 @@ def main() -> int:
         if getattr(arguments, "seeds", None) is None:
             raise ValueError("--repeated-runtime-preflight requires --seeds")
         seeds = _parse_seeds(arguments.seeds)
-        if runtime_requirements is None:
+        if runtime_requirements is None and not source_controlled:
             validate_repeated_external_benchmark_runtime(
                 spec,
                 seeds or (),
@@ -161,12 +182,14 @@ def main() -> int:
                 seeds or (),
                 probe_action=getattr(arguments, "probe_action", None),
                 runtime_requirements=runtime_requirements,
+                source_checkout_paths=source_checkout_paths,
+                source_checkout_requirements=source_checkout_requirements,
             )
         print(f"benchmark repeated runtime preflight succeeded ({len(seeds or ())} seeds)")
         return 0
     if getattr(arguments, "runtime_preflight", False):
         _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
-        if runtime_requirements is None:
+        if runtime_requirements is None and not source_controlled:
             preflight_report = validate_external_benchmark_runtime(
                 spec,
                 probe_action=getattr(arguments, "probe_action", None),
@@ -176,6 +199,8 @@ def main() -> int:
                 spec,
                 probe_action=getattr(arguments, "probe_action", None),
                 runtime_requirements=runtime_requirements,
+                source_checkout_paths=source_checkout_paths,
+                source_checkout_requirements=source_checkout_requirements,
             )
         mode = "step" if preflight_report.step_result is not None else "reset"
         print(f"benchmark runtime preflight succeeded ({mode} probe)")
@@ -186,6 +211,7 @@ def main() -> int:
         probe_action is not None
         and not getattr(arguments, "preflight_before_run", False)
         and runtime_requirements is None
+        and not source_controlled
     ):
         raise ValueError("--probe-action requires a runtime preflight or --preflight-before-run")
 
@@ -212,12 +238,14 @@ def main() -> int:
         else None
     )
     if seeds is None:
-        if runtime_requirements is not None:
+        if runtime_requirements is not None or source_controlled:
             report = run_external_benchmark_with_preflight(
                 spec,
                 probe_action=probe_action,
                 runner=benchmark_runner,
                 runtime_requirements=runtime_requirements,
+                source_checkout_paths=source_checkout_paths,
+                source_checkout_requirements=source_checkout_requirements,
             )
         else:
             if getattr(arguments, "preflight_before_run", False):
@@ -235,13 +263,15 @@ def main() -> int:
             )
 
     else:
-        if runtime_requirements is not None:
+        if runtime_requirements is not None or source_controlled:
             reports = run_repeated_external_benchmarks_with_preflight(
                 spec,
                 seeds,
                 probe_action=probe_action,
                 runner=benchmark_runner,
                 runtime_requirements=runtime_requirements,
+                source_checkout_paths=source_checkout_paths,
+                source_checkout_requirements=source_checkout_requirements,
             )
         elif getattr(arguments, "preflight_before_run", False):
             reports = run_repeated_external_benchmarks_with_preflight(
@@ -300,6 +330,87 @@ def _build_runtime_requirements(arguments: argparse.Namespace) -> RuntimeRequire
         require_clean_working_tree=require_clean_working_tree,
         dependency_versions=dependency_versions,
     )
+
+
+def _build_source_checkout_contract(
+    arguments: argparse.Namespace,
+) -> tuple[dict[str, Path] | None, dict[str, SourceCheckoutRequirement] | None]:
+    """Build a complete named source-checkout admission contract from CLI arguments."""
+
+    path_values = getattr(arguments, "source_checkout", None) or ()
+    revision_values = getattr(arguments, "require_source_revision", None) or ()
+    allow_dirty_values = getattr(arguments, "allow_dirty_source_checkout", None) or ()
+    if not path_values and not revision_values and not allow_dirty_values:
+        return None, None
+
+    checkout_paths = {
+        name: Path(path)
+        for name, path in _parse_named_values(path_values, option="--source-checkout").items()
+    }
+    revisions = _parse_named_values(revision_values, option="--require-source-revision")
+    allow_dirty = _parse_unique_names(
+        allow_dirty_values,
+        option="--allow-dirty-source-checkout",
+    )
+
+    path_names = {name.casefold(): name for name in checkout_paths}
+    revision_names = {name.casefold(): name for name in revisions}
+    if set(path_names) != set(revision_names):
+        raise ValueError(
+            "--source-checkout and --require-source-revision must declare the same names"
+        )
+    unknown_dirty_names = allow_dirty - set(path_names)
+    if unknown_dirty_names:
+        names = ", ".join(sorted(unknown_dirty_names))
+        raise ValueError(f"--allow-dirty-source-checkout names must be declared sources: {names}")
+
+    requirements: dict[str, SourceCheckoutRequirement] = {}
+    for normalized_name in sorted(path_names):
+        display_name = path_names[normalized_name]
+        revision_name = revision_names[normalized_name]
+        requirements[display_name] = SourceCheckoutRequirement(
+            expected_revision=revisions[revision_name],
+            require_clean_working_tree=normalized_name not in allow_dirty,
+        )
+    return checkout_paths, requirements
+
+
+def _parse_named_values(values: Sequence[str], *, option: str) -> dict[str, str]:
+    """Parse repeatable ``NAME=VALUE`` arguments with case-insensitive unique names."""
+
+    parsed: dict[str, str] = {}
+    normalized_names: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            raise TypeError(f"{option} values must be strings")
+        name, separator, assigned_value = value.partition("=")
+        name = name.strip()
+        assigned_value = assigned_value.strip()
+        if not separator or not name or not assigned_value:
+            raise ValueError(f"{option} must use NAME=VALUE")
+        normalized_name = name.casefold()
+        if normalized_name in normalized_names:
+            raise ValueError(f"{option} names must be unique ignoring case")
+        normalized_names.add(normalized_name)
+        parsed[name] = assigned_value
+    return parsed
+
+
+def _parse_unique_names(values: Sequence[str], *, option: str) -> set[str]:
+    """Normalize repeatable source names while rejecting duplicates."""
+
+    parsed: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            raise TypeError(f"{option} values must be strings")
+        name = value.strip()
+        if not name:
+            raise ValueError(f"{option} names must not be empty")
+        normalized_name = name.casefold()
+        if normalized_name in parsed:
+            raise ValueError(f"{option} names must be unique ignoring case")
+        parsed.add(normalized_name)
+    return parsed
 
 
 def _parse_dependency_requirements(values: Sequence[str]) -> dict[str, str]:
