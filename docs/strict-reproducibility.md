@@ -42,7 +42,7 @@ exact-byte integrity manifest
 
 ## Readiness preflight without measurement
 
-Expensive external experiments can now validate the controlled environment independently of measurement through `preflight_controlled_paired_external_benchmarks(...)` in `experiments.paired_source_preflight`.
+Expensive external experiments can validate the controlled environment independently of measurement through `preflight_controlled_paired_external_benchmarks(...)` in `experiments.paired_source_preflight`.
 
 The preflight function performs the same fail-closed admission ordering used by controlled paired execution:
 
@@ -82,6 +82,30 @@ preflight = preflight_controlled_paired_external_benchmarks(
 ```
 
 The placeholders are deliberate. ReMemAgent does not invent upstream revisions, model versions, or measured results. Those values must come from the execution environment selected for the actual experiment.
+
+### CLI readiness mode
+
+The same readiness boundary is available through `remem-paired-benchmark --preflight-only`. This mode validates the declared runtime contract, pinned source checkouts, benchmark callables, and per-seed environment probes, then exits before measured episodes begin.
+
+```bash
+remem-paired-benchmark \
+  --benchmark webshop \
+  --episodes 100 \
+  --max-steps 50 \
+  --seeds 11,17,29,43,71 \
+  --environment-factory your_package.environments:build_webshop \
+  --success-evaluator your_package.metrics:is_success \
+  --baseline-policy-factory your_package.policies:build_baseline \
+  --treatment-policy-factory your_package.policies:build_remem \
+  --require-code-revision <REMEM_COMMIT> \
+  --require-clean-working-tree \
+  --require-dependency-version torch==<PINNED_VERSION> \
+  --source-checkout webshop=/path/to/webshop \
+  --require-source-revision webshop=<WEBSHOP_COMMIT> \
+  --preflight-only
+```
+
+Preflight-only execution does not write the paired report or integrity manifest, and existing artifact destinations are not opened or overwritten. When `--strict-reproducibility` is combined with `--preflight-only`, the strict declaration gate still applies to the intended measured protocol, including its requirement for an explicit manifest destination; the manifest is validated as part of the declaration but is not created by preflight-only execution.
 
 ## Strict CLI example
 
