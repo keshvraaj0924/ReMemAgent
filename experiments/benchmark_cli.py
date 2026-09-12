@@ -7,12 +7,12 @@ import os
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from experiments.artifact_bundle import (
-    PreparedArtifact,
-    create_private_artifact_path,
-    publish_artifact_bundle,
+from experiments.benchmark_distribution_config import (
+    BenchmarkDistributionConfig,
+    build_benchmark_distribution_config,
 )
-from experiments.benchmark_manifest import save_benchmark_artifact_manifest
+from experiments.benchmark_observability_bundle import persist_benchmark_observability_bundle
+from experiments.benchmark_observability_session import BenchmarkObservabilitySession
 from experiments.benchmark_report import save_benchmark_report, save_repeated_benchmark_reports
 from experiments.benchmark_statistics import summarize_benchmark_reports
 from experiments.controlled_benchmark_artifacts import (
@@ -40,11 +40,8 @@ from experiments.runtime_provenance import collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements
 from experiments.source_checkouts import SourceCheckoutRequirement
 from remem.benchmark import BenchmarkSuiteRunner
-from remem.observability import (
-    ObservationCollector,
-    ObservationSnapshot,
-    write_observation_snapshot,
-)
+from remem.observability import ObservationSnapshot
+from remem.observability_distribution_artifacts import DistributionObservationSnapshot
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/benchmark.json")
 
@@ -78,9 +75,24 @@ def parse_args() -> argparse.Namespace:
         help="Optional path for the deterministic benchmark observability snapshot",
     )
     parser.add_argument(
+        "--distribution-output",
+        type=Path,
+        help="Optional path for the fixed-bucket benchmark duration distribution sidecar",
+    )
+    parser.add_argument(
+        "--episode-duration-buckets",
+        help=(
+            "Comma-separated finite, non-negative, strictly increasing episode-duration "
+            "bucket upper bounds in seconds; requires --distribution-output"
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Allow replacing an existing benchmark report, manifest, or observability snapshot",
+        help=(
+            "Allow replacing an existing benchmark report, manifest, observability snapshot, "
+            "or distribution sidecar"
+        ),
     )
     preflight_group = parser.add_mutually_exclusive_group()
     preflight_group.add_argument(
@@ -254,8 +266,29 @@ def main() -> int:
         overwrite=overwrite,
         reserved_paths=(output_path, selected_manifest_path),
     )
+    distribution_config = build_benchmark_distribution_config(
+        output_path=getattr(arguments, "distribution_output", None),
+        episode_duration_buckets=getattr(arguments, "episode_duration_buckets", None),
+    )
+    if distribution_config is not None:
+        distribution_path = _prepare_optional_artifact_path(
+            distribution_config.output_path,
+            artifact_name="distribution observability sidecar",
+            overwrite=overwrite,
+            reserved_paths=(output_path, selected_manifest_path, observability_path),
+        )
+        if distribution_path is None:
+            raise AssertionError("validated distribution configuration must have an output path")
+        distribution_config = BenchmarkDistributionConfig(
+            output_path=distribution_path,
+            episode_duration_upper_bounds=distribution_config.episode_duration_upper_bounds,
+        )
+    observability_session = BenchmarkObservabilitySession(
+        observability_output_path=observability_path,
+        distribution_config=distribution_config,
+    )
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
-    observation_collector = ObservationCollector() if observability_path is not None else None
+    observation_collector = observability_session.create_collector()
     benchmark_runner = (
         BenchmarkSuiteRunner(observation_collector=observation_collector)
         if observation_collector is not None
@@ -345,8 +378,9 @@ def main() -> int:
                     statistics=statistics,
                 )
 
-    observation_snapshot = (
-        observation_collector.snapshot() if observation_collector is not None else None
+    observability_snapshots = observability_session.freeze(observation_collector)
+    distribution_path = (
+        distribution_config.output_path if distribution_config is not None else None
     )
     output_path = _persist_benchmark_bundle(
         output_path,
@@ -354,13 +388,17 @@ def main() -> int:
         writer=report_writer,
         manifest_path=selected_manifest_path,
         observability_path=observability_path,
-        observation_snapshot=observation_snapshot,
+        observation_snapshot=observability_snapshots.observation_snapshot,
+        distribution_path=distribution_path,
+        distribution_snapshot=observability_snapshots.distribution_snapshot,
     )
 
     if selected_manifest_path is not None:
         print(f"saved benchmark artifact manifest: {selected_manifest_path}")
     if observability_path is not None:
         print(f"saved benchmark observability snapshot: {observability_path}")
+    if distribution_path is not None:
+        print(f"saved benchmark duration distribution sidecar: {distribution_path}")
     print(f"saved benchmark report: {output_path}")
     return 0
 
@@ -493,54 +531,21 @@ def _persist_benchmark_bundle(
     manifest_path: Path | None = None,
     observability_path: Path | None = None,
     observation_snapshot: ObservationSnapshot | None = None,
+    distribution_path: Path | None = None,
+    distribution_snapshot: DistributionObservationSnapshot | None = None,
 ) -> Path:
-    """Stage and publish one benchmark artifact bundle with rollback semantics."""
+    """Publish one benchmark artifact bundle through the shared transactional path."""
 
-    if (observability_path is None) != (observation_snapshot is None):
-        raise ValueError(
-            "observability_path and observation_snapshot must either both be provided or both omitted"
-        )
-
-    prepared_artifacts: list[PreparedArtifact] = []
-    report_temporary_path = create_private_artifact_path(output_path)
-    report_artifact = PreparedArtifact(report_temporary_path, output_path)
-    prepared_artifacts.append(report_artifact)
-    try:
-        writer(report_temporary_path)
-
-        ordered_artifacts: list[PreparedArtifact] = []
-        if observability_path is not None and observation_snapshot is not None:
-            observability_temporary_path = create_private_artifact_path(observability_path)
-            observability_artifact = PreparedArtifact(
-                observability_temporary_path,
-                observability_path,
-            )
-            prepared_artifacts.append(observability_artifact)
-            write_observation_snapshot(
-                observability_temporary_path,
-                observation_snapshot,
-                overwrite=True,
-            )
-            ordered_artifacts.append(observability_artifact)
-
-        if manifest_path is not None:
-            manifest_temporary_path = create_private_artifact_path(manifest_path)
-            manifest_artifact = PreparedArtifact(manifest_temporary_path, manifest_path)
-            prepared_artifacts.append(manifest_artifact)
-            save_benchmark_artifact_manifest(
-                report_temporary_path,
-                manifest_temporary_path,
-                overwrite=True,
-            )
-            ordered_artifacts.append(manifest_artifact)
-
-        ordered_artifacts.append(report_artifact)
-        publish_artifact_bundle(tuple(ordered_artifacts), overwrite=overwrite)
-    except BaseException:
-        for artifact in prepared_artifacts:
-            artifact.temporary_path.unlink(missing_ok=True)
-        raise
-    return output_path
+    return persist_benchmark_observability_bundle(
+        output_path,
+        overwrite=overwrite,
+        report_writer=writer,
+        manifest_path=manifest_path,
+        observability_path=observability_path,
+        observation_snapshot=observation_snapshot,
+        distribution_path=distribution_path,
+        distribution_snapshot=distribution_snapshot,
+    )
 
 
 def _persist_benchmark_report(
@@ -617,6 +622,10 @@ def _reject_preflight_only_conflicts(
         raise ValueError("--manifest requires a measured benchmark run")
     if getattr(arguments, "observability_output", None) is not None:
         raise ValueError("--observability-output requires a measured benchmark run")
+    if getattr(arguments, "distribution_output", None) is not None:
+        raise ValueError("--distribution-output requires a measured benchmark run")
+    if getattr(arguments, "episode_duration_buckets", None) is not None:
+        raise ValueError("--episode-duration-buckets requires a measured benchmark run")
     if before_run and getattr(arguments, "preflight_before_run", False):
         raise ValueError("--preflight-before-run requires a measured benchmark run")
 
