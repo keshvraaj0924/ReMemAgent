@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import sys
 from collections.abc import Mapping
@@ -17,11 +18,15 @@ from experiments.controlled_benchmark_artifacts import (
     validate_persisted_controlled_benchmark_artifact,
 )
 from experiments.paired_artifacts import validate_persisted_paired_artifact
+from experiments.preflight_evidence import (
+    PREFLIGHT_EVIDENCE_PROVENANCE_KEY,
+    verify_controlled_paired_preflight_evidence,
+)
 from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse the report and optional manifest paths."""
+    """Parse the report and optional integrity/readiness evidence paths."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path, help="Persisted benchmark JSON artifact")
@@ -30,11 +35,22 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Integrity manifest; defaults to <report>.manifest.json",
     )
+    parser.add_argument(
+        "--preflight-evidence",
+        type=Path,
+        help=(
+            "Persisted readiness evidence required to verify an evidence-bound measured artifact"
+        ),
+    )
     return parser.parse_args()
 
 
-def verify_report_artifact(report_path: Path, manifest_path: Path | None = None) -> None:
-    """Verify report bytes, embedded identities, and controlled admission evidence."""
+def verify_report_artifact(
+    report_path: Path,
+    manifest_path: Path | None = None,
+    preflight_evidence_path: Path | None = None,
+) -> None:
+    """Verify report bytes, identities, admission evidence, and readiness binding."""
 
     selected_manifest_path = manifest_path or report_path.with_suffix(
         report_path.suffix + ".manifest.json"
@@ -45,6 +61,7 @@ def verify_report_artifact(report_path: Path, manifest_path: Path | None = None)
     validate_persisted_benchmark_artifact(payload)
     validate_persisted_controlled_benchmark_artifact(payload)
     validate_persisted_paired_artifact(payload)
+    _verify_preflight_evidence_binding(payload, preflight_evidence_path)
 
 
 def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
@@ -59,12 +76,67 @@ def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
     return payload
 
 
+def _verify_preflight_evidence_binding(
+    payload: Mapping[str, Any],
+    preflight_evidence_path: Path | None,
+) -> None:
+    """Verify an artifact's readiness digest against the retained evidence object.
+
+    Evidence-bound measured artifacts fail closed unless the original readiness JSON
+    is supplied. Legacy artifacts without the readiness digest remain independently
+    verifiable and reject an unrelated evidence argument rather than silently
+    implying a binding that was never persisted.
+    """
+
+    runtime_provenance = payload.get("runtime_provenance")
+    stored_digest = (
+        runtime_provenance.get(PREFLIGHT_EVIDENCE_PROVENANCE_KEY)
+        if isinstance(runtime_provenance, Mapping)
+        else None
+    )
+
+    if stored_digest is None and preflight_evidence_path is None:
+        return
+    if stored_digest is None:
+        raise ValueError("benchmark artifact is not bound to preflight evidence")
+    if not isinstance(stored_digest, str):
+        raise ValueError("preflight evidence provenance digest must be a string")
+    if preflight_evidence_path is None:
+        raise ValueError(
+            "evidence-bound benchmark artifact requires --preflight-evidence for verification"
+        )
+
+    evidence = _load_preflight_evidence(preflight_evidence_path)
+    verify_controlled_paired_preflight_evidence(evidence)
+    evidence_digest = evidence.get("evidence_sha256")
+    if not isinstance(evidence_digest, str):
+        raise ValueError("verified preflight evidence must contain evidence_sha256")
+    if not hmac.compare_digest(stored_digest, evidence_digest):
+        raise ValueError("benchmark artifact readiness digest does not match preflight evidence")
+
+
+def _load_preflight_evidence(path: Path) -> Mapping[str, Any]:
+    """Load retained readiness evidence without recollecting mutable runtime state."""
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("preflight evidence must contain valid JSON") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError("preflight evidence root must be a JSON object")
+    return payload
+
+
 def main() -> int:
     """Verify a benchmark report and return a process exit status."""
 
     arguments = parse_args()
     try:
-        verify_report_artifact(arguments.report, arguments.manifest)
+        verify_report_artifact(
+            arguments.report,
+            arguments.manifest,
+            arguments.preflight_evidence,
+        )
     except (OSError, ValueError) as error:
         print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
         return 1
