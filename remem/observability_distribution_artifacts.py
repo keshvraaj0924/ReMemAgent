@@ -35,7 +35,9 @@ class DistributionObservationSnapshot:
         for raw_name, snapshot in self.duration_histograms.items():
             name = _normalize_metric_name(raw_name)
             if name in normalized:
-                raise ValueError(f"distribution metric names normalize to the same value: {raw_name!r}")
+                raise ValueError(
+                    f"distribution metric names normalize to the same value: {raw_name!r}"
+                )
             if not isinstance(snapshot, ObservationHistogramSnapshot):
                 raise TypeError(
                     "duration histogram values must be ObservationHistogramSnapshot instances"
@@ -97,12 +99,15 @@ def write_distribution_observation_snapshot(
     if destination.exists() and not overwrite:
         raise FileExistsError(f"distribution observation snapshot already exists: {destination}")
 
-    payload = json.dumps(
-        snapshot.to_dict(),
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ) + "\n"
+    payload = (
+        json.dumps(
+            snapshot.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n"
+    )
     temporary_path: Path | None = None
     try:
         with NamedTemporaryFile(
@@ -118,7 +123,9 @@ def write_distribution_observation_snapshot(
             os.fsync(temporary_file.fileno())
             temporary_path = Path(temporary_file.name)
         if destination.exists() and not overwrite:
-            raise FileExistsError(f"distribution observation snapshot already exists: {destination}")
+            raise FileExistsError(
+                f"distribution observation snapshot already exists: {destination}"
+            )
         os.replace(temporary_path, destination)
         temporary_path = None
     finally:
@@ -139,17 +146,33 @@ def read_distribution_observation_snapshot(path: str | Path) -> DistributionObse
 def _histogram_snapshot_from_dict(payload: Mapping[str, object]) -> ObservationHistogramSnapshot:
     """Reconstruct one histogram while validating persisted derived fields."""
 
-    upper_bounds = payload.get("upper_bounds")
-    bucket_counts = payload.get("bucket_counts")
-    total = payload.get("total")
-    if not isinstance(upper_bounds, list):
+    raw_upper_bounds = payload.get("upper_bounds")
+    raw_bucket_counts = payload.get("bucket_counts")
+    raw_total = payload.get("total")
+    if not isinstance(raw_upper_bounds, list):
         raise TypeError("histogram upper_bounds must be a list")
-    if not isinstance(bucket_counts, list):
+    if not isinstance(raw_bucket_counts, list):
         raise TypeError("histogram bucket_counts must be a list")
+
+    upper_bounds: list[float] = []
+    for raw_bound in raw_upper_bounds:
+        if isinstance(raw_bound, bool) or not isinstance(raw_bound, (int, float)):
+            raise TypeError("histogram upper_bounds values must be numbers")
+        upper_bounds.append(float(raw_bound))
+
+    bucket_counts: list[int] = []
+    for raw_count in raw_bucket_counts:
+        if isinstance(raw_count, bool) or not isinstance(raw_count, int):
+            raise TypeError("histogram bucket_counts values must be integers")
+        bucket_counts.append(raw_count)
+
+    if isinstance(raw_total, bool) or not isinstance(raw_total, (int, float)):
+        raise TypeError("histogram total must be a number")
+
     snapshot = ObservationHistogramSnapshot(
         upper_bounds=tuple(upper_bounds),
         bucket_counts=tuple(bucket_counts),
-        total=total,
+        total=float(raw_total),
     )
     if payload.get("count") != snapshot.count:
         raise ValueError("persisted histogram count does not match bucket counts")

@@ -37,7 +37,10 @@ def test_distribution_snapshot_serializes_metrics_in_sorted_order() -> None:
 def test_distribution_snapshot_rejects_normalized_name_collisions() -> None:
     with pytest.raises(ValueError, match="normalize to the same value"):
         DistributionObservationSnapshot(
-            duration_histograms={"benchmark.duration": _histogram(), " benchmark.duration ": _histogram()}
+            duration_histograms={
+                "benchmark.duration": _histogram(),
+                " benchmark.duration ": _histogram(),
+            }
         )
 
 
@@ -52,15 +55,21 @@ def test_distribution_snapshot_round_trips_through_canonical_json(tmp_path: Path
     assert read_distribution_observation_snapshot(path) == snapshot
     persisted = path.read_text(encoding="utf-8")
     assert persisted.endswith("\n")
-    assert persisted == json.dumps(
-        snapshot.to_dict(),
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ) + "\n"
+    assert (
+        persisted
+        == json.dumps(
+            snapshot.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n"
+    )
 
 
-def test_distribution_snapshot_writer_rejects_existing_file_without_overwrite(tmp_path: Path) -> None:
+def test_distribution_snapshot_writer_rejects_existing_file_without_overwrite(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "duration-distributions.json"
     path.write_text("existing", encoding="utf-8")
 
