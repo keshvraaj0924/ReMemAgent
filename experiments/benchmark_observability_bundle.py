@@ -22,6 +22,8 @@ from remem.observability_distribution_artifacts import (
     write_distribution_observation_snapshot,
 )
 
+ManifestWriter = Callable[[Path, Path], object]
+
 
 def persist_benchmark_observability_bundle(
     output_path: Path,
@@ -33,12 +35,16 @@ def persist_benchmark_observability_bundle(
     observation_snapshot: ObservationSnapshot | None = None,
     distribution_path: Path | None = None,
     distribution_snapshot: DistributionObservationSnapshot | None = None,
+    manifest_writer: Callable[..., object] = save_benchmark_artifact_manifest,
 ) -> Path:
     """Stage and publish a report and its optional observability sidecars.
 
     The report is always published last and therefore remains the bundle commit
     marker. Any publication failure rolls back already-published auxiliary
     artifacts through :func:`publish_artifact_bundle`.
+
+    ``manifest_writer`` remains injectable so CLI callers and tests can preserve
+    the established manifest-writing seam while sharing this transactional path.
     """
 
     _validate_optional_pair(
@@ -90,7 +96,7 @@ def persist_benchmark_observability_bundle(
 
         if manifest_path is not None:
             manifest_artifact = _prepare_artifact(manifest_path, prepared_artifacts)
-            save_benchmark_artifact_manifest(
+            manifest_writer(
                 report_artifact.temporary_path,
                 manifest_artifact.temporary_path,
                 overwrite=True,
