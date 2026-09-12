@@ -36,6 +36,8 @@ def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
     readiness_path.write_text(json.dumps(readiness_payload), encoding="utf-8")
     original_runner = evidence_cli.paired_cli.run_controlled_paired_external_benchmarks
     observed: dict[str, object] = {}
+    source_path = tmp_path / "webshop"
+    source_revision = "c" * 40
 
     def evidence_bound_runner(readiness_evidence, *args, **kwargs):
         observed["evidence"] = readiness_evidence
@@ -68,6 +70,10 @@ def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
             "remem-paired-benchmark",
             "--require-preflight-evidence",
             str(readiness_path),
+            "--source-checkout",
+            f"webshop={source_path}",
+            "--require-source-revision",
+            f"webshop={source_revision}",
             "--benchmark",
             "webshop",
         ],
@@ -78,6 +84,10 @@ def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
     assert observed["result"] == "controlled-result"
     assert observed["delegated_argv"] == [
         "remem-paired-benchmark",
+        "--source-checkout",
+        f"webshop={source_path}",
+        "--require-source-revision",
+        f"webshop={source_revision}",
         "--benchmark",
         "webshop",
     ]
@@ -104,6 +114,28 @@ def test_main_rejects_evidence_binding_for_preflight_only(
         evidence_cli.main()
 
 
+def test_main_rejects_evidence_binding_without_controlled_source_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    readiness_path = tmp_path / "readiness.json"
+    readiness_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "remem-paired-benchmark",
+            "--require-preflight-evidence",
+            str(readiness_path),
+            "--benchmark",
+            "webshop",
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="requires declared source checkouts"):
+        evidence_cli.main()
+
+
 def test_main_rejects_non_object_readiness_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -117,6 +149,8 @@ def test_main_rejects_non_object_readiness_evidence(
             "remem-paired-benchmark",
             "--require-preflight-evidence",
             str(readiness_path),
+            "--source-checkout=webshop=/tmp/webshop",
+            f"--require-source-revision=webshop={'c' * 40}",
         ],
     )
 
