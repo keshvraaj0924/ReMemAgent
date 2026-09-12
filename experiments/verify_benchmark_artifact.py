@@ -7,6 +7,7 @@ import hmac
 import json
 import sys
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,26 @@ from experiments.preflight_evidence import (
     verify_controlled_paired_preflight_evidence,
 )
 from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkVerificationResult:
+    """Machine-readable attestation for one successfully verified artifact."""
+
+    schema_version: int
+    byte_count: int
+    sha256: str
+    preflight_evidence_sha256: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a deterministic JSON-compatible representation."""
+
+        return {
+            "schema_version": self.schema_version,
+            "byte_count": self.byte_count,
+            "sha256": self.sha256,
+            "preflight_evidence_sha256": self.preflight_evidence_sha256,
+        }
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,6 +63,12 @@ def parse_args() -> argparse.Namespace:
             "Persisted readiness evidence required to verify an evidence-bound measured artifact"
         ),
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit the verified artifact attestation as canonical JSON",
+    )
     return parser.parse_args()
 
 
@@ -49,7 +76,7 @@ def verify_report_artifact(
     report_path: Path,
     manifest_path: Path | None = None,
     preflight_evidence_path: Path | None = None,
-) -> None:
+) -> BenchmarkVerificationResult:
     """Verify report bytes, identities, admission evidence, and readiness binding."""
 
     selected_manifest_path = manifest_path or report_path.with_suffix(
@@ -61,7 +88,16 @@ def verify_report_artifact(
     validate_persisted_benchmark_artifact(payload)
     validate_persisted_controlled_benchmark_artifact(payload)
     validate_persisted_paired_artifact(payload)
-    _verify_preflight_evidence_binding(payload, preflight_evidence_path)
+    preflight_evidence_sha256 = _verify_preflight_evidence_binding(
+        payload,
+        preflight_evidence_path,
+    )
+    return BenchmarkVerificationResult(
+        schema_version=manifest.schema_version,
+        byte_count=manifest.byte_count,
+        sha256=manifest.sha256,
+        preflight_evidence_sha256=preflight_evidence_sha256,
+    )
 
 
 def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
@@ -79,7 +115,7 @@ def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
 def _verify_preflight_evidence_binding(
     payload: Mapping[str, Any],
     preflight_evidence_path: Path | None,
-) -> None:
+) -> str | None:
     """Verify an artifact's readiness digest against the retained evidence object.
 
     Evidence-bound measured artifacts fail closed unless the original readiness JSON
@@ -96,7 +132,7 @@ def _verify_preflight_evidence_binding(
     )
 
     if stored_digest is None and preflight_evidence_path is None:
-        return
+        return None
     if stored_digest is None:
         raise ValueError("benchmark artifact is not bound to preflight evidence")
     if not isinstance(stored_digest, str):
@@ -113,6 +149,7 @@ def _verify_preflight_evidence_binding(
         raise ValueError("verified preflight evidence must contain evidence_sha256")
     if not hmac.compare_digest(stored_digest, evidence_digest):
         raise ValueError("benchmark artifact readiness digest does not match preflight evidence")
+    return evidence_digest
 
 
 def _load_preflight_evidence(path: Path) -> Mapping[str, Any]:
@@ -132,7 +169,7 @@ def main() -> int:
 
     arguments = parse_args()
     try:
-        verify_report_artifact(
+        result = verify_report_artifact(
             arguments.report,
             arguments.manifest,
             arguments.preflight_evidence,
@@ -141,9 +178,20 @@ def main() -> int:
         print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
         return 1
 
-    # Preserve the established CLI success prefix for callers that parse it.
-    # Configuration identity is still verified by verify_report_artifact when present.
-    print(f"benchmark artifact integrity verified: {arguments.report}")
+    if arguments.json_output:
+        print(
+            json.dumps(
+                result.to_dict(),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+                allow_nan=False,
+            )
+        )
+    else:
+        # Preserve the established CLI success prefix for callers that parse it.
+        # Configuration identity is still verified by verify_report_artifact when present.
+        print(f"benchmark artifact integrity verified: {arguments.report}")
     return 0
 
 
