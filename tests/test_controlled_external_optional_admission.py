@@ -79,7 +79,9 @@ def test_runtime_only_controlled_run_preserves_admitted_runtime(monkeypatch) -> 
     assert events == ["runtime_collect", "runtime_validate", "preflight", "measure"]
 
 
-def test_source_only_controlled_run_collects_runtime_without_runtime_validation(monkeypatch) -> None:
+def test_source_only_controlled_run_collects_runtime_without_runtime_validation(
+    monkeypatch,
+) -> None:
     runtime = _runtime()
     source = {
         "webshop": SourceCheckoutProvenance(
@@ -122,9 +124,7 @@ def test_source_only_controlled_run_collects_runtime_without_runtime_validation(
     result = controlled.run_controlled_external_benchmark(
         _spec(),
         source_checkout_paths={"WebShop": Path("/tmp/webshop")},
-        source_checkout_requirements={
-            "WebShop": SourceCheckoutRequirement("webshop-revision")
-        },
+        source_checkout_requirements={"WebShop": SourceCheckoutRequirement("webshop-revision")},
     )
 
     assert result.runtime_provenance is runtime
