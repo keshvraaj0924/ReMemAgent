@@ -93,6 +93,28 @@ def verify_controlled_paired_preflight_evidence(payload: Mapping[str, Any]) -> N
         raise ValueError("preflight evidence fingerprint mismatch")
 
 
+def validate_preflight_evidence_matches_admission(
+    payload: Mapping[str, Any],
+    result: ControlledPairedPreflightResult,
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement],
+) -> None:
+    """Require persisted evidence to match the exact state admitted for measurement.
+
+    The persisted evidence is verified first, then compared with a canonical payload
+    built only from the already-admitted snapshots. No runtime or source state is
+    recollected. A mismatch therefore blocks measurement when state changed between
+    an earlier readiness run and the current admission.
+    """
+
+    verify_controlled_paired_preflight_evidence(payload)
+    admitted_payload = build_controlled_paired_preflight_evidence(
+        result,
+        source_checkout_requirements,
+    )
+    if payload["evidence_sha256"] != admitted_payload["evidence_sha256"]:
+        raise ValueError("preflight evidence does not match the current admitted state")
+
+
 def preflight_evidence_json(payload: Mapping[str, Any]) -> str:
     """Serialize verified readiness evidence deterministically for logs or files."""
 
@@ -117,5 +139,6 @@ __all__ = [
     "PREFLIGHT_EVIDENCE_SCHEMA_VERSION",
     "build_controlled_paired_preflight_evidence",
     "preflight_evidence_json",
+    "validate_preflight_evidence_matches_admission",
     "verify_controlled_paired_preflight_evidence",
 ]
