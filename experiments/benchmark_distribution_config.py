@@ -60,7 +60,9 @@ class BenchmarkDistributionConfig:
         if snapshot is None:
             raise ValueError("collector is missing the benchmark episode duration histogram")
         if snapshot.upper_bounds != expected_bounds:
-            raise ValueError("collector episode duration bucket contract does not match configuration")
+            raise ValueError(
+                "collector episode duration bucket contract does not match configuration"
+            )
         return DistributionObservationSnapshot(duration_histograms=histograms)
 
 

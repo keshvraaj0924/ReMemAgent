@@ -74,9 +74,9 @@ def test_distribution_config_collects_and_freezes_episode_durations(tmp_path: Pa
     distribution_snapshot = config.snapshot(collector)
     histogram = distribution_snapshot.duration_histograms[BENCHMARK_EPISODE_DURATION_METRIC]
 
-    assert aggregate_snapshot.durations_seconds[
-        BENCHMARK_EPISODE_DURATION_METRIC
-    ] == pytest.approx(2.5)
+    assert aggregate_snapshot.durations_seconds[BENCHMARK_EPISODE_DURATION_METRIC] == pytest.approx(
+        2.5
+    )
     assert histogram.upper_bounds == (0.5, 1.0)
     assert histogram.bucket_counts == (1, 1, 1)
     assert histogram.count == 3
