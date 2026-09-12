@@ -34,12 +34,31 @@ The persisted file is the canonical verified readiness payload generated from th
 
 ## Binding readiness to later measurement
 
-A readiness file can be verified structurally without proving that a later process still has the same runtime and source state. For measured orchestration, use `run_evidence_bound_paired_external_benchmarks(...)` rather than treating standalone verification as sufficient.
+A readiness file can be verified structurally without proving that a later process still has the same runtime and source state. For measured orchestration, use `run_evidence_bound_paired_external_benchmarks(...)` or the measured CLI evidence-binding option rather than treating standalone verification as sufficient.
 
 The evidence-bound runner performs fresh controlled admission, compares the previously persisted evidence with the exact runtime/source snapshots admitted in the current process, and starts measured episodes only when the canonical evidence fingerprint matches. A malformed, tampered, or stale readiness artifact therefore fails before measurement.
 
 Internally, `run_admitted_paired_external_benchmarks(...)` provides a narrow measurement boundary for an already-admitted `ControlledPairedPreflightResult`. It deliberately does not recollect runtime state, recollect external Git state, or rerun environment readiness probes. This separation prevents a second mutable observation from being substituted between evidence validation and measurement.
 
-The current `remem-paired-benchmark` CLI can generate readiness evidence, while evidence-bound measured execution is currently exposed through the Python API. CLI wiring for requiring a prior readiness artifact is a subsequent orchestration increment; callers must not assume the existing measured CLI path consumes a readiness file.
+For measured CLI execution, pass the persisted artifact with `--require-preflight-evidence PATH` while declaring the same controlled source-checkout contract used for the run:
+
+```bash
+remem-paired-benchmark \
+  --benchmark webshop \
+  --episodes 10 \
+  --max-steps 50 \
+  --seeds 11,17,23 \
+  --environment-factory <module:factory> \
+  --success-evaluator <module:evaluator> \
+  --baseline-policy-factory <module:baseline_factory> \
+  --treatment-policy-factory <module:memory_factory> \
+  --source-checkout webshop=/path/to/WebShop \
+  --require-source-revision webshop=<exact-git-revision> \
+  --require-preflight-evidence artifacts/webshop-readiness.json \
+  --output artifacts/webshop-paired.json \
+  --manifest artifacts/webshop-paired.manifest.json
+```
+
+`--require-preflight-evidence` is valid only for measured execution and requires explicit source checkout paths plus exact required source revisions. The CLI fresh-admits runtime, source checkouts, and paired environment readiness; validates the persisted evidence against those exact admitted snapshots; and only then starts measured episodes. If the evidence is malformed, tampered, or stale, the run fails before measured execution and before the paired report or manifest is persisted.
 
 This object is readiness evidence, not a benchmark result. It contains no measured episode outcomes and must not be used to claim ALFWorld/WebShop effectiveness. Measured claims still require a completed paired benchmark artifact and its integrity verification.
