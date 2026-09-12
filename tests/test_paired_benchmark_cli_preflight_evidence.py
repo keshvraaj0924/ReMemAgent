@@ -106,7 +106,10 @@ def test_preflight_only_persists_exact_controlled_readiness_evidence(
     payload = json.loads(arguments.preflight_evidence.read_text(encoding="utf-8"))
     verify_controlled_paired_preflight_evidence(payload)
     assert payload["runtime_provenance"] == controlled_result.runtime_provenance.to_dict()
-    assert payload["source_checkout_provenance"]["webshop"]["revision"] == "c" * 40
+    assert (
+        payload["source_checkout_provenance"]["repositories"]["webshop"]["revision"]
+        == "c" * 40
+    )
     assert observed["seeds"] == (11, 17)
     assert not arguments.output.exists()
 
