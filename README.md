@@ -112,7 +112,7 @@ ReMemAgent/
 
 **Active research prototype.**
 
-The deterministic research core, external benchmark contracts, reproducibility metadata, controlled artifact persistence, and paired seed-level statistical analysis are implemented. GitHub Quality run **#1272** passed on the previous code head `e86a92f3` on Python 3.11 and 3.12; later commits must earn their own green run before they are treated as verified.
+The deterministic research core, external benchmark contracts, reproducibility metadata, controlled artifact persistence, readiness-evidence binding, and paired seed-level statistical analysis are implemented. Every new branch increment is expected to earn its own green Quality run before it is treated as verified.
 
 The statistical layer supports exact paired sign-flip tests, Holm-Bonferroni correction across primary metrics, and paired Cohen's *d_z*. These are analysis primitives only; they do not constitute benchmark evidence until real matched runs are produced.
 
@@ -125,7 +125,7 @@ The repository does **not** claim benchmark improvements or production readiness
 - **Learned components stay isolated** — checkpoint/model loading and inference remain outside deterministic memory heuristics.
 - **Tests before claims** — behavior is covered before experimental conclusions are reported.
 - **Failure is evidence** — unsuccessful experiences remain useful when they encode transferable avoidance knowledge.
-- **Fail closed at research boundaries** — malformed evaluator output, provenance drift, source revision drift, and artifact tampering are rejected rather than guessed around.
+- **Fail closed at research boundaries** — malformed evaluator output, provenance drift, source revision drift, readiness-evidence drift, and artifact tampering are rejected rather than guessed around.
 - **Controlled complexity** — new components must justify their effect on latency, tokens, memory growth, and experimental interpretability.
 
 ## External benchmark execution
@@ -174,7 +174,31 @@ remem-paired-benchmark \
 remem-verify-preflight artifacts/webshop-readiness.json
 ```
 
-Readiness evidence proves that the recorded runtime/source contract passed the controlled preflight represented by that artifact. It is not a benchmark result and does not establish model effectiveness.
+A later measured run can require that exact readiness artifact. Fresh controlled admission must still match it before any measured episode is started:
+
+```bash
+remem-paired-benchmark \
+  --benchmark webshop \
+  --episodes 100 \
+  --max-steps 50 \
+  --seeds 11,17,29,43,71 \
+  --environment-factory your_package.environments:build_webshop \
+  --success-evaluator your_package.metrics:is_success \
+  --baseline-policy-factory your_package.policies:build_baseline \
+  --treatment-policy-factory your_package.policies:build_remem \
+  --source-checkout webshop=/path/to/webshop \
+  --require-source-revision webshop=<WEBSHOP_COMMIT> \
+  --require-preflight-evidence artifacts/webshop-readiness.json \
+  --output artifacts/webshop-paired.json \
+  --manifest artifacts/webshop-paired.json.manifest.json
+
+remem-verify-benchmark \
+  artifacts/webshop-paired.json \
+  --manifest artifacts/webshop-paired.json.manifest.json \
+  --preflight-evidence artifacts/webshop-readiness.json
+```
+
+Readiness evidence proves that the recorded runtime/source contract passed the controlled preflight represented by that artifact. It is not a benchmark result and does not establish model effectiveness. Evidence-bound measured artifacts record the readiness fingerprint in their identity-bound runtime provenance; verification requires the retained readiness JSON and rejects a missing, tampered, or unrelated object.
 
 The placeholders are intentional. Upstream revisions, dependency versions, model checkpoints, and benchmark outcomes must come from the actual controlled execution environment; ReMemAgent does not invent them.
 
