@@ -83,6 +83,42 @@ def preflight_controlled_paired_external_benchmarks(
     )
 
 
+def run_admitted_paired_external_benchmarks(
+    preflight_result: ControlledPairedPreflightResult,
+    baseline_spec: ExternalBenchmarkSpec,
+    treatment_spec: ExternalBenchmarkSpec,
+    seeds: Sequence[int],
+    *,
+    baseline_label: str = "baseline",
+    treatment_label: str = "treatment",
+) -> ControlledPairedBenchmarkResult:
+    """Measure a paired experiment using an already-admitted controlled snapshot.
+
+    This boundary is intentionally side-effect free with respect to runtime and Git
+    admission: it never recollects mutable state or reruns readiness probes. Callers
+    can therefore validate additional evidence against ``preflight_result`` before
+    invoking measurement, while persistence still receives the exact admitted
+    runtime and source snapshots.
+    """
+
+    if not isinstance(preflight_result, ControlledPairedPreflightResult):
+        raise TypeError("preflight_result must be a ControlledPairedPreflightResult")
+
+    paired_result = run_paired_external_benchmarks(
+        baseline_spec,
+        treatment_spec,
+        seeds,
+        baseline_label=baseline_label,
+        treatment_label=treatment_label,
+    )
+    paired_result = replace(paired_result, runtime_provenance=preflight_result.runtime_provenance)
+    return ControlledPairedBenchmarkResult(
+        paired_result=paired_result,
+        runtime_provenance=preflight_result.runtime_provenance,
+        source_checkout_provenance=preflight_result.source_checkout_provenance,
+    )
+
+
 def run_controlled_paired_external_benchmarks(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
@@ -112,18 +148,13 @@ def run_controlled_paired_external_benchmarks(
         source_checkout_requirements=source_checkout_requirements,
         probe_action=probe_action,
     )
-    paired_result = run_paired_external_benchmarks(
+    return run_admitted_paired_external_benchmarks(
+        preflight_result,
         baseline_spec,
         treatment_spec,
         seeds,
         baseline_label=baseline_label,
         treatment_label=treatment_label,
-    )
-    paired_result = replace(paired_result, runtime_provenance=preflight_result.runtime_provenance)
-    return ControlledPairedBenchmarkResult(
-        paired_result=paired_result,
-        runtime_provenance=preflight_result.runtime_provenance,
-        source_checkout_provenance=preflight_result.source_checkout_provenance,
     )
 
 
@@ -159,5 +190,6 @@ __all__ = [
     "ControlledPairedBenchmarkResult",
     "ControlledPairedPreflightResult",
     "preflight_controlled_paired_external_benchmarks",
+    "run_admitted_paired_external_benchmarks",
     "run_controlled_paired_external_benchmarks",
 ]
