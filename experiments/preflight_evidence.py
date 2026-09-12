@@ -23,6 +23,7 @@ from experiments.source_checkouts import (
 )
 
 PREFLIGHT_EVIDENCE_SCHEMA_VERSION = 1
+PREFLIGHT_EVIDENCE_PROVENANCE_KEY = "preflight_evidence_sha256"
 
 
 def build_controlled_paired_preflight_evidence(
@@ -136,6 +137,7 @@ def _canonical_sha256(payload: Mapping[str, object]) -> str:
 
 
 __all__ = [
+    "PREFLIGHT_EVIDENCE_PROVENANCE_KEY",
     "PREFLIGHT_EVIDENCE_SCHEMA_VERSION",
     "build_controlled_paired_preflight_evidence",
     "preflight_evidence_json",
