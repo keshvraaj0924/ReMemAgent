@@ -271,9 +271,7 @@ def test_controlled_run_reuses_preflight_snapshots_for_measurement(monkeypatch) 
     monkeypatch.setattr(
         controlled_paired,
         "replace",
-        lambda result, **changes: SimpleNamespace(
-            runtime_provenance=changes["runtime_provenance"]
-        ),
+        lambda result, **changes: SimpleNamespace(runtime_provenance=changes["runtime_provenance"]),
     )
 
     result = controlled_paired.run_controlled_paired_external_benchmarks(
