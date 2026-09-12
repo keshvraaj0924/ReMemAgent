@@ -1,6 +1,6 @@
 # Paired readiness evidence
 
-Controlled paired preflight now has a machine-readable evidence representation for CI and research orchestration.
+Controlled paired preflight has a machine-readable evidence representation for CI and research orchestration.
 
 `build_controlled_paired_preflight_evidence(...)` accepts the exact `ControlledPairedPreflightResult` returned by controlled readiness admission plus the declared source-checkout requirement contract. It does not recollect Git or runtime state after preflight.
 
@@ -31,5 +31,15 @@ remem-paired-benchmark \
 ```
 
 The persisted file is the canonical verified readiness payload generated from the snapshots that actually passed controlled preflight. `--overwrite` is required to replace an existing readiness file, matching benchmark artifact overwrite behavior.
+
+## Binding readiness to later measurement
+
+A readiness file can be verified structurally without proving that a later process still has the same runtime and source state. For measured orchestration, use `run_evidence_bound_paired_external_benchmarks(...)` rather than treating standalone verification as sufficient.
+
+The evidence-bound runner performs fresh controlled admission, compares the previously persisted evidence with the exact runtime/source snapshots admitted in the current process, and starts measured episodes only when the canonical evidence fingerprint matches. A malformed, tampered, or stale readiness artifact therefore fails before measurement.
+
+Internally, `run_admitted_paired_external_benchmarks(...)` provides a narrow measurement boundary for an already-admitted `ControlledPairedPreflightResult`. It deliberately does not recollect runtime state, recollect external Git state, or rerun environment readiness probes. This separation prevents a second mutable observation from being substituted between evidence validation and measurement.
+
+The current `remem-paired-benchmark` CLI can generate readiness evidence, while evidence-bound measured execution is currently exposed through the Python API. CLI wiring for requiring a prior readiness artifact is a subsequent orchestration increment; callers must not assume the existing measured CLI path consumes a readiness file.
 
 This object is readiness evidence, not a benchmark result. It contains no measured episode outcomes and must not be used to claim ALFWorld/WebShop effectiveness. Measured claims still require a completed paired benchmark artifact and its integrity verification.
