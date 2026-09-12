@@ -163,7 +163,9 @@ def main() -> int:
             evidence_path = getattr(arguments, "preflight_evidence", None)
             if evidence_path is not None:
                 if preflight_result is None or source_checkout_requirements is None:
-                    raise ValueError("preflight evidence requires controlled source-checkout admission")
+                    raise ValueError(
+                        "preflight evidence requires controlled source-checkout admission"
+                    )
                 saved_evidence = _save_preflight_evidence(
                     preflight_result,
                     source_checkout_requirements,
@@ -171,7 +173,9 @@ def main() -> int:
                     overwrite=arguments.overwrite,
                 )
                 print(f"saved paired preflight readiness evidence: {saved_evidence}")
-            print("paired benchmark preflight completed; no measured episodes or benchmark artifacts created")
+            print(
+                "paired benchmark preflight completed; no measured episodes or benchmark artifacts created"
+            )
             return 0
 
         _validate_artifact_destinations(arguments.output, arguments.manifest)
