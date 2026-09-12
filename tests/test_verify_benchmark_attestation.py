@@ -50,7 +50,63 @@ def test_verify_report_artifact_returns_exact_manifest_attestation(
     assert result.schema_version == 1
     assert result.byte_count == len(expected_bytes)
     assert result.sha256 == hashlib.sha256(expected_bytes).hexdigest()
+    assert result.benchmark_name is None
+    assert result.configuration_fingerprint is None
+    assert result.experiment_identity is None
     assert result.preflight_evidence_sha256 is None
+
+
+def test_verify_report_artifact_attests_validated_experiment_identity(
+    tmp_path: Path,
+) -> None:
+    """Verification should expose validated report identity fields for CI correlation."""
+
+    report_path = tmp_path / "benchmark.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "episodes": [],
+                "benchmark_name": "webshop",
+                "configuration_fingerprint": "b" * 64,
+                "experiment_identity": "c" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = save_benchmark_artifact_manifest(report_path)
+
+    result = verify_report_artifact(report_path, manifest_path)
+
+    assert result.benchmark_name == "webshop"
+    assert result.configuration_fingerprint == "b" * 64
+    assert result.experiment_identity == "c" * 64
+
+
+@pytest.mark.parametrize(
+    ("key", "invalid_value"),
+    [
+        ("benchmark_name", 3),
+        ("configuration_fingerprint", ""),
+        ("experiment_identity", []),
+    ],
+)
+def test_verify_report_artifact_rejects_invalid_attestation_identity_field(
+    tmp_path: Path,
+    key: str,
+    invalid_value: object,
+) -> None:
+    """Attestation metadata should never silently coerce malformed report identity fields."""
+
+    report_path = tmp_path / "benchmark.json"
+    report_path.write_text(
+        json.dumps({"schema_version": 1, "episodes": [], key: invalid_value}),
+        encoding="utf-8",
+    )
+    manifest_path = save_benchmark_artifact_manifest(report_path)
+
+    with pytest.raises(ValueError, match=key):
+        verify_report_artifact(report_path, manifest_path)
 
 
 def test_verify_report_artifact_attests_matching_readiness_digest(
@@ -104,7 +160,10 @@ def test_main_json_output_is_canonical_and_machine_readable(
     assert captured.err == ""
     parsed = json.loads(captured.out)
     assert parsed == {
+        "benchmark_name": None,
         "byte_count": len(report_path.read_bytes()),
+        "configuration_fingerprint": None,
+        "experiment_identity": None,
         "preflight_evidence_sha256": None,
         "schema_version": 1,
         "sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
