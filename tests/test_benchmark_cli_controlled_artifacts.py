@@ -79,7 +79,9 @@ def test_runtime_controlled_cli_persists_exact_admitted_result(
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda **kwargs: pytest.fail("controlled persistence must not recollect runtime provenance"),
+        lambda **kwargs: pytest.fail(
+            "controlled persistence must not recollect runtime provenance"
+        ),
     )
 
     def fake_save(
@@ -142,7 +144,9 @@ def test_source_controlled_cli_persists_exact_source_contract(
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda **kwargs: pytest.fail("controlled persistence must not recollect runtime provenance"),
+        lambda **kwargs: pytest.fail(
+            "controlled persistence must not recollect runtime provenance"
+        ),
     )
 
     assert benchmark_cli.main() == 0
@@ -178,8 +182,10 @@ def test_repeated_controlled_cli_persists_exact_result_and_statistics(
         benchmark_cli,
         "summarize_benchmark_reports",
         lambda measured_reports: SimpleNamespace(
-            to_dict=lambda: statistics if measured_reports is reports else pytest.fail(
-                "statistics must use the controlled result reports"
+            to_dict=lambda: (
+                statistics
+                if measured_reports is reports
+                else pytest.fail("statistics must use the controlled result reports")
             )
         ),
     )
@@ -207,7 +213,9 @@ def test_repeated_controlled_cli_persists_exact_result_and_statistics(
     monkeypatch.setattr(
         benchmark_cli,
         "collect_runtime_provenance",
-        lambda **kwargs: pytest.fail("controlled persistence must not recollect runtime provenance"),
+        lambda **kwargs: pytest.fail(
+            "controlled persistence must not recollect runtime provenance"
+        ),
     )
 
     assert benchmark_cli.main() == 0
