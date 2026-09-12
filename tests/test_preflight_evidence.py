@@ -9,16 +9,17 @@ from experiments.preflight_evidence import (
     PREFLIGHT_EVIDENCE_SCHEMA_VERSION,
     build_controlled_paired_preflight_evidence,
     preflight_evidence_json,
+    validate_preflight_evidence_matches_admission,
     verify_controlled_paired_preflight_evidence,
 )
 from experiments.runtime_provenance import RuntimeProvenance
 from experiments.source_checkouts import SourceCheckoutProvenance, SourceCheckoutRequirement
 
 
-def _runtime_provenance() -> RuntimeProvenance:
+def _runtime_provenance(*, revision: str = "a" * 40) -> RuntimeProvenance:
     return RuntimeProvenance(
         schema_version=1,
-        code_revision="a" * 40,
+        code_revision=revision,
         working_tree_state="clean",
         python_version="3.12.0",
         platform="test-platform",
@@ -28,9 +29,9 @@ def _runtime_provenance() -> RuntimeProvenance:
     )
 
 
-def _preflight_result() -> ControlledPairedPreflightResult:
+def _preflight_result(*, runtime_revision: str = "a" * 40) -> ControlledPairedPreflightResult:
     return ControlledPairedPreflightResult(
-        runtime_provenance=_runtime_provenance(),
+        runtime_provenance=_runtime_provenance(revision=runtime_revision),
         source_checkout_provenance={
             "ALFWorld": SourceCheckoutProvenance(
                 revision="c" * 40,
@@ -89,3 +90,19 @@ def test_preflight_evidence_rejects_schema_drift() -> None:
 
     with pytest.raises(ValueError, match="exact persisted schema"):
         verify_controlled_paired_preflight_evidence(evidence)
+
+
+def test_preflight_evidence_matches_exact_current_admission() -> None:
+    result = _preflight_result()
+    requirements = _requirements()
+    evidence = build_controlled_paired_preflight_evidence(result, requirements)
+
+    validate_preflight_evidence_matches_admission(evidence, result, requirements)
+
+
+def test_preflight_evidence_rejects_state_drift_before_measurement() -> None:
+    evidence = build_controlled_paired_preflight_evidence(_preflight_result(), _requirements())
+    drifted_result = _preflight_result(runtime_revision="d" * 40)
+
+    with pytest.raises(ValueError, match="does not match the current admitted state"):
+        validate_preflight_evidence_matches_admission(evidence, drifted_result, _requirements())
