@@ -8,4 +8,10 @@ Loading is fail-closed. The reader validates the schema version, metric names, b
 
 A distribution sidecar is measurement evidence, not a percentile report. Fixed buckets can be merged exactly only when their upper-bound contracts are identical; they do not recover exact p50/p95/p99 values. Experiment configurations should therefore retain the bucket boundaries alongside the sidecar artifact and avoid comparing histograms with different bucket contracts as though they were equivalent.
 
-The current persistence layer is intentionally independent of the benchmark report schema. The next integration step is to stage and publish this sidecar in the same rollback-safe benchmark artifact bundle used for reports, manifests, and aggregate observability snapshots.
+## Transactional benchmark publication
+
+`experiments.benchmark_observability_bundle.persist_benchmark_observability_bundle` stages the benchmark report together with any requested integrity manifest, aggregate observability snapshot, and distribution sidecar before publication. Auxiliary artifacts are published first and the benchmark report is published last, preserving the report as the bundle commit marker.
+
+Destination aliases are rejected before staging begins. If publication fails after one or more auxiliary artifacts have been published—for example because another process claims the report path—the existing bundle publisher rolls those auxiliary paths back. In overwrite mode, pre-existing destination bytes are backed up and restored on publication failure.
+
+This transactional layer does not change benchmark report schema version 1 or the aggregate `ObservationSnapshot` schema. The distribution sidecar remains opt-in and independently versioned. The remaining integration work is CLI configuration of explicit episode-duration bucket boundaries and sidecar output paths; no implicit bucket contract should be introduced because changing bucket boundaries changes the measurement semantics.
