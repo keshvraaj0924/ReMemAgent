@@ -50,7 +50,7 @@ def _preflight_result(*, revision: str = "a" * 40) -> ControlledPairedPreflightR
             )
         }
     )
-    return controlled_paired.ControlledPairedPreflightResult(runtime, sources)
+    return ControlledPairedPreflightResult(runtime, sources)
 
 
 def _requirements() -> dict[str, SourceCheckoutRequirement]:
