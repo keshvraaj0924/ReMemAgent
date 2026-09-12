@@ -67,10 +67,7 @@ def _normalize_duration_histograms(
     for name, histogram in duration_histograms.items():
         normalized_name = _normalize_metric_name(name)
         if normalized_name in normalized:
-            raise ValueError(
-                "duration histogram names normalize to the same metric: "
-                f"{name!r}"
-            )
+            raise ValueError(f"duration histogram names normalize to the same metric: {name!r}")
         if not isinstance(histogram, ObservationHistogram):
             raise TypeError("duration histogram values must be ObservationHistogram instances")
         normalized[normalized_name] = histogram
