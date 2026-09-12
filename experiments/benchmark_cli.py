@@ -157,9 +157,14 @@ def main() -> int:
     source_controlled = source_checkout_paths is not None
     if getattr(arguments, "preflight", False):
         _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
-        if runtime_requirements is not None or source_controlled:
+        if runtime_requirements is not None:
             raise ValueError(
-                "runtime or source-checkout requirements require --runtime-preflight, "
+                "runtime requirements require --runtime-preflight, "
+                "--repeated-runtime-preflight, or a measured benchmark run"
+            )
+        if source_controlled:
+            raise ValueError(
+                "source-checkout requirements require --runtime-preflight, "
                 "--repeated-runtime-preflight, or a measured benchmark run"
             )
         validate_external_benchmark(spec)
@@ -170,13 +175,7 @@ def main() -> int:
         if getattr(arguments, "seeds", None) is None:
             raise ValueError("--repeated-runtime-preflight requires --seeds")
         seeds = _parse_seeds(arguments.seeds)
-        if runtime_requirements is None and not source_controlled:
-            validate_repeated_external_benchmark_runtime(
-                spec,
-                seeds or (),
-                probe_action=getattr(arguments, "probe_action", None),
-            )
-        else:
+        if source_controlled:
             validate_repeated_external_benchmark_runtime(
                 spec,
                 seeds or (),
@@ -185,22 +184,41 @@ def main() -> int:
                 source_checkout_paths=source_checkout_paths,
                 source_checkout_requirements=source_checkout_requirements,
             )
+        elif runtime_requirements is not None:
+            validate_repeated_external_benchmark_runtime(
+                spec,
+                seeds or (),
+                probe_action=getattr(arguments, "probe_action", None),
+                runtime_requirements=runtime_requirements,
+            )
+        else:
+            validate_repeated_external_benchmark_runtime(
+                spec,
+                seeds or (),
+                probe_action=getattr(arguments, "probe_action", None),
+            )
         print(f"benchmark repeated runtime preflight succeeded ({len(seeds or ())} seeds)")
         return 0
     if getattr(arguments, "runtime_preflight", False):
         _reject_preflight_only_conflicts(arguments, manifest=True, before_run=True)
-        if runtime_requirements is None and not source_controlled:
-            preflight_report = validate_external_benchmark_runtime(
-                spec,
-                probe_action=getattr(arguments, "probe_action", None),
-            )
-        else:
+        if source_controlled:
             preflight_report = validate_controlled_external_benchmark_runtime(
                 spec,
                 probe_action=getattr(arguments, "probe_action", None),
                 runtime_requirements=runtime_requirements,
                 source_checkout_paths=source_checkout_paths,
                 source_checkout_requirements=source_checkout_requirements,
+            )
+        elif runtime_requirements is not None:
+            preflight_report = validate_controlled_external_benchmark_runtime(
+                spec,
+                probe_action=getattr(arguments, "probe_action", None),
+                runtime_requirements=runtime_requirements,
+            )
+        else:
+            preflight_report = validate_external_benchmark_runtime(
+                spec,
+                probe_action=getattr(arguments, "probe_action", None),
             )
         mode = "step" if preflight_report.step_result is not None else "reset"
         print(f"benchmark runtime preflight succeeded ({mode} probe)")
@@ -238,7 +256,7 @@ def main() -> int:
         else None
     )
     if seeds is None:
-        if runtime_requirements is not None or source_controlled:
+        if source_controlled:
             report = run_external_benchmark_with_preflight(
                 spec,
                 probe_action=probe_action,
@@ -246,6 +264,13 @@ def main() -> int:
                 runtime_requirements=runtime_requirements,
                 source_checkout_paths=source_checkout_paths,
                 source_checkout_requirements=source_checkout_requirements,
+            )
+        elif runtime_requirements is not None:
+            report = run_external_benchmark_with_preflight(
+                spec,
+                probe_action=probe_action,
+                runner=benchmark_runner,
+                runtime_requirements=runtime_requirements,
             )
         else:
             if getattr(arguments, "preflight_before_run", False):
@@ -263,7 +288,7 @@ def main() -> int:
             )
 
     else:
-        if runtime_requirements is not None or source_controlled:
+        if source_controlled:
             reports = run_repeated_external_benchmarks_with_preflight(
                 spec,
                 seeds,
@@ -272,6 +297,14 @@ def main() -> int:
                 runtime_requirements=runtime_requirements,
                 source_checkout_paths=source_checkout_paths,
                 source_checkout_requirements=source_checkout_requirements,
+            )
+        elif runtime_requirements is not None:
+            reports = run_repeated_external_benchmarks_with_preflight(
+                spec,
+                seeds,
+                probe_action=probe_action,
+                runner=benchmark_runner,
+                runtime_requirements=runtime_requirements,
             )
         elif getattr(arguments, "preflight_before_run", False):
             reports = run_repeated_external_benchmarks_with_preflight(
