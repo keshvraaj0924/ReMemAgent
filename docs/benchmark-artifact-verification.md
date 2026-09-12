@@ -52,7 +52,18 @@ remem-verify-benchmark \
   --json
 ```
 
-Successful output is one canonical JSON object containing the verified report schema version, exact byte count, exact report SHA-256, and the authenticated readiness-evidence SHA-256 when the artifact is evidence-bound. For legacy artifacts without readiness binding, `preflight_evidence_sha256` is `null`.
+Successful output is one canonical JSON object containing:
+
+- the verified report schema version;
+- exact byte count and exact report SHA-256;
+- `benchmark_name` when the report records one;
+- the verified top-level `configuration_fingerprint` when present;
+- the verified top-level `experiment_identity` when present; and
+- the authenticated readiness-evidence SHA-256 when the artifact is evidence-bound.
+
+Legacy artifacts that do not record one of these optional identity fields emit `null` rather than having an identity inferred for them. If an identity field is present but is not a non-empty string, verification fails instead of silently coercing it into an attestation.
+
+The identity fields make the attestation directly useful for CI correlation and archival indexing: downstream automation can associate a verified byte-level artifact with its validated benchmark/configuration/experiment identity without reparsing the report. For legacy artifacts without readiness binding, `preflight_evidence_sha256` is `null`.
 
 This output is derived only after all artifact, identity, controlled-admission, paired-provenance, and readiness-binding checks succeed. It does not recollect mutable runtime or Git state. The attestation is intended for deterministic downstream automation; it is not a digital signature and should not be treated as proof against an untrusted artifact writer.
 
