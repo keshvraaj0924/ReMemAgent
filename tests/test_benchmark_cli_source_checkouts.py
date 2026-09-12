@@ -147,33 +147,32 @@ def test_repeated_runtime_preflight_forwards_source_checkout_contract(
     assert requirements["WebShop"].expected_revision == "abc123"
 
 
-def test_measured_single_run_routes_source_contract_through_preflight(
+def test_measured_single_run_routes_source_contract_through_controlled_execution(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     arguments = _arguments(tmp_path, probe_action="search")
     captured: dict[str, object] = {}
-    report = object()
+    controlled_result = object()
 
     def fake_run(*args: object, **kwargs: object) -> object:
         captured["run_kwargs"] = kwargs
-        return report
+        return controlled_result
 
     def fail_direct(*args: object, **kwargs: object) -> object:
         raise AssertionError("direct measured execution must not bypass source admission")
+
+    def fail_recollection(**kwargs: object) -> object:
+        raise AssertionError("controlled execution must not recollect runtime provenance")
 
     def fake_persist(path: Path, **kwargs: object) -> Path:
         captured["persist_kwargs"] = kwargs
         return path
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
-    monkeypatch.setattr(benchmark_cli, "run_external_benchmark_with_preflight", fake_run)
+    monkeypatch.setattr(benchmark_cli, "run_controlled_external_benchmark", fake_run)
     monkeypatch.setattr(benchmark_cli, "run_external_benchmark", fail_direct)
-    monkeypatch.setattr(
-        benchmark_cli,
-        "collect_runtime_provenance",
-        lambda **kwargs: SimpleNamespace(to_dict=lambda: {"code_revision": "remem123"}),
-    )
+    monkeypatch.setattr(benchmark_cli, "collect_runtime_provenance", fail_recollection)
     monkeypatch.setattr(benchmark_cli, "_persist_benchmark_bundle", fake_persist)
 
     assert benchmark_cli.main() == 0
