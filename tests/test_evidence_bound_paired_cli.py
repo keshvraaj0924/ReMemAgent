@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -9,6 +10,26 @@ from pathlib import Path
 import pytest
 
 import experiments.evidence_bound_paired_cli as evidence_cli
+
+
+def _valid_readiness_payload() -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "runtime_provenance": {},
+        "source_checkout_requirements": {},
+        "source_checkout_requirements_sha256": "a" * 64,
+        "source_checkout_provenance": {},
+        "source_checkout_provenance_sha256": "b" * 64,
+    }
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    payload["evidence_sha256"] = hashlib.sha256(canonical).hexdigest()
+    return payload
 
 
 def test_main_delegates_unchanged_without_evidence_option(
@@ -27,14 +48,15 @@ def test_main_delegates_unchanged_without_evidence_option(
     assert observed_argv == ["remem-paired-benchmark", "--benchmark", "webshop"]
 
 
-def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
+def test_main_binds_controlled_measurement_and_persistence_to_readiness_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     readiness_path = tmp_path / "readiness.json"
-    readiness_payload = {"schema_version": 1, "evidence_fingerprint": "abc"}
+    readiness_payload = _valid_readiness_payload()
     readiness_path.write_text(json.dumps(readiness_payload), encoding="utf-8")
     original_runner = evidence_cli.paired_cli.run_controlled_paired_external_benchmarks
+    original_saver = evidence_cli.paired_cli.save_paired_execution_result
     observed: dict[str, object] = {}
     source_path = tmp_path / "webshop"
     source_revision = "c" * 40
@@ -44,6 +66,11 @@ def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
         observed["args"] = args
         observed["kwargs"] = kwargs
         return "controlled-result"
+
+    def fake_saver(*args, **kwargs):
+        observed["save_args"] = args
+        observed["save_kwargs"] = kwargs
+        return tmp_path / "paired.json"
 
     def delegated_main() -> int:
         observed["delegated_argv"] = list(sys.argv)
@@ -55,6 +82,11 @@ def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
             source_checkout_paths={"webshop": tmp_path},
             source_checkout_requirements={"webshop": "source"},
         )
+        evidence_cli.paired_cli.save_paired_execution_result(
+            "paired-result",
+            tmp_path / "paired.json",
+            runtime_provenance={"code_revision": "abc123"},
+        )
         return 0
 
     monkeypatch.setattr(
@@ -62,6 +94,7 @@ def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
         "run_evidence_bound_paired_external_benchmarks",
         evidence_bound_runner,
     )
+    monkeypatch.setattr(evidence_cli.paired_cli, "save_paired_execution_result", fake_saver)
     monkeypatch.setattr(evidence_cli.paired_cli, "main", delegated_main)
     monkeypatch.setattr(
         sys,
@@ -91,7 +124,46 @@ def test_main_binds_controlled_measurement_to_loaded_readiness_evidence(
         "--benchmark",
         "webshop",
     ]
+    save_kwargs = observed["save_kwargs"]
+    assert isinstance(save_kwargs, dict)
+    runtime_provenance = save_kwargs["runtime_provenance"]
+    assert isinstance(runtime_provenance, dict)
+    assert runtime_provenance["code_revision"] == "abc123"
+    assert (
+        runtime_provenance[evidence_cli.PREFLIGHT_EVIDENCE_PROVENANCE_KEY]
+        == readiness_payload["evidence_sha256"]
+    )
     assert evidence_cli.paired_cli.run_controlled_paired_external_benchmarks is original_runner
+    assert evidence_cli.paired_cli.save_paired_execution_result is original_saver
+
+
+def test_main_rejects_tampered_evidence_before_delegation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    readiness_payload = _valid_readiness_payload()
+    readiness_payload["runtime_provenance"] = {"code_revision": "drifted"}
+    readiness_path = tmp_path / "readiness.json"
+    readiness_path.write_text(json.dumps(readiness_payload), encoding="utf-8")
+    monkeypatch.setattr(
+        evidence_cli.paired_cli,
+        "main",
+        lambda: pytest.fail("tampered readiness evidence must block CLI delegation"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "remem-paired-benchmark",
+            "--require-preflight-evidence",
+            str(readiness_path),
+            "--source-checkout=webshop=/tmp/webshop",
+            f"--require-source-revision=webshop={'c' * 40}",
+        ],
+    )
+
+    with pytest.raises(ValueError, match="fingerprint mismatch"):
+        evidence_cli.main()
 
 
 def test_main_rejects_evidence_binding_for_preflight_only(

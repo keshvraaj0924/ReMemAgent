@@ -3,7 +3,8 @@
 The primary paired CLI predates persisted readiness evidence. This bridge preserves
 its full argument contract while adding ``--require-preflight-evidence PATH`` for
 measured controlled runs. The option is removed before delegating to the existing
-parser, and the controlled runner is replaced only for that invocation.
+parser, and the controlled runner and persistence boundary are replaced only for
+that invocation.
 """
 
 from __future__ import annotations
@@ -18,10 +19,12 @@ import experiments.paired_benchmark_cli as paired_cli
 from experiments.evidence_bound_paired_benchmark import (
     run_evidence_bound_paired_external_benchmarks,
 )
+from experiments.preflight_evidence import verify_controlled_paired_preflight_evidence
 
 READINESS_EVIDENCE_OPTION = "--require-preflight-evidence"
 SOURCE_CHECKOUT_OPTION = "--source-checkout"
 SOURCE_REVISION_OPTION = "--require-source-revision"
+PREFLIGHT_EVIDENCE_PROVENANCE_KEY = "preflight_evidence_sha256"
 
 
 def main() -> int:
@@ -38,7 +41,10 @@ def main() -> int:
             )
         _require_controlled_source_contract(delegated_argv)
         readiness_evidence = _load_readiness_evidence(evidence_path)
+        verify_controlled_paired_preflight_evidence(readiness_evidence)
+        evidence_sha256 = _readiness_evidence_sha256(readiness_evidence)
         original_runner = paired_cli.run_controlled_paired_external_benchmarks
+        original_saver = paired_cli.save_paired_execution_result
 
         def evidence_bound_runner(*args: Any, **kwargs: Any):
             return run_evidence_bound_paired_external_benchmarks(
@@ -47,12 +53,25 @@ def main() -> int:
                 **kwargs,
             )
 
+        def evidence_bound_saver(*args: Any, **kwargs: Any):
+            runtime_provenance = dict(kwargs.get("runtime_provenance") or {})
+            if PREFLIGHT_EVIDENCE_PROVENANCE_KEY in runtime_provenance:
+                raise ValueError(
+                    "runtime_provenance reserves "
+                    f"{PREFLIGHT_EVIDENCE_PROVENANCE_KEY!r} for evidence-bound execution"
+                )
+            runtime_provenance[PREFLIGHT_EVIDENCE_PROVENANCE_KEY] = evidence_sha256
+            kwargs["runtime_provenance"] = runtime_provenance
+            return original_saver(*args, **kwargs)
+
         paired_cli.run_controlled_paired_external_benchmarks = evidence_bound_runner
+        paired_cli.save_paired_execution_result = evidence_bound_saver
         sys.argv = delegated_argv
         try:
             return paired_cli.main()
         finally:
             paired_cli.run_controlled_paired_external_benchmarks = original_runner
+            paired_cli.save_paired_execution_result = original_saver
     finally:
         sys.argv = original_argv
 
@@ -121,7 +140,20 @@ def _load_readiness_evidence(path: Path) -> Mapping[str, Any]:
     return payload
 
 
-__all__ = ["READINESS_EVIDENCE_OPTION", "main"]
+def _readiness_evidence_sha256(payload: Mapping[str, Any]) -> str:
+    """Return the already-verified readiness digest used to bind persisted measurement."""
+
+    evidence_sha256 = payload.get("evidence_sha256")
+    if not isinstance(evidence_sha256, str):
+        raise ValueError("verified preflight evidence must contain evidence_sha256")
+    return evidence_sha256
+
+
+__all__ = [
+    "PREFLIGHT_EVIDENCE_PROVENANCE_KEY",
+    "READINESS_EVIDENCE_OPTION",
+    "main",
+]
 
 
 if __name__ == "__main__":
