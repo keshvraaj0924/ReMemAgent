@@ -35,7 +35,9 @@ def _readiness_evidence() -> dict[str, object]:
     return payload
 
 
-def test_verify_report_artifact_returns_exact_manifest_attestation(tmp_path: Path) -> None:
+def test_verify_report_artifact_returns_exact_manifest_attestation(
+    tmp_path: Path,
+) -> None:
     """Successful verification should expose the exact byte-level manifest evidence."""
 
     report_path = tmp_path / "benchmark.json"
@@ -51,7 +53,9 @@ def test_verify_report_artifact_returns_exact_manifest_attestation(tmp_path: Pat
     assert result.preflight_evidence_sha256 is None
 
 
-def test_verify_report_artifact_attests_matching_readiness_digest(tmp_path: Path) -> None:
+def test_verify_report_artifact_attests_matching_readiness_digest(
+    tmp_path: Path,
+) -> None:
     """Evidence-bound verification should return the authenticated readiness digest."""
 
     evidence = _readiness_evidence()
@@ -105,10 +109,13 @@ def test_main_json_output_is_canonical_and_machine_readable(
         "schema_version": 1,
         "sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
     }
-    assert captured.out == json.dumps(
-        parsed,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-    ) + "\n"
+    assert captured.out == (
+        json.dumps(
+            parsed,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
+        + "\n"
+    )
