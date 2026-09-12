@@ -79,6 +79,8 @@ reports = run_repeated_external_benchmarks_with_preflight(
 
 Source-checkout collection occurs once before repeated environment probes; it is not repeated independently for every seed.
 
+`experiments.controlled_external_benchmark` is the evidence-preserving execution boundary. It always captures the runtime snapshot before benchmark side effects, validates runtime requirements when supplied, optionally validates a complete source-checkout contract, and returns the exact admitted snapshots together with the measured report or reports. Runtime-only and source-only controlled executions therefore do not need to recollect mutable state after measurement.
+
 ## Command-line admission
 
 Both external benchmark entry points expose the source checkout contract directly. `remem-benchmark` and `remem-paired-benchmark` accept:
@@ -107,14 +109,16 @@ remem-benchmark \
 
 The revision remains an explicit experiment input. ReMemAgent does not substitute a guessed upstream commit.
 
-## Paired artifact evidence
+## Artifact evidence
 
 Controlled paired execution can carry the exact admitted source snapshot through measurement. `save_paired_execution_result()` accepts that snapshot together with the source requirement contract, validates the pair again, persists both canonical forms, and injects their SHA-256 fingerprints into runtime provenance before paired experiment identity is constructed.
 
-Artifact verification reconstructs the contract and snapshot, verifies that the observed Git state still satisfies the persisted requirements, and checks both fingerprints. Tampering with the required revision, cleanliness policy, observed revision, or working-tree state is therefore detectable and also changes experiment identity when artifacts are created correctly.
+Standalone controlled execution now has the equivalent persistence boundary in `experiments.controlled_benchmark_artifacts`. `save_controlled_benchmark_result()` and `save_controlled_repeated_benchmark_result()` accept the exact snapshots returned by controlled execution, validate source state against the declared contract again, inject runtime/source evidence fingerprints before ordinary experiment identity is constructed, and persist the canonical contracts and snapshots alongside the report.
+
+`validate_persisted_controlled_benchmark_artifact()` checks the same runtime/source evidence during artifact verification. Tampering with a required revision, cleanliness policy, observed revision, working-tree state, or runtime requirement digest is therefore detectable for artifacts created through the controlled persistence API.
 
 ## Remaining boundary
 
-Source state is now enforceable from both benchmark CLIs, and paired controlled artifacts can cryptographically bind the admitted source contract and observed checkout snapshot into experiment identity. Ordinary `remem-benchmark` reports still use the general benchmark-report schema and do not yet persist the admitted source checkout contract/snapshot as identity-bound fields.
+The ordinary controlled execution and persistence APIs can now preserve and identity-bind admitted runtime/source evidence without post-measurement recollection. The remaining integration step is routing controlled `remem-benchmark` measured runs through those APIs automatically; the current CLI still uses its legacy report writer after admission.
 
-For scientific baseline-versus-memory comparisons where source provenance must be part of the evidence identity, use the controlled paired path. A future schema change may extend the same identity binding to standalone benchmark reports; until then, do not claim that an ordinary report alone cryptographically proves its source checkout state.
+Until that CLI handoff is complete and covered by the full quality matrix, treat standalone identity binding as an explicit API capability rather than an automatic `remem-benchmark` guarantee. Paired controlled artifacts already perform the complete admission-to-persistence handoff. No benchmark effectiveness claim follows from provenance integrity alone.
