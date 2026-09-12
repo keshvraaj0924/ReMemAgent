@@ -13,6 +13,9 @@ from experiments.benchmark_manifest import (
     load_benchmark_artifact_manifest,
     verify_benchmark_artifact,
 )
+from experiments.controlled_benchmark_artifacts import (
+    validate_persisted_controlled_benchmark_artifact,
+)
 from experiments.paired_artifacts import validate_persisted_paired_artifact
 from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
 
@@ -31,7 +34,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def verify_report_artifact(report_path: Path, manifest_path: Path | None = None) -> None:
-    """Verify report bytes, embedded identities, and paired execution provenance."""
+    """Verify report bytes, embedded identities, and controlled admission evidence."""
 
     selected_manifest_path = manifest_path or report_path.with_suffix(
         report_path.suffix + ".manifest.json"
@@ -40,6 +43,7 @@ def verify_report_artifact(report_path: Path, manifest_path: Path | None = None)
     verify_benchmark_artifact(report_path, manifest)
     payload = _load_report_payload(report_path)
     validate_persisted_benchmark_artifact(payload)
+    validate_persisted_controlled_benchmark_artifact(payload)
     validate_persisted_paired_artifact(payload)
 
 
