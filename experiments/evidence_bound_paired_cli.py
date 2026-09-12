@@ -20,6 +20,8 @@ from experiments.evidence_bound_paired_benchmark import (
 )
 
 READINESS_EVIDENCE_OPTION = "--require-preflight-evidence"
+SOURCE_CHECKOUT_OPTION = "--source-checkout"
+SOURCE_REVISION_OPTION = "--require-source-revision"
 
 
 def main() -> int:
@@ -30,10 +32,11 @@ def main() -> int:
         evidence_path, delegated_argv = _extract_readiness_evidence_path(original_argv)
         if evidence_path is None:
             return paired_cli.main()
-        if "--preflight-only" in delegated_argv:
+        if _contains_option(delegated_argv, "--preflight-only"):
             raise SystemExit(
                 f"error: {READINESS_EVIDENCE_OPTION} is for measured execution, not --preflight-only"
             )
+        _require_controlled_source_contract(delegated_argv)
         readiness_evidence = _load_readiness_evidence(evidence_path)
         original_runner = paired_cli.run_controlled_paired_external_benchmarks
 
@@ -83,6 +86,25 @@ def _extract_readiness_evidence_path(argv: Sequence[str]) -> tuple[Path | None, 
         delegated.append(argument)
         index += 1
     return evidence_path, delegated
+
+
+def _contains_option(argv: Sequence[str], option: str) -> bool:
+    """Return whether argv contains an option in separated or ``--name=value`` form."""
+
+    prefix = f"{option}="
+    return any(argument == option or argument.startswith(prefix) for argument in argv[1:])
+
+
+def _require_controlled_source_contract(argv: Sequence[str]) -> None:
+    """Fail closed unless evidence-bound measurement will use controlled admission."""
+
+    if not _contains_option(argv, SOURCE_CHECKOUT_OPTION) or not _contains_option(
+        argv, SOURCE_REVISION_OPTION
+    ):
+        raise SystemExit(
+            "error: --require-preflight-evidence requires declared source checkouts "
+            "and exact source revisions"
+        )
 
 
 def _load_readiness_evidence(path: Path) -> Mapping[str, Any]:
