@@ -52,9 +52,7 @@ def test_histogram_registration_rejects_non_histogram_values() -> None:
 
 def test_benchmark_episode_timing_populates_duration_distribution() -> None:
     histogram = ObservationHistogram((60.0,))
-    collector = DistributionObservationCollector(
-        {"benchmark.episode.duration_seconds": histogram}
-    )
+    collector = DistributionObservationCollector({"benchmark.episode.duration_seconds": histogram})
 
     BenchmarkSuiteRunner(observation_collector=collector).run(
         benchmark_name="distribution-observability-smoke",
@@ -66,11 +64,7 @@ def test_benchmark_episode_timing_populates_duration_distribution() -> None:
     )
 
     aggregate = collector.snapshot()
-    distribution = collector.duration_distribution_snapshots()[
-        "benchmark.episode.duration_seconds"
-    ]
+    distribution = collector.duration_distribution_snapshots()["benchmark.episode.duration_seconds"]
     assert distribution.count == 2
-    assert distribution.total == aggregate.durations_seconds[
-        "benchmark.episode.duration_seconds"
-    ]
+    assert distribution.total == aggregate.durations_seconds["benchmark.episode.duration_seconds"]
     assert sum(distribution.bucket_counts) == 2
