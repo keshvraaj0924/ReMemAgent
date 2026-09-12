@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
@@ -30,6 +31,8 @@ from experiments.source_checkouts import (
     validate_source_checkout_requirements,
 )
 from remem.benchmark import BenchmarkRunReport, BenchmarkSuiteRunner
+
+_EMPTY_SOURCE_PROVENANCE: Mapping[str, SourceCheckoutProvenance] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,22 +56,22 @@ class ControlledRepeatedExternalBenchmarkResult:
 def run_controlled_external_benchmark(
     spec: ExternalBenchmarkSpec,
     *,
-    runtime_requirements: RuntimeRequirements,
-    source_checkout_paths: Mapping[str, Path],
-    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement],
+    runtime_requirements: RuntimeRequirements | None = None,
+    source_checkout_paths: Mapping[str, Path] | None = None,
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement] | None = None,
     probe_action: str | None = None,
     runner: BenchmarkSuiteRunner | None = None,
 ) -> ControlledExternalBenchmarkResult:
     """Admit runtime/source state, preflight the environment, then measure once.
 
-    Admission occurs before callable resolution and environment construction. The
-    returned snapshots are the exact objects that passed validation, allowing
-    persistence to bind evidence to pre-measurement state without a second Git or
-    package metadata collection after the benchmark has run.
+    Runtime provenance is always collected before benchmark side effects so the
+    exact admitted snapshot can be identity-bound during persistence. Runtime
+    requirements and source-checkout requirements are optional independent
+    controls; source paths and requirements must be supplied together.
     """
 
     runtime_provenance = _validate_runtime_contract(runtime_requirements)
-    source_checkout_provenance = _validate_source_checkout_contract(
+    source_checkout_provenance = _validate_optional_source_checkout_contract(
         source_checkout_paths,
         source_checkout_requirements,
     )
@@ -85,22 +88,22 @@ def run_controlled_repeated_external_benchmarks(
     spec: ExternalBenchmarkSpec,
     seeds: Sequence[int],
     *,
-    runtime_requirements: RuntimeRequirements,
-    source_checkout_paths: Mapping[str, Path],
-    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement],
+    runtime_requirements: RuntimeRequirements | None = None,
+    source_checkout_paths: Mapping[str, Path] | None = None,
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement] | None = None,
     probe_action: str | None = None,
     runner: BenchmarkSuiteRunner | None = None,
 ) -> ControlledRepeatedExternalBenchmarkResult:
     """Admit shared state once, preflight every seed, then measure every seed.
 
-    Runtime and source admission are intentionally performed once because all
-    repeated runs belong to one experiment execution. Environment probes remain
-    seed-isolated and happen only after admission succeeds.
+    Runtime and optional source admission are intentionally performed once because
+    all repeated runs belong to one experiment execution. Environment probes
+    remain seed-isolated and happen only after admission succeeds.
     """
 
     selected_seeds = validate_repeated_benchmark_request(spec, seeds)
     runtime_provenance = _validate_runtime_contract(runtime_requirements)
-    source_checkout_provenance = _validate_source_checkout_contract(
+    source_checkout_provenance = _validate_optional_source_checkout_contract(
         source_checkout_paths,
         source_checkout_requirements,
     )
@@ -117,26 +120,37 @@ def run_controlled_repeated_external_benchmarks(
     )
 
 
-def _validate_runtime_contract(requirements: RuntimeRequirements) -> RuntimeProvenance:
-    """Collect and validate one runtime snapshot before external side effects."""
+def _validate_runtime_contract(
+    requirements: RuntimeRequirements | None,
+) -> RuntimeProvenance:
+    """Collect one runtime snapshot and optionally validate its declared contract."""
 
-    if not isinstance(requirements, RuntimeRequirements):
-        raise TypeError("runtime_requirements must be a RuntimeRequirements instance")
+    if requirements is not None and not isinstance(requirements, RuntimeRequirements):
+        raise TypeError("runtime_requirements must be a RuntimeRequirements instance or None")
     provenance = collect_runtime_provenance()
-    validate_runtime_requirements(provenance, requirements)
+    if requirements is not None:
+        validate_runtime_requirements(provenance, requirements)
     return provenance
 
 
-def _validate_source_checkout_contract(
-    repositories: Mapping[str, Path],
-    requirements: Mapping[str, SourceCheckoutRequirement],
+def _validate_optional_source_checkout_contract(
+    repositories: Mapping[str, Path] | None,
+    requirements: Mapping[str, SourceCheckoutRequirement] | None,
 ) -> Mapping[str, SourceCheckoutProvenance]:
-    """Collect and validate one immutable snapshot of external source checkouts."""
+    """Collect and validate source state when a complete source contract is supplied."""
 
+    if repositories is None and requirements is None:
+        return _EMPTY_SOURCE_PROVENANCE
+    if repositories is None or requirements is None:
+        raise ValueError(
+            "source_checkout_paths and source_checkout_requirements must be provided together"
+        )
     if not isinstance(repositories, Mapping):
         raise TypeError("source_checkout_paths must be a mapping")
     if not isinstance(requirements, Mapping):
         raise TypeError("source_checkout_requirements must be a mapping")
+    if not repositories:
+        raise ValueError("source_checkout_paths must not be empty")
     if not requirements:
         raise ValueError("source_checkout_requirements must not be empty")
 
