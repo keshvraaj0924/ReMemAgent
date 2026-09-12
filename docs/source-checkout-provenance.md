@@ -111,14 +111,16 @@ The revision remains an explicit experiment input. ReMemAgent does not substitut
 
 ## Artifact evidence
 
-Controlled paired execution can carry the exact admitted source snapshot through measurement. `save_paired_execution_result()` accepts that snapshot together with the source requirement contract, validates the pair again, persists both canonical forms, and injects their SHA-256 fingerprints into runtime provenance before paired experiment identity is constructed.
+Controlled paired execution carries the exact admitted source snapshot through measurement. `save_paired_execution_result()` accepts that snapshot together with the source requirement contract, validates the pair again, persists both canonical forms, and injects their SHA-256 fingerprints into runtime provenance before paired experiment identity is constructed.
 
-Standalone controlled execution now has the equivalent persistence boundary in `experiments.controlled_benchmark_artifacts`. `save_controlled_benchmark_result()` and `save_controlled_repeated_benchmark_result()` accept the exact snapshots returned by controlled execution, validate source state against the declared contract again, inject runtime/source evidence fingerprints before ordinary experiment identity is constructed, and persist the canonical contracts and snapshots alongside the report.
+Standalone controlled execution has the equivalent persistence boundary in `experiments.controlled_benchmark_artifacts`. `save_controlled_benchmark_result()` and `save_controlled_repeated_benchmark_result()` accept the exact snapshots returned by controlled execution, validate source state against the declared contract again, inject runtime/source evidence fingerprints before ordinary experiment identity is constructed, and persist the canonical contracts and snapshots alongside the report.
 
-`validate_persisted_controlled_benchmark_artifact()` checks the same runtime/source evidence during artifact verification. Tampering with a required revision, cleanliness policy, observed revision, working-tree state, or runtime requirement digest is therefore detectable for artifacts created through the controlled persistence API.
+`remem-benchmark` now routes any measured run that declares runtime requirements or a source-checkout contract through `experiments.controlled_external_benchmark` and then through the corresponding controlled artifact writer. The CLI therefore persists the exact pre-measurement runtime/source evidence admitted for that run instead of collecting mutable Git or package state again after measurement. Repeated controlled runs use the same admission snapshot for all requested seeds while statistics are computed from the measured reports returned by that controlled execution.
 
-## Remaining boundary
+`validate_persisted_controlled_benchmark_artifact()` checks the same runtime/source evidence during artifact verification. Tampering with a required revision, cleanliness policy, observed revision, working-tree state, or runtime requirement digest is therefore detectable for artifacts created through the controlled persistence path.
 
-The ordinary controlled execution and persistence APIs can now preserve and identity-bind admitted runtime/source evidence without post-measurement recollection. The remaining integration step is routing controlled `remem-benchmark` measured runs through those APIs automatically; the current CLI still uses its legacy report writer after admission.
+## Evidence boundary
 
-Until that CLI handoff is complete and covered by the full quality matrix, treat standalone identity binding as an explicit API capability rather than an automatic `remem-benchmark` guarantee. Paired controlled artifacts already perform the complete admission-to-persistence handoff. No benchmark effectiveness claim follows from provenance integrity alone.
+The standalone and paired controlled CLI paths now implement the complete admission → measurement → identity-bound persistence handoff for declared runtime/source contracts. This is a reproducibility and integrity guarantee only. It does not establish that ReMemAgent improves ALFWorld or WebShop performance, and it does not establish production readiness.
+
+Real effectiveness evidence still requires explicitly pinned upstream benchmark revisions, a fixed model/policy runtime, matched multi-seed baseline-versus-memory runs, and the corresponding statistical analysis. ReMemAgent intentionally does not invent those revisions or benchmark results.
