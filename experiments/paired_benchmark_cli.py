@@ -15,8 +15,13 @@ from experiments.paired_benchmark import (
     run_paired_external_benchmarks_with_preflight,
 )
 from experiments.paired_source_preflight import (
+    ControlledPairedPreflightResult,
     preflight_controlled_paired_external_benchmarks,
     run_controlled_paired_external_benchmarks,
+)
+from experiments.preflight_evidence import (
+    build_controlled_paired_preflight_evidence,
+    preflight_evidence_json,
 )
 from experiments.runtime_provenance import collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements
@@ -58,7 +63,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Validate runtime, source checkouts, and paired environment readiness, then exit "
-            "without measured episodes or artifacts"
+            "without measured episodes or benchmark artifacts"
+        ),
+    )
+    parser.add_argument(
+        "--preflight-evidence",
+        type=Path,
+        help=(
+            "Persist verified machine-readable readiness evidence during --preflight-only; "
+            "requires declared source checkouts"
         ),
     )
     parser.add_argument(
@@ -125,6 +138,11 @@ def main() -> int:
         source_checkout_paths, source_checkout_requirements = _build_source_checkout_contract(
             arguments
         )
+        _validate_preflight_evidence_arguments(
+            preflight_only=getattr(arguments, "preflight_only", False),
+            preflight_evidence=getattr(arguments, "preflight_evidence", None),
+            source_checkout_requirements=source_checkout_requirements,
+        )
         if getattr(arguments, "strict_reproducibility", False):
             validate_strict_paired_reproducibility(
                 seeds=seeds,
@@ -133,7 +151,7 @@ def main() -> int:
                 manifest_path=arguments.manifest,
             )
         if getattr(arguments, "preflight_only", False):
-            _run_preflight_only(
+            preflight_result = _run_preflight_only(
                 baseline_spec,
                 treatment_spec,
                 seeds,
@@ -142,7 +160,18 @@ def main() -> int:
                 source_checkout_paths=source_checkout_paths,
                 source_checkout_requirements=source_checkout_requirements,
             )
-            print("paired benchmark preflight completed; no measured episodes or artifacts created")
+            evidence_path = getattr(arguments, "preflight_evidence", None)
+            if evidence_path is not None:
+                if preflight_result is None or source_checkout_requirements is None:
+                    raise ValueError("preflight evidence requires controlled source-checkout admission")
+                saved_evidence = _save_preflight_evidence(
+                    preflight_result,
+                    source_checkout_requirements,
+                    evidence_path,
+                    overwrite=arguments.overwrite,
+                )
+                print(f"saved paired preflight readiness evidence: {saved_evidence}")
+            print("paired benchmark preflight completed; no measured episodes or benchmark artifacts created")
             return 0
 
         _validate_artifact_destinations(arguments.output, arguments.manifest)
@@ -212,11 +241,11 @@ def _run_preflight_only(
     runtime_requirements: RuntimeRequirements | None,
     source_checkout_paths: Mapping[str, Path] | None,
     source_checkout_requirements: Mapping[str, SourceCheckoutRequirement] | None,
-) -> None:
-    """Run paired readiness admission without measurement or artifact persistence."""
+) -> ControlledPairedPreflightResult | None:
+    """Run paired readiness admission without measured benchmark execution."""
 
     if source_checkout_paths is not None and source_checkout_requirements is not None:
-        preflight_controlled_paired_external_benchmarks(
+        return preflight_controlled_paired_external_benchmarks(
             baseline_spec,
             treatment_spec,
             seeds,
@@ -225,7 +254,6 @@ def _run_preflight_only(
             source_checkout_paths=source_checkout_paths,
             source_checkout_requirements=source_checkout_requirements,
         )
-        return
 
     preflight_paired_external_benchmarks(
         baseline_spec,
@@ -234,6 +262,40 @@ def _run_preflight_only(
         probe_action=probe_action,
         runtime_requirements=runtime_requirements,
     )
+    return None
+
+
+def _save_preflight_evidence(
+    result: ControlledPairedPreflightResult,
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement],
+    path: Path,
+    *,
+    overwrite: bool,
+) -> Path:
+    """Persist verified controlled readiness evidence without recollecting mutable state."""
+
+    output_path = _prepare_output_path(path, overwrite=overwrite)
+    payload = build_controlled_paired_preflight_evidence(result, source_checkout_requirements)
+    serialized = preflight_evidence_json(payload)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(f"{serialized}\n", encoding="utf-8")
+    return output_path
+
+
+def _validate_preflight_evidence_arguments(
+    *,
+    preflight_only: bool,
+    preflight_evidence: Path | None,
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement] | None,
+) -> None:
+    """Require evidence persistence to use the controlled readiness-only boundary."""
+
+    if preflight_evidence is None:
+        return
+    if not preflight_only:
+        raise ValueError("--preflight-evidence requires --preflight-only")
+    if source_checkout_requirements is None:
+        raise ValueError("--preflight-evidence requires declared source checkouts")
 
 
 def _add_policy_arguments(parser: argparse.ArgumentParser, condition: str) -> None:
