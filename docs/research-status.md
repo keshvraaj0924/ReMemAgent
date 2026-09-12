@@ -1,114 +1,81 @@
 # Research status
 
-This document records the implemented research surface without implying experimental conclusions that have not been measured.
+This document records what the repository has implemented and verified without turning engineering checks into scientific claims.
 
 ## Verified engineering baseline
 
-The `feat/core-memory-engine` branch has a verified green GitHub `Quality` workflow at commit `890b97a` (run `1077`) on September 10, 2026. Both Python 3.11 and 3.12 jobs completed the full configured quality pipeline successfully: package installation and import checks, 706 pytest tests, Ruff formatting and linting, mypy type checking, dependency validation, Python compilation, distribution builds, wheel/source-distribution smoke tests, and artifact upload.
+The `feat/core-memory-engine` branch has a verified green GitHub `Quality` workflow at commit `6d1f888d48cc571b14fce8a218b6936f4e15fc95` (run `1278`) on September 12, 2026. Both Python 3.11 and 3.12 completed the configured quality pipeline successfully. The run collected **917 pytest tests** and also passed Ruff formatting and linting, mypy type checking, dependency validation, Python compilation, wheel/source-distribution builds, isolated distribution smoke tests, and artifact upload.
 
-## Current verification state
+This is an engineering verification statement. It does **not** establish benchmark improvement, transfer advantage, statistical significance, model-training effectiveness, or production readiness.
 
-Run `1077` is the latest verified code-quality baseline for the implementation described here. CI success is evidence that the covered engineering contracts pass; it is not evidence of benchmark improvement, transfer advantage, statistical significance, or production readiness.
+## Implemented research surface
 
-The framework currently provides deterministic implementations for:
+The framework currently provides tested implementations for the planned research layers:
 
-- typed episodic memory and lifecycle management;
-- retrieval, deduplication, reconstruction, trust, and transferability;
-- counterfactual routing and failure-memory capture;
-- consolidation and retirement policies;
+- typed episodic memory, storage, ingestion, lifecycle state, and failure evidence;
+- retrieval, deduplication, reconstruction, trust, and transferability estimation;
+- explicit heuristic and counterfactual routing boundaries;
+- consolidation, staleness, validation, and retirement policies;
 - synthetic negative-transfer evaluation and ablation reporting;
-- normalized ALFWorld/WebShop environment boundaries;
-- an explicit external benchmark callable boundary and concrete ALFWorld/WebShop adapter-factory bridge;
-- concrete lazy factory bridges for the upstream ALFWorld text API and WebShop Gym text API, without adding those third-party packages to core dependencies;
-- strict validation of official benchmark bridge configuration before optional third-party imports or environment construction;
-- a caller-owned model-policy composition factory that injects ReMemAgent memory guidance without taking ownership of model loading or inference;
-- strict policy trust-threshold validation shared with the external benchmark specification contract;
-- strict boolean validation of benchmark success evaluators before episode outcomes are attributed or stored;
-- GRPO batch normalization and an async verl agent-loop bridge;
-- deterministic JSON Lines writers for framework-neutral GRPO and verl training artifacts;
-- integrity manifests with row counts and SHA-256 digests for persisted training artifacts;
-- reproducible single-run and explicit multi-seed experiment execution with provenance-preserving JSON serialization;
-- seed-level descriptive benchmark statistics without pooling independent episodes;
-- paired treatment-minus-baseline descriptive deltas aligned by independent seed;
-- versioned benchmark report artifacts;
-- backend-neutral observability primitives with deterministic, atomically persisted local snapshots and additive multi-worker snapshot merging;
-- explicit observability outcome accounting for mutually exclusive success/failure paths at both episode and suite boundaries;
-- import-only and runtime environment preflight checks for external benchmark launches;
-- standalone SHA-256 integrity manifests for persisted benchmark report files, with exact-byte verification and schema-version checking;
-- explicit cleanup of caller-created benchmark environments when adapter construction fails;
-- paired benchmark CLI artifact-overwrite protection, checked before environment or policy construction;
-- token-level preservation of optional verl response log probabilities through validation, trajectory serialization, and the external adapter boundary.
+- seed-aware benchmark statistics and paired baseline-versus-treatment analysis;
+- exact paired sign-flip tests, Holm correction, and paired effect-size utilities;
+- normalized ALFWorld and WebShop adapters plus lazy upstream construction bridges;
+- caller-owned learned-policy composition so model loading and inference remain separate from memory heuristics;
+- framework-neutral GRPO data contracts and an async verl agent-loop boundary;
+- deterministic JSONL training artifacts and SHA-256 integrity manifests;
+- single-run, repeated multi-seed, and paired external benchmark execution;
+- runtime and source-checkout preflight before controlled measurement;
+- exact runtime dependency, code revision, working-tree, and external source revision admission contracts;
+- identity-bound persistence of the exact runtime/source snapshots admitted before measurement;
+- deterministic benchmark report serialization, experiment identities, and exact-byte integrity manifests;
+- artifact verification that fails closed on malformed schemas, stale identities, source/runtime evidence drift, or byte tampering;
+- deterministic local observability snapshots, deltas, checkpoint persistence, additive worker merging, and explicit success/failure accounting;
+- CI quality, package build, installed-package import, and wheel/source-distribution smoke checks.
 
-Integration callable loading is centralized in `remem.integrations.loading`, so benchmark environment factories and external policy/evaluator factories share one explicit `module:attribute` resolution contract.
+## Strict paired reproducibility
 
-External benchmark reports retain the declared benchmark configuration alongside measured episode results, including episode count, step limit, seed, the exact callable specifications used for the environment, policy, success evaluator, and optional transfer evaluator, and the configured minimum trust threshold. The runner rejects supplied provenance metadata when its benchmark name, episode count, step limit, or seed differs from the actual invocation. This prevents a measured artifact from silently carrying stale run metadata; trust thresholds are now part of the persisted configuration rather than being implicit CLI state.
+`remem-paired-benchmark --strict-reproducibility` is the fail-closed entry point for paired experiments intended to become research evidence. Before external measurement starts, strict mode requires:
 
-Success evaluation is fail-closed at the episode execution boundary. Although `SuccessEvaluator` is statically typed to return `bool`, runtime integrations can violate annotations. ReMemAgent therefore rejects non-boolean return values instead of applying Python truthiness. A value such as the string `"false"` cannot be silently counted as a successful episode or ingested as successful memory attribution.
+1. at least two independent seeds;
+2. an exact ReMemAgent revision;
+3. a clean ReMemAgent working tree;
+4. at least one exact installed dependency version;
+5. at least one exact external source-checkout revision;
+6. clean external source checkouts with no dirty-tree exception; and
+7. an explicit integrity-manifest destination.
 
-Benchmark report JSON is explicitly versioned with `BENCHMARK_REPORT_SCHEMA_VERSION`. Both single-run and repeated-run artifacts carry the schema version, while repeated artifacts also preserve the shared configuration fingerprint. This creates a stable compatibility boundary for future readers and prevents schema evolution from being confused with changes to measured benchmark semantics.
+The strict gate validates the **declared contract**. It does not pretend that the machine satisfies that contract. Controlled preflight separately collects the actual runtime/source state immediately before measurement, validates it against the declaration, probes the configured environment, and only then permits paired execution. The admitted snapshots are carried forward into artifact identity and persistence instead of being recollected after measurement.
 
-Runtime provenance passed to benchmark report persistence is now validated and detached before serialization: provenance keys must be non-empty strings and values must be strings. This prevents malformed caller metadata or later mutation of the caller's mapping from silently changing the artifact contract.
+See [`strict-reproducibility.md`](strict-reproducibility.md) for the command-line contract and example shape.
 
-The model-policy composition boundary accepts a caller-owned factory that receives the deterministic episode seed and returns the action-generation callable expected by `MemoryGuidedPolicy`. This keeps learned components, checkpoint loading, tokenization, and inference outside the research heuristic layer while making memory-guided benchmark policies directly composable. The external benchmark CLI exposes this mode through `--action-policy-factory` and `--minimum-trust`; callers may alternatively provide a complete `--policy-factory` when they already own policy composition. Both the CLI specification and the policy-composition factory now reject booleans, non-finite values, and out-of-range values for `minimum_trust`, so the trust threshold has one strict numeric contract at both entry points.
+## Reproducibility and evidence boundary
 
-A repository-owned deterministic smoke fixture exercises the complete external path without third-party benchmark dependencies: a batch-shaped ALFWorld-compatible environment is adapted, a seed-aware action policy is memory-guided after its warm-up episode, successful trajectories are ingested, and the resulting report preserves callable provenance. This fixture is an engineering regression gate only and is not a scientific benchmark.
+External benchmark evidence can record the benchmark protocol, ordered independent seeds, code revision, working-tree state, installed dependency versions, source-checkout revisions, callable specifications, policy trust threshold, per-seed reports, paired statistics, experiment identities, preflight provenance, and exact-byte artifact manifests.
 
-The concrete official benchmark bridges now expose `build_alfworld_text_environment_factory` and `build_webshop_text_environment_factory`. ALFWorld construction follows the upstream `get_environment(...).init_env(batch_size=1)` text-environment API; WebShop construction follows the upstream `gym.make("WebAgentTextEnv-v0", observation_mode="text", ...)` interface. Imports remain lazy, so the repository's dependency-free core and CI smoke tests do not require either external benchmark package. The returned raw factories are still passed through ReMemAgent's normalized benchmark adapters rather than embedding benchmark-specific logic in the research runner. Their configuration boundaries now reject malformed `train_eval`, `env_type`, nested ALFWorld environment configuration, WebShop observation/environment identifiers, and `num_products` values before optional dependency loading.
+Repeated execution does not pool episodes across independent seeds. Paired execution aligns baseline and treatment by shared seed and preserves explicit protocol configuration. Statistical utilities are available for descriptive and paired analysis, but their existence is not itself evidence that ReMemAgent improves an agent.
 
-Repeated external execution has an explicit multi-seed boundary. `run_repeated_external_benchmarks` rejects empty or duplicate seed lists, creates independent benchmark runs for each requested seed, and preserves the seed in every report's configuration. `save_repeated_benchmark_reports` persists those reports as one JSON artifact while rejecting duplicate seeds, mixed benchmark names, and inconsistent experimental configuration, preventing ambiguous aggregation of runs with different episode counts, step limits, callable implementations, or trust thresholds.
-
-The benchmark statistics module summarizes independent seed runs without pooling their episodes. It reports descriptive mean, sample standard deviation, standard error, and a 95% normal-approximation confidence interval for success rate, mean reward, and transfer success rate. A single seed reports zero estimated uncertainty rather than implying that a sampling distribution was measured. Paired condition comparisons now additionally compute treatment-minus-baseline deltas per shared seed before summarizing the deltas, preserving the pairing induced by the experimental seed design without introducing a hypothesis test. Paired comparisons now require every report to retain explicit benchmark configuration, preventing an unconfigured report from being mistaken for evidence that two conditions used the same evaluation protocol.
-
-The external benchmark CLI now supports `--seeds` as an ordered, comma-separated set of unique independent seeds. Multi-seed CLI runs persist both the individual reports and the computed seed-level descriptive statistics in the same deterministic JSON artifact. The existing `--seed` single-run mode remains available.
-
-Runtime provenance is captured at the benchmark artifact boundary. `collect_runtime_provenance` records the Python version, platform, installed ReMemAgent package version, Git revision when available, and a deterministic fingerprint plus normalized versions of installed Python distributions. CI/container callers can provide `REMEM_GIT_COMMIT` explicitly; local checkouts fall back to `git rev-parse HEAD`. If no revision can be resolved, the artifact records `unknown` rather than inventing a revision. Dependency metadata is captured from the runtime's installed distributions rather than inferred from the project manifest, so an experiment records the environment that actually executed it. The benchmark CLI attaches this metadata to its JSON report, while the serializer remains backward-compatible for callers that do not provide runtime metadata.
-
-Observability snapshots expose a deterministic JSON-compatible representation with sorted metric keys. `write_observation_snapshot` additionally persists a snapshot atomically after flushing and syncing a temporary file in the destination directory, creating parent directories as needed. This keeps local telemetry suitable for experiment artifacts without coupling the research core to an external telemetry backend. `merge_observation_snapshots` provides a deterministic additive aggregation boundary for independent worker snapshots and rejects invalid aggregate values rather than silently carrying corrupt telemetry forward. `ObservationCollector.record_outcome` now gives integration code an explicit success/failure accounting primitive for operations whose failure path must be observable without relying on unrelated counters. `BenchmarkSuiteRunner` now applies that primitive to the complete suite lifecycle while retaining `benchmark.runs.completed` as an explicit successful-completion counter.
-
-The training integration layer can persist validated GRPO or verl batches as deterministic JSON Lines. Writers create parent directories, preserve row ordering, sort JSON keys, and avoid introducing tokenizer or trainer dependencies. Each persisted training artifact can now be accompanied by an integrity manifest containing its row count and SHA-256 digest; verification re-parses the JSONL and checks the exact bytes, so downstream training can fail closed on mutation or malformed data. GRPO batch construction now also rejects singleton groups before dataset persistence, preventing a superficially valid batch from producing only zero comparative advantages. The verl boundary now additionally preserves optional rollout response log probabilities one-for-one with response tokens, while keeping tokenization and model execution caller-owned.
-
-The CI quality workflow now checks dependency consistency, compiles all repository Python sources, builds the distributable package, verifies that the installed `remem` and `experiments` packages import successfully, and runs pytest with strict configuration and marker validation in addition to tests, formatting, linting, and type checking. The package-build validation uses the same development dependency set as the quality job, so packaging regressions are caught before a research artifact is published. Successful matrix jobs also upload the generated distribution artifacts, making the exact wheel and source distribution produced by CI inspectable alongside the pytest reports rather than rebuilding an unverified artifact later. The test suite includes isolated installation smoke coverage for both wheel and source-distribution artifacts, with console-script names derived directly from `pyproject.toml`.
-
-The external benchmark launcher now has two explicit preflight levels. `--preflight` resolves every configured callable without constructing environments. `--runtime-preflight` constructs the real configured environment through the same normalized adapter used by measured runs and validates its reset contract; supplying `--probe-action` additionally validates one concrete step. The runtime probe uses the configured run seed (or zero only when no seed was supplied) and closes the environment on every path. This provides a fail-fast integration check without pretending that a reset or one-step probe is a benchmark result.
-
-Repeated runtime preflight now forms an explicit gate before measured multi-seed execution: every requested seed is probed independently through the same environment and policy boundary, and a failed probe prevents any measured run from starting. This is covered by a regression test so the framework cannot silently produce a partially measured experiment after an integration failure.
-
-Benchmark reports can now additionally be paired with an exact-byte SHA-256 integrity manifest. The manifest checks the persisted report's current schema version, byte count, and digest; verification is deliberately separate from report validation and statistical analysis, and it does not provide authenticity or a scientific-validity claim.
-
-The benchmark environment factory now also treats adapter construction as part of environment ownership. If a caller-created raw ALFWorld/WebShop environment fails the required `reset`/`step` adapter contract, the factory attempts to close that environment before propagating the original validation error. This prevents malformed external environments from leaking resources during preflight or measured setup while preserving the causal exception.
-
-The paired benchmark CLI now applies the same artifact lifecycle guard as the single-run benchmark CLI: report and manifest destinations are checked for accidental overwrite before either condition is preflighted or measured. Existing evidence therefore cannot be silently replaced by a later paired run unless `--overwrite` is explicit.
-
-These capabilities are intentionally separated from model SDKs and external benchmark packages where practical.
+The deterministic ALFWorld/WebShop fixtures exercised in CI are engineering regression gates. They verify adapter and execution contracts without claiming to be official benchmark measurements. Likewise, GRPO/verl integration tests verify data and agent-loop boundaries without claiming that a real checkpoint has been trained successfully.
 
 ## What has not been established
 
-No benchmark improvement, transfer advantage, statistical significance, or production-readiness claim is made by this repository status. Those claims require executed experiments with fixed configurations, recorded outputs, and independently reproducible runs.
+The repository still does **not** have verified end-to-end scientific evidence for:
 
-In particular, the following remain experimental integration work rather than verified end-to-end claims:
+- real ALFWorld benchmark results using a pinned upstream checkout and fixed model-policy runtime;
+- real WebShop benchmark results using a pinned upstream checkout and fixed model-policy runtime;
+- a demonstrated baseline-versus-memory performance improvement across repeated independent seeds;
+- full GRPO/verl optimization using a real checkpoint and distributed training infrastructure;
+- production deployment reliability or operational scalability.
 
-1. ALFWorld and WebShop runs against their real upstream environments and model checkpoints.
-2. Full GRPO/verl training runs with real model checkpoints and distributed infrastructure.
-3. Statistical analysis across repeated seeds for the negative-transfer benchmark and ablations.
-4. External observability exporters and deployment-specific telemetry.
+No upstream Git revision, dependency version, model checkpoint, metric, or benchmark outcome should be inferred when it has not been measured. The framework deliberately records `unknown` or rejects the run instead of fabricating missing provenance.
 
-## Reproducibility contract
+## Engineering gates for publishable experiments
 
-Research results should be recorded with:
+A candidate external result should pass the repository quality workflow, strict reproducibility declaration, runtime/source admission, environment preflight, measured execution, identity-bound artifact persistence, and exact-byte artifact verification. The resulting artifact should then be analyzed using the stored per-seed results and explicit protocol rather than reconstructed from console output.
 
-- the benchmark configuration;
-- random seed(s);
-- code revision;
-- environment/dependency versions;
-- serialized per-run metrics;
-- enough input metadata to reconstruct the run.
-
-The repository provides a multi-seed runner that gives each synthetic case set an isolated random generator and preserves per-run case and experiment fingerprints. The external benchmark runner accepts an optional run seed: each episode receives `seed + episode_index` through both environment and policy factories, while the report records the run-level seed and declared callable configuration. Repeated external execution independently invokes that same contract for each requested seed and rejects duplicate seeds. Repeated report persistence additionally verifies that every run shares the same declared experimental configuration apart from its independent seed. Benchmark integrations provide typed factories that resolve caller-owned raw environment factories and wrap each created environment with the correct ALFWorld or WebShop adapter. The official benchmark bridges provide a concrete construction path for the upstream APIs while keeping third-party imports optional. Their input validation fails before optional dependency loading for malformed bridge configuration. The model-policy factory preserves the same episode seed when creating a caller-owned action policy, allowing deterministic checkpoint/model selection without embedding model-specific logic in ReMemAgent. Its trust threshold uses the same strict finite numeric contract as the external benchmark specification. Shared callable loading keeps those integration boundaries consistent without introducing benchmark-package dependencies into the core library. Provenance supplied directly to the suite runner is validated against the invocation before execution, and the memory-guidance trust threshold is retained alongside that provenance. Single and repeated benchmark reports can be serialized with deterministic JSON settings; every serialized report declares the current report schema version, repeated artifacts preserve seed order and the shared configuration fingerprint, and mixed benchmark families or mismatched configurations are rejected. The deterministic smoke fixture validates this full contract locally through the same external runner and demonstrates memory guidance crossing the policy boundary. Seed-level statistics operate on per-run metrics rather than pooled episodes, while paired condition comparisons operate on matched seeds and summarize treatment-minus-baseline deltas without testing significance. Paired comparisons also require explicit stored protocol configuration so the evaluation contract cannot be inferred from missing metadata. Benchmark CLI artifacts additionally record runtime provenance, including the installed distribution versions and their deterministic fingerprint, when available. Observability snapshots can be serialized deterministically for inclusion in future experiment artifacts and can now be persisted atomically as local JSON files; independent worker snapshots can be merged additively without mutating their sources, and explicit outcome counters can distinguish success from failure at integration boundaries. Benchmark suite lifecycle telemetry now records mutually exclusive suite success/failure outcomes in addition to the explicit successful-completion counter, preventing failed runs from being confused with missing telemetry. GRPO/verl batches can be persisted as deterministic JSON Lines after validation, preserving reward/advantage alignment and memory provenance. Training artifact manifests can certify those exact JSONL bytes and row counts before external ingestion. GRPO batch construction rejects singleton groups so persisted training data cannot silently contain only zero comparative advantages. The runtime benchmark preflight can now exercise the actual configured adapter before measured execution, including one caller-selected valid action when supplied, and repeated preflight covers every requested seed before measured execution begins. Benchmark report files can additionally be paired with exact-byte SHA-256 manifests before downstream archival or analysis. The normalized step-result contract now fails closed on non-finite rewards and malformed terminal metadata before those values reach metrics or training. Benchmark adapter construction also closes malformed caller-owned environments when the normalization contract rejects them. Runtime provenance supplied to report persistence is validated as a detached string mapping, preventing malformed metadata from becoming an invalid JSON artifact or being changed after serialization begins. The paired benchmark CLI checks both report and manifest destinations before preflight or measured execution and requires explicit `--overwrite` for replacement. The verl adapter preserves external response log probabilities without recomputing or fabricating them, keeping them aligned with the validated response token sequence. The CI quality workflow additionally performs installed-package import smoke checks and strict pytest configuration/marker validation, and publishes the exact distribution artifacts produced by each successful Python-version job for inspection. The distribution test verifies both wheel and source-distribution installation in isolated environments. Benchmark outcome evaluators must return actual booleans; truthy non-booleans are rejected before attribution, preventing malformed external evaluator output from being recorded as scientific evidence. The framework does not calculate or imply statistical significance, and it does not fabricate or infer missing experimental evidence.
-
-## Engineering gates
-
-Before promoting a research result, run the complete local quality suite and then execute the corresponding benchmark or integration with its declared configuration. CI success is evidence of software correctness for the covered tests; it is not evidence of scientific effectiveness. A historical green workflow does not substitute for a fresh green run after subsequent code changes.
+CI success proves only that the covered software contracts passed. It does not substitute for executing the real benchmark. A historical green workflow also does not certify later code changes; each implementation increment must earn its own successful quality run before it is described as verified.
 
 ## Next milestone
 
-The next highest-value milestone is **execute real ALFWorld/WebShop benchmark experiments against the now-green engineering baseline**. Install and pin the real upstream benchmark environments and the selected model-policy runtime in a controlled execution environment; run runtime preflight against the exact configurations that will be measured; execute controlled multi-seed baseline and memory-guided conditions through the repeated/paired paths; persist per-seed reports and descriptive statistics; record code and dependency provenance; generate and verify exact-byte artifact manifests; and publish only measured results. Paired condition comparisons should be used when baseline and treatment share the same independent seeds and explicit protocol configuration. Any inferential significance analysis remains a separately justified statistical layer. The dependency-free smoke fixture remains an engineering regression gate rather than benchmark evidence. After external benchmark evidence is established, the same provenance and artifact-integrity discipline should be applied to full GRPO/verl runs.
+The next highest-value scientific milestone is to execute **real explicitly pinned ALFWorld/WebShop multi-seed paired experiments** through `--strict-reproducibility`. The execution environment must supply the actual upstream source revision, installed dependency versions, model-policy implementation/checkpoint, valid benchmark configuration, and artifact destination. Those values should be measured and recorded from the environment chosen for the experiment rather than invented in repository documentation.
+
+After the real external benchmark evidence is established and independently reproducible, the same admission, provenance, artifact-integrity, and reporting discipline should be applied to full GRPO/verl training runs and subsequent learned routing experiments.
