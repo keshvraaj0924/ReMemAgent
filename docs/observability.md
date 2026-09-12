@@ -32,6 +32,26 @@ Snapshot mappings are detached from caller-owned dictionaries and exposed as rea
 
 The merge operation deliberately does not invent event ordering, timestamps, percentiles, or cross-process trace relationships. It is therefore appropriate for additive research metrics such as call counts and total elapsed time, while richer telemetry remains an optional deployment concern.
 
+## Deterministic latency distributions
+
+`remem.observability_distributions` adds fixed-bucket histograms for experiments that need more than a single duration total without introducing a metrics SDK or changing the existing `ObservationSnapshot` schema.
+
+```python
+from remem.observability_distributions import ObservationHistogram
+
+latency = ObservationHistogram((0.01, 0.05, 0.1, 0.5, 1.0))
+latency.observe(0.034)
+latency.observe(0.72)
+
+snapshot = latency.snapshot()
+```
+
+`ObservationHistogram` is thread-safe and accepts finite, non-negative observations. Bucket upper bounds are finite, non-negative, and strictly increasing. Snapshot bucket counts are non-cumulative: one count is stored for every configured upper bound plus a final overflow bucket. The snapshot also preserves the exact observation count and sum, so the arithmetic mean is derived without sampling or approximation.
+
+`merge_histogram_snapshots(...)` merges independent workers only when their bucket contracts match exactly. `histogram_snapshot_delta(previous, current)` converts two cumulative snapshots into an interval distribution and fails closed when any bucket count or total regresses. ReMemAgent deliberately does not silently rebucket mismatched histograms because doing so would make research comparisons ambiguous.
+
+These histograms provide deterministic distribution evidence, but they do not claim exact percentiles: a percentile estimated from fixed buckets is bounded by the bucket resolution. Experiments that publish percentiles should record and report the bucket contract alongside the result.
+
 ## External exporter boundary
 
 `remem.observability_exporters` provides a dependency-free protocol for handing validated snapshots to caller-owned operational telemetry systems. ReMemAgent does not import Prometheus, OpenTelemetry, Datadog, or other vendor SDKs; an application can implement `ObservationExporter` directly or adapt an existing payload callback through `CallbackObservationExporter`.
@@ -63,4 +83,4 @@ This distinction matters because a valid commit SHA alone does not prove that th
 
 ## Current limitation
 
-The collector aggregates counters and total durations only. It does not provide histograms or distributed traces. External snapshot export now has an explicit vendor-neutral boundary, but backend-specific metric translation, authentication, retries, batching, buffering, sampling, and trace correlation remain deployment-specific and are intentionally not dependencies of the deterministic research core.
+The core collector still intentionally exposes counters and total durations only; histogram distributions live in a separate module so existing snapshot artifacts keep their schema and byte contract. ReMemAgent does not provide distributed traces. External snapshot export has a vendor-neutral boundary, but backend-specific metric translation, authentication, retries, batching, buffering, sampling, trace correlation, and percentile estimation policy remain deployment-specific and are intentionally not dependencies of the deterministic research core.
