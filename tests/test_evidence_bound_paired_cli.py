@@ -56,7 +56,6 @@ def test_main_binds_controlled_measurement_and_persistence_to_readiness_evidence
     readiness_payload = _valid_readiness_payload()
     readiness_path.write_text(json.dumps(readiness_payload), encoding="utf-8")
     original_runner = evidence_cli.paired_cli.run_controlled_paired_external_benchmarks
-    original_saver = evidence_cli.paired_cli.save_paired_execution_result
     observed: dict[str, object] = {}
     source_path = tmp_path / "webshop"
     source_revision = "c" * 40
@@ -134,7 +133,7 @@ def test_main_binds_controlled_measurement_and_persistence_to_readiness_evidence
         == readiness_payload["evidence_sha256"]
     )
     assert evidence_cli.paired_cli.run_controlled_paired_external_benchmarks is original_runner
-    assert evidence_cli.paired_cli.save_paired_execution_result is original_saver
+    assert evidence_cli.paired_cli.save_paired_execution_result is fake_saver
 
 
 def test_main_rejects_tampered_evidence_before_delegation(
