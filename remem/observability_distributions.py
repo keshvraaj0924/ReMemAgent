@@ -6,8 +6,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import isfinite
 from threading import Lock
-from types import MappingProxyType
-from typing import Self
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,7 +162,10 @@ def _validate_upper_bounds(upper_bounds: Sequence[float]) -> tuple[float, ...]:
     return tuple(normalized)
 
 
-def _validate_bucket_counts(bucket_counts: Sequence[int], expected_length: int) -> tuple[int, ...]:
+def _validate_bucket_counts(
+    bucket_counts: Sequence[int],
+    expected_length: int,
+) -> tuple[int, ...]:
     """Validate exact per-bucket counts for one snapshot."""
 
     if len(bucket_counts) != expected_length:
