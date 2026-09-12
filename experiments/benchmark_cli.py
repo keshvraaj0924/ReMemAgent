@@ -11,6 +11,7 @@ from experiments.benchmark_distribution_config import (
     BenchmarkDistributionConfig,
     build_benchmark_distribution_config,
 )
+from experiments.benchmark_manifest import save_benchmark_artifact_manifest
 from experiments.benchmark_observability_bundle import persist_benchmark_observability_bundle
 from experiments.benchmark_observability_session import BenchmarkObservabilitySession
 from experiments.benchmark_report import save_benchmark_report, save_repeated_benchmark_reports
@@ -254,10 +255,9 @@ def main() -> int:
 
     overwrite = getattr(arguments, "overwrite", False)
     output_path = _prepare_output_path(arguments.output, overwrite=overwrite)
-    manifest_path = getattr(arguments, "manifest", None)
     selected_manifest_path = _prepare_manifest_path(
         output_path,
-        manifest_path,
+        getattr(arguments, "manifest", None),
         overwrite=overwrite,
     )
     observability_path = _prepare_optional_artifact_path(
@@ -317,10 +317,7 @@ def main() -> int:
 
         else:
             if getattr(arguments, "preflight_before_run", False):
-                validate_external_benchmark_runtime(
-                    spec,
-                    probe_action=probe_action,
-                )
+                validate_external_benchmark_runtime(spec, probe_action=probe_action)
             report = run_external_benchmark(spec, runner=benchmark_runner)
             runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
 
@@ -362,11 +359,7 @@ def main() -> int:
                     runner=benchmark_runner,
                 )
             else:
-                reports = run_repeated_external_benchmarks(
-                    spec,
-                    seeds,
-                    runner=benchmark_runner,
-                )
+                reports = run_repeated_external_benchmarks(spec, seeds, runner=benchmark_runner)
             statistics = summarize_benchmark_reports(reports).to_dict()
             runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
 
@@ -379,9 +372,7 @@ def main() -> int:
                 )
 
     observability_snapshots = observability_session.freeze(observation_collector)
-    distribution_path = (
-        distribution_config.output_path if distribution_config is not None else None
-    )
+    distribution_path = distribution_config.output_path if distribution_config is not None else None
     output_path = _persist_benchmark_bundle(
         output_path,
         overwrite=overwrite,
@@ -408,8 +399,9 @@ def _build_runtime_requirements(arguments: argparse.Namespace) -> RuntimeRequire
 
     expected_revision = getattr(arguments, "require_code_revision", None)
     require_clean_working_tree = getattr(arguments, "require_clean_working_tree", False)
-    dependency_values = getattr(arguments, "require_dependency_version", None) or ()
-    dependency_versions = _parse_dependency_requirements(dependency_values)
+    dependency_versions = _parse_dependency_requirements(
+        getattr(arguments, "require_dependency_version", None) or ()
+    )
     if expected_revision is None and not require_clean_working_tree and not dependency_versions:
         return None
     return RuntimeRequirements(
@@ -545,6 +537,7 @@ def _persist_benchmark_bundle(
         observation_snapshot=observation_snapshot,
         distribution_path=distribution_path,
         distribution_snapshot=distribution_snapshot,
+        manifest_writer=save_benchmark_artifact_manifest,
     )
 
 
