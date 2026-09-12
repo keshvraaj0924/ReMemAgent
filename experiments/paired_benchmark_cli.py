@@ -15,6 +15,7 @@ from experiments.paired_source_preflight import run_controlled_paired_external_b
 from experiments.runtime_provenance import collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements
 from experiments.source_checkouts import SourceCheckoutProvenance, SourceCheckoutRequirement
+from experiments.strict_reproducibility import validate_strict_paired_reproducibility
 
 DEFAULT_OUTPUT_PATH = Path("artifacts/paired-benchmark.json")
 PAIRED_PREFLIGHT_STATUS_KEY = "paired_runtime_preflight"
@@ -46,6 +47,14 @@ def parse_args() -> argparse.Namespace:
         help="Allow replacing an existing paired benchmark report or integrity manifest",
     )
     parser.add_argument("--probe-action")
+    parser.add_argument(
+        "--strict-reproducibility",
+        action="store_true",
+        help=(
+            "Require a multi-seed, exact-revision, clean-tree, dependency-pinned, "
+            "source-pinned run with an integrity manifest before measurement"
+        ),
+    )
     parser.add_argument(
         "--require-code-revision",
         help="Require the exact repository revision before paired preflight or measurement",
@@ -102,6 +111,13 @@ def main() -> int:
         source_checkout_paths, source_checkout_requirements = _build_source_checkout_contract(
             arguments
         )
+        if getattr(arguments, "strict_reproducibility", False):
+            validate_strict_paired_reproducibility(
+                seeds=seeds,
+                runtime_requirements=runtime_requirements,
+                source_checkout_requirements=source_checkout_requirements,
+                manifest_path=arguments.manifest,
+            )
         _validate_artifact_destinations(arguments.output, arguments.manifest)
         output_path = _prepare_output_path(arguments.output, overwrite=arguments.overwrite)
         manifest_path = (
