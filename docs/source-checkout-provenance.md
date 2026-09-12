@@ -79,6 +79,34 @@ reports = run_repeated_external_benchmarks_with_preflight(
 
 Source-checkout collection occurs once before repeated environment probes; it is not repeated independently for every seed.
 
+## Command-line admission
+
+Both external benchmark entry points expose the source checkout contract directly. `remem-benchmark` and `remem-paired-benchmark` accept:
+
+- `--source-checkout NAME=PATH` to identify a source-installed benchmark repository;
+- `--require-source-revision NAME=REVISION` to require the exact Git revision;
+- `--allow-dirty-source-checkout NAME` to opt a declared checkout out of the default clean-tree requirement.
+
+The source path and revision sets must declare the same names, compared case-insensitively. A source contract automatically selects controlled runtime preflight for single-run, repeated, and paired measured execution, so a caller cannot accidentally request pinned source evidence while bypassing admission. Callable-only `--preflight` remains intentionally insufficient because it does not inspect Git state.
+
+Example:
+
+```bash
+remem-benchmark \
+  --benchmark webshop \
+  --episodes 20 \
+  --max-steps 40 \
+  --seeds 11,17,23 \
+  --environment-factory package.module:make_webshop_environment \
+  --policy-factory package.module:make_policy \
+  --success-evaluator package.module:is_success \
+  --source-checkout WebShop=/opt/benchmarks/webshop \
+  --require-source-revision WebShop=<exact-webshop-git-sha> \
+  --output artifacts/webshop.json
+```
+
+The revision remains an explicit experiment input. ReMemAgent does not substitute a guessed upstream commit.
+
 ## Paired artifact evidence
 
 Controlled paired execution can carry the exact admitted source snapshot through measurement. `save_paired_execution_result()` accepts that snapshot together with the source requirement contract, validates the pair again, persists both canonical forms, and injects their SHA-256 fingerprints into runtime provenance before paired experiment identity is constructed.
@@ -87,6 +115,6 @@ Artifact verification reconstructs the contract and snapshot, verifies that the 
 
 ## Remaining boundary
 
-Source state is now enforced during controlled Python preflight and can be cryptographically bound into paired artifacts. The remaining reproducibility gap is command-line orchestration: `remem-paired-benchmark` does not yet expose source-checkout path/revision options or automatically pass the admitted snapshot to persistence.
+Source state is now enforceable from both benchmark CLIs, and paired controlled artifacts can cryptographically bind the admitted source contract and observed checkout snapshot into experiment identity. Ordinary `remem-benchmark` reports still use the general benchmark-report schema and do not yet persist the admitted source checkout contract/snapshot as identity-bound fields.
 
-The next integration step is to wire those source controls through the paired CLI and cover the end-to-end handoff before running real multi-seed ALFWorld/WebShop measurements as reproducible evidence.
+For scientific baseline-versus-memory comparisons where source provenance must be part of the evidence identity, use the controlled paired path. A future schema change may extend the same identity binding to standalone benchmark reports; until then, do not claim that an ordinary report alone cryptographically proves its source checkout state.
