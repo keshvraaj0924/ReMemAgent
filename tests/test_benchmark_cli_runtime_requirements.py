@@ -123,15 +123,10 @@ def test_measured_single_run_enforces_requirements_without_extra_preflight_flag(
 
     arguments = _arguments(tmp_path)
     arguments.require_clean_working_tree = True
-    report = object()
+    controlled_result = object()
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(benchmark_cli, "parse_args", lambda: arguments)
-    monkeypatch.setattr(
-        benchmark_cli,
-        "collect_runtime_provenance",
-        lambda **kwargs: type("Provenance", (), {"to_dict": lambda self: {}})(),
-    )
 
     def controlled_run(
         spec: ExternalBenchmarkSpec,
@@ -139,22 +134,31 @@ def test_measured_single_run_enforces_requirements_without_extra_preflight_flag(
         probe_action: str | None,
         runner: object | None,
         runtime_requirements: RuntimeRequirements | None,
+        source_checkout_paths: object | None,
+        source_checkout_requirements: object | None,
     ) -> object:
         captured["requirements"] = runtime_requirements
-        return report
+        captured["source_checkout_paths"] = source_checkout_paths
+        captured["source_checkout_requirements"] = source_checkout_requirements
+        return controlled_result
 
     def fail_direct_measurement(*args, **kwargs) -> None:
         pytest.fail("direct measurement must not bypass runtime requirements")
 
     monkeypatch.setattr(
         benchmark_cli,
-        "run_external_benchmark_with_preflight",
+        "run_controlled_external_benchmark",
         controlled_run,
     )
     monkeypatch.setattr(
         benchmark_cli,
         "run_external_benchmark",
         fail_direct_measurement,
+    )
+    monkeypatch.setattr(
+        benchmark_cli,
+        "collect_runtime_provenance",
+        lambda **kwargs: pytest.fail("controlled execution must not recollect runtime provenance"),
     )
     monkeypatch.setattr(
         benchmark_cli,
@@ -166,6 +170,8 @@ def test_measured_single_run_enforces_requirements_without_extra_preflight_flag(
     requirements = captured["requirements"]
     assert isinstance(requirements, RuntimeRequirements)
     assert requirements.require_clean_working_tree is True
+    assert captured["source_checkout_paths"] is None
+    assert captured["source_checkout_requirements"] is None
 
 
 def test_callable_only_preflight_rejects_runtime_requirements(monkeypatch, tmp_path: Path) -> None:
