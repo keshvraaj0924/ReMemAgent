@@ -30,12 +30,57 @@ from experiments.source_checkouts import (
 
 
 @dataclass(frozen=True, slots=True)
+class ControlledPairedPreflightResult:
+    """Exact runtime and source snapshots admitted before paired measurement."""
+
+    runtime_provenance: RuntimeProvenance
+    source_checkout_provenance: Mapping[str, SourceCheckoutProvenance]
+
+
+@dataclass(frozen=True, slots=True)
 class ControlledPairedBenchmarkResult:
     """Measured paired result plus the exact pre-measurement admission snapshots."""
 
     paired_result: PairedBenchmarkResult
     runtime_provenance: RuntimeProvenance
     source_checkout_provenance: Mapping[str, SourceCheckoutProvenance]
+
+
+def preflight_controlled_paired_external_benchmarks(
+    baseline_spec: ExternalBenchmarkSpec,
+    treatment_spec: ExternalBenchmarkSpec,
+    seeds: Sequence[int],
+    *,
+    runtime_requirements: RuntimeRequirements,
+    source_checkout_paths: Mapping[str, Path],
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement],
+    probe_action: str | None = None,
+) -> ControlledPairedPreflightResult:
+    """Validate controlled state and both benchmark conditions without measurement.
+
+    This is the fail-closed readiness boundary for expensive external experiments.
+    Runtime and source snapshots are collected before benchmark callables are
+    resolved. Only after both contracts pass do the paired environment probes run.
+    The returned snapshots are therefore the exact state admitted by preflight and
+    can be reused by a subsequent measured execution in the same process.
+    """
+
+    runtime_provenance = _validate_runtime_contract(runtime_requirements)
+    source_checkout_provenance = _validate_source_checkout_contract(
+        source_checkout_paths,
+        source_checkout_requirements,
+    )
+    preflight_paired_external_benchmarks(
+        baseline_spec,
+        treatment_spec,
+        seeds,
+        probe_action=probe_action,
+        runtime_requirements=None,
+    )
+    return ControlledPairedPreflightResult(
+        runtime_provenance=runtime_provenance,
+        source_checkout_provenance=source_checkout_provenance,
+    )
 
 
 def run_controlled_paired_external_benchmarks(
@@ -58,18 +103,14 @@ def run_controlled_paired_external_benchmarks(
     that was actually validated rather than recollecting mutable Git state later.
     """
 
-    runtime_provenance = _validate_runtime_contract(runtime_requirements)
-    source_checkout_provenance = _validate_source_checkout_contract(
-        source_checkout_paths,
-        source_checkout_requirements,
-    )
-
-    preflight_paired_external_benchmarks(
+    preflight_result = preflight_controlled_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
         seeds,
+        runtime_requirements=runtime_requirements,
+        source_checkout_paths=source_checkout_paths,
+        source_checkout_requirements=source_checkout_requirements,
         probe_action=probe_action,
-        runtime_requirements=None,
     )
     paired_result = run_paired_external_benchmarks(
         baseline_spec,
@@ -78,11 +119,14 @@ def run_controlled_paired_external_benchmarks(
         baseline_label=baseline_label,
         treatment_label=treatment_label,
     )
-    paired_result = replace(paired_result, runtime_provenance=runtime_provenance)
+    paired_result = replace(
+        paired_result,
+        runtime_provenance=preflight_result.runtime_provenance,
+    )
     return ControlledPairedBenchmarkResult(
         paired_result=paired_result,
-        runtime_provenance=runtime_provenance,
-        source_checkout_provenance=source_checkout_provenance,
+        runtime_provenance=preflight_result.runtime_provenance,
+        source_checkout_provenance=preflight_result.source_checkout_provenance,
     )
 
 
@@ -116,5 +160,7 @@ def _validate_source_checkout_contract(
 
 __all__ = [
     "ControlledPairedBenchmarkResult",
+    "ControlledPairedPreflightResult",
+    "preflight_controlled_paired_external_benchmarks",
     "run_controlled_paired_external_benchmarks",
 ]
