@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_SCRIPTS = {
     "remem-ablation": "experiments.cli:main",
     "remem-benchmark": "experiments.benchmark_cli:main",
-    "remem-paired-benchmark": "experiments.paired_benchmark_cli:main",
+    "remem-paired-benchmark": "experiments.evidence_bound_paired_cli:main",
     "remem-verify-benchmark": "experiments.verify_benchmark_artifact:main",
     "remem-verify-preflight": "experiments.verify_preflight_evidence:main",
     "remem-check-environments": "experiments.environment_cli:main",
