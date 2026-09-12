@@ -15,6 +15,14 @@ from experiments.artifact_bundle import (
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
 from experiments.benchmark_report import save_benchmark_report, save_repeated_benchmark_reports
 from experiments.benchmark_statistics import summarize_benchmark_reports
+from experiments.controlled_benchmark_artifacts import (
+    save_controlled_benchmark_result,
+    save_controlled_repeated_benchmark_result,
+)
+from experiments.controlled_external_benchmark import (
+    run_controlled_external_benchmark,
+    run_controlled_repeated_external_benchmarks,
+)
 from experiments.external_benchmark import (
     ExternalBenchmarkSpec,
     run_external_benchmark,
@@ -24,7 +32,6 @@ from experiments.external_benchmark import (
     validate_seed_sequence,
 )
 from experiments.external_preflight import (
-    run_external_benchmark_with_preflight,
     run_repeated_external_benchmarks_with_preflight,
     validate_controlled_external_benchmark_runtime,
     validate_repeated_external_benchmark_runtime,
@@ -247,7 +254,6 @@ def main() -> int:
         overwrite=overwrite,
         reserved_paths=(output_path, selected_manifest_path),
     )
-    runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
     seeds = _parse_seeds(getattr(arguments, "seeds", None))
     observation_collector = ObservationCollector() if observability_path is not None else None
     benchmark_runner = (
@@ -255,9 +261,11 @@ def main() -> int:
         if observation_collector is not None
         else None
     )
+    controlled_execution = runtime_requirements is not None or source_controlled
+
     if seeds is None:
-        if source_controlled:
-            report = run_external_benchmark_with_preflight(
+        if controlled_execution:
+            controlled_result = run_controlled_external_benchmark(
                 spec,
                 probe_action=probe_action,
                 runner=benchmark_runner,
@@ -265,13 +273,15 @@ def main() -> int:
                 source_checkout_paths=source_checkout_paths,
                 source_checkout_requirements=source_checkout_requirements,
             )
-        elif runtime_requirements is not None:
-            report = run_external_benchmark_with_preflight(
-                spec,
-                probe_action=probe_action,
-                runner=benchmark_runner,
-                runtime_requirements=runtime_requirements,
-            )
+
+            def report_writer(temporary_path: Path) -> object:
+                return save_controlled_benchmark_result(
+                    controlled_result,
+                    temporary_path,
+                    runtime_requirements=runtime_requirements,
+                    source_checkout_requirements=source_checkout_requirements,
+                )
+
         else:
             if getattr(arguments, "preflight_before_run", False):
                 validate_external_benchmark_runtime(
@@ -279,17 +289,18 @@ def main() -> int:
                     probe_action=probe_action,
                 )
             report = run_external_benchmark(spec, runner=benchmark_runner)
+            runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
 
-        def report_writer(temporary_path: Path) -> object:
-            return save_benchmark_report(
-                report,
-                temporary_path,
-                runtime_provenance=runtime_provenance,
-            )
+            def report_writer(temporary_path: Path) -> object:
+                return save_benchmark_report(
+                    report,
+                    temporary_path,
+                    runtime_provenance=runtime_provenance,
+                )
 
     else:
-        if source_controlled:
-            reports = run_repeated_external_benchmarks_with_preflight(
+        if controlled_execution:
+            controlled_result_repeated = run_controlled_repeated_external_benchmarks(
                 spec,
                 seeds,
                 probe_action=probe_action,
@@ -298,36 +309,41 @@ def main() -> int:
                 source_checkout_paths=source_checkout_paths,
                 source_checkout_requirements=source_checkout_requirements,
             )
-        elif runtime_requirements is not None:
-            reports = run_repeated_external_benchmarks_with_preflight(
-                spec,
-                seeds,
-                probe_action=probe_action,
-                runner=benchmark_runner,
-                runtime_requirements=runtime_requirements,
-            )
-        elif getattr(arguments, "preflight_before_run", False):
-            reports = run_repeated_external_benchmarks_with_preflight(
-                spec,
-                seeds,
-                probe_action=probe_action,
-                runner=benchmark_runner,
-            )
-        else:
-            reports = run_repeated_external_benchmarks(
-                spec,
-                seeds,
-                runner=benchmark_runner,
-            )
-        statistics = summarize_benchmark_reports(reports).to_dict()
+            statistics = summarize_benchmark_reports(controlled_result_repeated.reports).to_dict()
 
-        def report_writer(temporary_path: Path) -> object:
-            return save_repeated_benchmark_reports(
-                reports,
-                temporary_path,
-                runtime_provenance=runtime_provenance,
-                statistics=statistics,
-            )
+            def report_writer(temporary_path: Path) -> object:
+                return save_controlled_repeated_benchmark_result(
+                    controlled_result_repeated,
+                    temporary_path,
+                    runtime_requirements=runtime_requirements,
+                    source_checkout_requirements=source_checkout_requirements,
+                    statistics=statistics,
+                )
+
+        else:
+            if getattr(arguments, "preflight_before_run", False):
+                reports = run_repeated_external_benchmarks_with_preflight(
+                    spec,
+                    seeds,
+                    probe_action=probe_action,
+                    runner=benchmark_runner,
+                )
+            else:
+                reports = run_repeated_external_benchmarks(
+                    spec,
+                    seeds,
+                    runner=benchmark_runner,
+                )
+            statistics = summarize_benchmark_reports(reports).to_dict()
+            runtime_provenance = collect_runtime_provenance(environment=os.environ).to_dict()
+
+            def report_writer(temporary_path: Path) -> object:
+                return save_repeated_benchmark_reports(
+                    reports,
+                    temporary_path,
+                    runtime_provenance=runtime_provenance,
+                    statistics=statistics,
+                )
 
     observation_snapshot = (
         observation_collector.snapshot() if observation_collector is not None else None
