@@ -50,7 +50,7 @@ def _preflight_result(*, revision: str = "a" * 40) -> ControlledPairedPreflightR
             )
         }
     )
-    return ControlledPairedPreflightResult(runtime, sources)
+    return controlled_paired.ControlledPairedPreflightResult(runtime, sources)
 
 
 def _requirements() -> dict[str, SourceCheckoutRequirement]:
@@ -90,7 +90,9 @@ def test_evidence_bound_run_validates_before_measurement(monkeypatch) -> None:
         events.append("measurement")
         return expected_result
 
-    monkeypatch.setattr(evidence_bound, "preflight_controlled_paired_external_benchmarks", preflight)
+    monkeypatch.setattr(
+        evidence_bound, "preflight_controlled_paired_external_benchmarks", preflight
+    )
     monkeypatch.setattr(evidence_bound, "validate_preflight_evidence_matches_admission", validate)
     monkeypatch.setattr(evidence_bound, "run_admitted_paired_external_benchmarks", measure)
 
