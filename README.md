@@ -154,6 +154,28 @@ remem-paired-benchmark \
   --manifest artifacts/webshop-paired.json.manifest.json
 ```
 
+Before expensive measured inference, the same controlled contract can be exercised in readiness-only mode and persisted as independently verifiable evidence:
+
+```bash
+remem-paired-benchmark \
+  --benchmark webshop \
+  --episodes 100 \
+  --max-steps 50 \
+  --seeds 11,17,29,43,71 \
+  --environment-factory your_package.environments:build_webshop \
+  --success-evaluator your_package.metrics:is_success \
+  --baseline-policy-factory your_package.policies:build_baseline \
+  --treatment-policy-factory your_package.policies:build_remem \
+  --source-checkout webshop=/path/to/webshop \
+  --require-source-revision webshop=<WEBSHOP_COMMIT> \
+  --preflight-only \
+  --preflight-evidence artifacts/webshop-readiness.json
+
+remem-verify-preflight artifacts/webshop-readiness.json
+```
+
+Readiness evidence proves that the recorded runtime/source contract passed the controlled preflight represented by that artifact. It is not a benchmark result and does not establish model effectiveness.
+
 The placeholders are intentional. Upstream revisions, dependency versions, model checkpoints, and benchmark outcomes must come from the actual controlled execution environment; ReMemAgent does not invent them.
 
 ## Quality checks
