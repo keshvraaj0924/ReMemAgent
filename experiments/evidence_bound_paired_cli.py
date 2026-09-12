@@ -19,12 +19,14 @@ import experiments.paired_benchmark_cli as paired_cli
 from experiments.evidence_bound_paired_benchmark import (
     run_evidence_bound_paired_external_benchmarks,
 )
-from experiments.preflight_evidence import verify_controlled_paired_preflight_evidence
+from experiments.preflight_evidence import (
+    PREFLIGHT_EVIDENCE_PROVENANCE_KEY,
+    verify_controlled_paired_preflight_evidence,
+)
 
 READINESS_EVIDENCE_OPTION = "--require-preflight-evidence"
 SOURCE_CHECKOUT_OPTION = "--source-checkout"
 SOURCE_REVISION_OPTION = "--require-source-revision"
-PREFLIGHT_EVIDENCE_PROVENANCE_KEY = "preflight_evidence_sha256"
 
 
 def main() -> int:
