@@ -97,9 +97,10 @@ def test_save_controlled_single_binds_exact_admitted_evidence(tmp_path, monkeypa
     assert SOURCE_CHECKOUT_REQUIREMENTS_PROVENANCE_KEY in captured_provenance
     assert SOURCE_CHECKOUT_SNAPSHOT_PROVENANCE_KEY in captured_provenance
     assert payload["runtime_requirements"] == requirements.to_dict()
-    assert payload["source_checkout_requirements"]["repositories"]["webshop"][
-        "expected_revision"
-    ] == "webshop-revision"
+    assert (
+        payload["source_checkout_requirements"]["repositories"]["webshop"]["expected_revision"]
+        == "webshop-revision"
+    )
     artifacts.validate_persisted_controlled_benchmark_artifact(payload)
 
 
