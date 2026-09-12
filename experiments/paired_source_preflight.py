@@ -119,10 +119,7 @@ def run_controlled_paired_external_benchmarks(
         baseline_label=baseline_label,
         treatment_label=treatment_label,
     )
-    paired_result = replace(
-        paired_result,
-        runtime_provenance=preflight_result.runtime_provenance,
-    )
+    paired_result = replace(paired_result, runtime_provenance=preflight_result.runtime_provenance)
     return ControlledPairedBenchmarkResult(
         paired_result=paired_result,
         runtime_provenance=preflight_result.runtime_provenance,
