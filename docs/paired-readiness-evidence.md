@@ -61,6 +61,17 @@ remem-paired-benchmark \
 
 `--require-preflight-evidence` is valid only for measured execution and requires explicit source checkout paths plus exact required source revisions. The CLI fresh-admits runtime, source checkouts, and paired environment readiness; validates the persisted evidence against those exact admitted snapshots; and only then starts measured episodes. If the evidence is malformed, tampered, or stale, the run fails before measured execution and before the paired report or manifest is persisted.
 
-For an evidence-bound measured CLI run, the paired artifact also records the verified readiness artifact's canonical SHA-256 as `runtime_provenance.preflight_evidence_sha256`. Runtime provenance already participates in paired experiment identity construction, so the measured artifact identity is cryptographically bound to the exact readiness evidence that authorized measurement. This digest is an audit link, not a substitute for retaining and independently verifying the readiness JSON itself.
+For an evidence-bound measured CLI run, the paired artifact also records the verified readiness artifact's canonical SHA-256 as `runtime_provenance.preflight_evidence_sha256`. Runtime provenance already participates in paired experiment identity construction, so the measured artifact identity is cryptographically bound to the exact readiness evidence that authorized measurement.
+
+Retain the original readiness JSON with the measured report. Verification of an evidence-bound report now requires that original object so the audit link is checked rather than trusted as an opaque digest:
+
+```bash
+remem-verify-benchmark \
+  artifacts/webshop-paired.json \
+  --manifest artifacts/webshop-paired.manifest.json \
+  --preflight-evidence artifacts/webshop-readiness.json
+```
+
+The verifier first checks the report bytes and benchmark identity contracts, verifies the supplied readiness JSON itself, and then requires its canonical `evidence_sha256` to match `runtime_provenance.preflight_evidence_sha256`. A bound measured artifact fails closed when the readiness file is omitted, malformed, tampered, or valid but unrelated. Supplying readiness evidence for an unbound legacy artifact is also rejected so verification cannot imply a provenance relationship that was never persisted.
 
 This object is readiness evidence, not a benchmark result. It contains no measured episode outcomes and must not be used to claim ALFWorld/WebShop effectiveness. Measured claims still require a completed paired benchmark artifact and its integrity verification.
