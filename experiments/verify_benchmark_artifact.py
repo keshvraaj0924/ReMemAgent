@@ -33,6 +33,9 @@ class BenchmarkVerificationResult:
     schema_version: int
     byte_count: int
     sha256: str
+    benchmark_name: str | None = None
+    configuration_fingerprint: str | None = None
+    experiment_identity: str | None = None
     preflight_evidence_sha256: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -42,6 +45,9 @@ class BenchmarkVerificationResult:
             "schema_version": self.schema_version,
             "byte_count": self.byte_count,
             "sha256": self.sha256,
+            "benchmark_name": self.benchmark_name,
+            "configuration_fingerprint": self.configuration_fingerprint,
+            "experiment_identity": self.experiment_identity,
             "preflight_evidence_sha256": self.preflight_evidence_sha256,
         }
 
@@ -88,6 +94,12 @@ def verify_report_artifact(
     validate_persisted_benchmark_artifact(payload)
     validate_persisted_controlled_benchmark_artifact(payload)
     validate_persisted_paired_artifact(payload)
+    benchmark_name = _optional_attested_string(payload, "benchmark_name")
+    configuration_fingerprint = _optional_attested_string(
+        payload,
+        "configuration_fingerprint",
+    )
+    experiment_identity = _optional_attested_string(payload, "experiment_identity")
     preflight_evidence_sha256 = _verify_preflight_evidence_binding(
         payload,
         preflight_evidence_path,
@@ -96,8 +108,22 @@ def verify_report_artifact(
         schema_version=manifest.schema_version,
         byte_count=manifest.byte_count,
         sha256=manifest.sha256,
+        benchmark_name=benchmark_name,
+        configuration_fingerprint=configuration_fingerprint,
+        experiment_identity=experiment_identity,
         preflight_evidence_sha256=preflight_evidence_sha256,
     )
+
+
+def _optional_attested_string(payload: Mapping[str, Any], key: str) -> str | None:
+    """Return an optional top-level identity field after enforcing its string contract."""
+
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"benchmark artifact {key} must be a non-empty string when present")
+    return value
 
 
 def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
