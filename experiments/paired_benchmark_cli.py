@@ -10,8 +10,14 @@ from pathlib import Path
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
 from experiments.external_benchmark import ExternalBenchmarkSpec, validate_seed_sequence
 from experiments.paired_artifacts import save_paired_execution_result
-from experiments.paired_benchmark import run_paired_external_benchmarks_with_preflight
-from experiments.paired_source_preflight import run_controlled_paired_external_benchmarks
+from experiments.paired_benchmark import (
+    preflight_paired_external_benchmarks,
+    run_paired_external_benchmarks_with_preflight,
+)
+from experiments.paired_source_preflight import (
+    preflight_controlled_paired_external_benchmarks,
+    run_controlled_paired_external_benchmarks,
+)
 from experiments.runtime_provenance import collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements
 from experiments.source_checkouts import SourceCheckoutProvenance, SourceCheckoutRequirement
@@ -47,6 +53,14 @@ def parse_args() -> argparse.Namespace:
         help="Allow replacing an existing paired benchmark report or integrity manifest",
     )
     parser.add_argument("--probe-action")
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help=(
+            "Validate runtime, source checkouts, and paired environment readiness, then exit "
+            "without measured episodes or artifacts"
+        ),
+    )
     parser.add_argument(
         "--strict-reproducibility",
         action="store_true",
@@ -118,6 +132,19 @@ def main() -> int:
                 source_checkout_requirements=source_checkout_requirements,
                 manifest_path=arguments.manifest,
             )
+        if getattr(arguments, "preflight_only", False):
+            _run_preflight_only(
+                baseline_spec,
+                treatment_spec,
+                seeds,
+                probe_action=arguments.probe_action,
+                runtime_requirements=runtime_requirements,
+                source_checkout_paths=source_checkout_paths,
+                source_checkout_requirements=source_checkout_requirements,
+            )
+            print("paired benchmark preflight completed; no measured episodes or artifacts created")
+            return 0
+
         _validate_artifact_destinations(arguments.output, arguments.manifest)
         output_path = _prepare_output_path(arguments.output, overwrite=arguments.overwrite)
         manifest_path = (
@@ -174,6 +201,39 @@ def main() -> int:
         return 0
     except (TypeError, ValueError, FileExistsError) as exc:
         raise SystemExit(f"error: {exc}") from exc
+
+
+def _run_preflight_only(
+    baseline_spec: ExternalBenchmarkSpec,
+    treatment_spec: ExternalBenchmarkSpec,
+    seeds: Sequence[int],
+    *,
+    probe_action: str | None,
+    runtime_requirements: RuntimeRequirements | None,
+    source_checkout_paths: Mapping[str, Path] | None,
+    source_checkout_requirements: Mapping[str, SourceCheckoutRequirement] | None,
+) -> None:
+    """Run paired readiness admission without measurement or artifact persistence."""
+
+    if source_checkout_paths is not None and source_checkout_requirements is not None:
+        preflight_controlled_paired_external_benchmarks(
+            baseline_spec,
+            treatment_spec,
+            seeds,
+            probe_action=probe_action,
+            runtime_requirements=runtime_requirements or RuntimeRequirements(),
+            source_checkout_paths=source_checkout_paths,
+            source_checkout_requirements=source_checkout_requirements,
+        )
+        return
+
+    preflight_paired_external_benchmarks(
+        baseline_spec,
+        treatment_spec,
+        seeds,
+        probe_action=probe_action,
+        runtime_requirements=runtime_requirements,
+    )
 
 
 def _add_policy_arguments(parser: argparse.ArgumentParser, condition: str) -> None:
