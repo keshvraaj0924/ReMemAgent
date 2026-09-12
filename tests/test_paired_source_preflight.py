@@ -198,3 +198,95 @@ def test_controlled_paired_source_requirements_must_not_be_empty(monkeypatch) ->
             source_checkout_paths={"webshop": Path("/tmp/webshop")},
             source_checkout_requirements={},
         )
+
+
+def test_controlled_preflight_returns_exact_snapshots_without_measurement(monkeypatch) -> None:
+    baseline = _spec("tests.test_external_benchmark:make_policy")
+    treatment = _spec("tests.test_external_benchmark:make_memory_policy")
+    expected_runtime = _runtime_provenance()
+    expected_source = _source_provenance()
+    events: list[str] = []
+
+    monkeypatch.setattr(
+        controlled_paired,
+        "collect_runtime_provenance",
+        lambda: events.append("runtime") or expected_runtime,
+    )
+    monkeypatch.setattr(
+        controlled_paired,
+        "collect_source_checkout_provenance",
+        lambda repositories: events.append("source") or expected_source,
+    )
+
+    def paired_preflight(*args, **kwargs):
+        assert kwargs["runtime_requirements"] is None
+        assert kwargs["probe_action"] == "search"
+        events.append("preflight")
+
+    monkeypatch.setattr(controlled_paired, "preflight_paired_external_benchmarks", paired_preflight)
+    monkeypatch.setattr(
+        controlled_paired,
+        "run_paired_external_benchmarks",
+        lambda *args, **kwargs: pytest.fail("preflight-only admission must not measure"),
+    )
+
+    result = controlled_paired.preflight_controlled_paired_external_benchmarks(
+        baseline,
+        treatment,
+        (11, 17),
+        runtime_requirements=RuntimeRequirements(expected_code_revision="actual"),
+        source_checkout_paths={"webshop": Path("/tmp/webshop")},
+        source_checkout_requirements={
+            "webshop": SourceCheckoutRequirement(expected_revision="source-revision")
+        },
+        probe_action="search",
+    )
+
+    assert events == ["runtime", "source", "preflight"]
+    assert result.runtime_provenance is expected_runtime
+    assert result.source_checkout_provenance is expected_source
+
+
+def test_controlled_run_reuses_preflight_snapshots_for_measurement(monkeypatch) -> None:
+    baseline = _spec("tests.test_external_benchmark:make_policy")
+    treatment = _spec("tests.test_external_benchmark:make_memory_policy")
+    expected_runtime = _runtime_provenance()
+    expected_source = _source_provenance()
+    preflight_result = controlled_paired.ControlledPairedPreflightResult(
+        runtime_provenance=expected_runtime,
+        source_checkout_provenance=expected_source,
+    )
+    measured_result = SimpleNamespace(runtime_provenance=None)
+
+    monkeypatch.setattr(
+        controlled_paired,
+        "preflight_controlled_paired_external_benchmarks",
+        lambda *args, **kwargs: preflight_result,
+    )
+    monkeypatch.setattr(
+        controlled_paired,
+        "run_paired_external_benchmarks",
+        lambda *args, **kwargs: measured_result,
+    )
+    monkeypatch.setattr(
+        controlled_paired,
+        "replace",
+        lambda result, **changes: SimpleNamespace(
+            runtime_provenance=changes["runtime_provenance"]
+        ),
+    )
+
+    result = controlled_paired.run_controlled_paired_external_benchmarks(
+        baseline,
+        treatment,
+        (11, 17),
+        runtime_requirements=RuntimeRequirements(expected_code_revision="actual"),
+        source_checkout_paths={"webshop": Path("/tmp/webshop")},
+        source_checkout_requirements={
+            "webshop": SourceCheckoutRequirement(expected_revision="source-revision")
+        },
+    )
+
+    assert result.runtime_provenance is expected_runtime
+    assert result.source_checkout_provenance is expected_source
+    assert result.paired_result.runtime_provenance is expected_runtime
