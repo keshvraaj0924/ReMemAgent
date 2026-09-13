@@ -89,7 +89,13 @@ class _Environment:
     def reset(self) -> str:
         return "observation"
 
+    def step(self, _actions: list[str]) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
+        return ["observation"], [0.0], [False], {}
+
 
 class _WebShopEnvironment:
     def reset(self) -> str:
         return "observation"
+
+    def step(self, _action: str) -> tuple[str, float, bool, dict[str, Any]]:
+        return "observation", 0.0, False, {}

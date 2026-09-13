@@ -28,6 +28,9 @@ class FakeWebShopEnvironment:
         self.reset_values.append(random.randrange(1_000_000))
         return "state"
 
+    def step(self, _action: str) -> tuple[str, float, bool, dict[str, Any]]:
+        return "state", 0.0, False, {}
+
     def close(self) -> None:
         self.closed = True
 
@@ -94,6 +97,9 @@ def test_webshop_factory_scopes_construction_and_reset_randomness(monkeypatch: A
         def reset(self) -> tuple[str, float]:
             return "reset", random.random()
 
+        def step(self, _action: str) -> tuple[str, float, bool, dict[str, Any]]:
+            return "state", 0.0, False, {}
+
     def make(environment_id: str, **kwargs: object) -> FakeEnvironment:
         assert environment_id == "WebAgentTextEnv-v0"
         assert kwargs == {"observation_mode": "text"}
@@ -123,6 +129,9 @@ def test_alfworld_factory_scopes_construction_randomness(monkeypatch: Any) -> No
     class FakeInitializedEnvironment:
         def reset(self) -> tuple[str, float]:
             return "reset", random.random()
+
+        def step(self, _actions: list[str]) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
+            return ["state"], [0.0], [False], {}
 
     class FakeEnvironment:
         def __init__(self, config: object, train_eval: str) -> None:
@@ -206,6 +215,9 @@ def test_alfworld_factory_freezes_mutable_configuration(monkeypatch: Any) -> Non
         def reset(self) -> str:
             return "state"
 
+        def step(self, _actions: list[str]) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
+            return ["state"], [0.0], [False], {}
+
     class FakeEnvironment:
         def __init__(self, config: dict[str, Any], train_eval: str) -> None:
             observed_configs.append(config)
@@ -244,6 +256,9 @@ def test_alfworld_factory_normalizes_train_eval_before_external_construction(
     class FakeInitializedEnvironment:
         def reset(self) -> str:
             return "state"
+
+        def step(self, _actions: list[str]) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
+            return ["state"], [0.0], [False], {}
 
     class FakeEnvironment:
         def __init__(self, _config: object, train_eval: str) -> None:
