@@ -175,7 +175,7 @@ def test_alfworld_factory_closes_invalid_initialized_environment(
     with pytest.raises(TypeError, match="ALFWorld environment must expose callable step"):
         factory(11)
 
-    assert created[0].close_calls >= 1
+    assert created[0].close_calls == 1
 
 
 def test_alfworld_factory_rejects_non_singleton_batch() -> None:
