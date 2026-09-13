@@ -34,6 +34,23 @@ After successful admission, the measured report runtime provenance includes:
 
 These fields make the actual admitted model declaration auditable next to the measured artifact rather than leaving it only in researcher notes.
 
+## Retained artifact verification
+
+After measurement, verify that the retained report still carries the exact model declaration from the frozen plan:
+
+```bash
+remem-verify-model-binding \
+  artifacts/webshop-paired.json \
+  artifacts/webshop-experiment-plan.json \
+  --json
+```
+
+The verifier fails closed when the report plan digest, code revision, model identity, or parameter mapping differs from the retained plan. Parameter comparison uses canonical JSON rather than Python's loose numeric equality, so `128` and `128.0` are treated as different declarations. It also rejects missing provenance fields instead of interpreting absence as a match.
+
+Successful JSON output includes the exact report byte count and SHA-256 together with the verified plan SHA-256, ReMemAgent revision, model identity, parameter mapping, and `model_configuration_binding_verified: true`. Retain this output next to the report when publishing controlled external benchmark evidence.
+
+This command verifies semantic model-configuration binding. Run the normal benchmark integrity/evidence verification as well; the model-binding command does not replace the report manifest, preflight-evidence, plan-file, sidecar, or complete research-evidence checks.
+
 ## Boundary of the guarantee
 
 This contract verifies **declaration consistency**. ReMemAgent cannot introspect an arbitrary caller-owned policy factory and prove that it actually loaded the declared checkpoint or applied every declared decoding parameter. The concrete model/policy integration must use those values faithfully, and external experiments should pin the model artifact or provider revision independently where possible.
