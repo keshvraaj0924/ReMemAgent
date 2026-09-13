@@ -25,12 +25,14 @@ from experiments.preflight_evidence import (
     verify_controlled_paired_preflight_evidence,
 )
 from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
+from remem.observability import OBSERVATION_SNAPSHOT_SCHEMA_VERSION, ObservationSnapshot
 from remem.observability_distribution_artifacts import (
     DISTRIBUTION_OBSERVATION_SCHEMA_VERSION,
     read_distribution_observation_snapshot,
 )
 
 _BUNDLE_DIGEST_DOMAIN = b"remem-benchmark-bundle-v1\0"
+_OBSERVABILITY_BUNDLE_DIGEST_DOMAIN = b"remem-benchmark-observability-bundle-v1\0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +46,9 @@ class BenchmarkVerificationResult:
     configuration_fingerprint: str | None = None
     experiment_identity: str | None = None
     preflight_evidence_sha256: str | None = None
+    observability_schema_version: int | None = None
+    observability_byte_count: int | None = None
+    observability_sha256: str | None = None
     distribution_schema_version: int | None = None
     distribution_byte_count: int | None = None
     distribution_sha256: str | None = None
@@ -60,6 +65,9 @@ class BenchmarkVerificationResult:
             "configuration_fingerprint": self.configuration_fingerprint,
             "experiment_identity": self.experiment_identity,
             "preflight_evidence_sha256": self.preflight_evidence_sha256,
+            "observability_schema_version": self.observability_schema_version,
+            "observability_byte_count": self.observability_byte_count,
+            "observability_sha256": self.observability_sha256,
             "distribution_schema_version": self.distribution_schema_version,
             "distribution_byte_count": self.distribution_byte_count,
             "distribution_sha256": self.distribution_sha256,
@@ -68,8 +76,8 @@ class BenchmarkVerificationResult:
 
 
 @dataclass(frozen=True, slots=True)
-class _DistributionVerification:
-    """Exact-byte integrity metadata for one validated distribution sidecar."""
+class _SidecarVerification:
+    """Exact-byte integrity metadata for one validated benchmark sidecar."""
 
     schema_version: int
     byte_count: int
@@ -94,6 +102,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--observability-sidecar",
+        type=Path,
+        help=(
+            "Optional persisted aggregate observability sidecar to validate and bind into "
+            "the verification attestation"
+        ),
+    )
+    parser.add_argument(
         "--distribution-sidecar",
         type=Path,
         help=(
@@ -115,6 +131,7 @@ def verify_report_artifact(
     manifest_path: Path | None = None,
     preflight_evidence_path: Path | None = None,
     distribution_sidecar_path: Path | None = None,
+    observability_sidecar_path: Path | None = None,
 ) -> BenchmarkVerificationResult:
     """Verify report bytes, identities, admission evidence, and optional sidecars."""
 
@@ -137,11 +154,12 @@ def verify_report_artifact(
         payload,
         preflight_evidence_path,
     )
+    observability = _verify_observability_sidecar(observability_sidecar_path)
     distribution = _verify_distribution_sidecar(distribution_sidecar_path)
-    bundle_sha256 = (
-        _build_bundle_digest(manifest.sha256, distribution.sha256)
-        if distribution is not None
-        else None
+    bundle_sha256 = _select_bundle_digest(
+        manifest.sha256,
+        observability,
+        distribution,
     )
     return BenchmarkVerificationResult(
         schema_version=manifest.schema_version,
@@ -151,6 +169,13 @@ def verify_report_artifact(
         configuration_fingerprint=configuration_fingerprint,
         experiment_identity=experiment_identity,
         preflight_evidence_sha256=preflight_evidence_sha256,
+        observability_schema_version=(
+            observability.schema_version if observability is not None else None
+        ),
+        observability_byte_count=(
+            observability.byte_count if observability is not None else None
+        ),
+        observability_sha256=observability.sha256 if observability is not None else None,
         distribution_schema_version=(
             distribution.schema_version if distribution is not None else None
         ),
@@ -183,29 +208,88 @@ def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
     return payload
 
 
+def _verify_observability_sidecar(
+    observability_sidecar_path: Path | None,
+) -> _SidecarVerification | None:
+    """Validate and hash one retained aggregate-observability sidecar."""
+
+    if observability_sidecar_path is None:
+        return None
+    raw_bytes = observability_sidecar_path.read_bytes()
+    try:
+        payload = json.loads(raw_bytes)
+    except json.JSONDecodeError as exc:
+        raise ValueError("observability sidecar must contain valid JSON") from exc
+    if not isinstance(payload, Mapping):
+        raise TypeError("observability sidecar root must be a JSON object")
+    ObservationSnapshot.from_dict(payload)
+    return _SidecarVerification(
+        schema_version=OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
+        byte_count=len(raw_bytes),
+        sha256=hashlib.sha256(raw_bytes).hexdigest(),
+    )
+
+
 def _verify_distribution_sidecar(
     distribution_sidecar_path: Path | None,
-) -> _DistributionVerification | None:
+) -> _SidecarVerification | None:
     """Validate and hash one retained distribution sidecar without mutating it."""
 
     if distribution_sidecar_path is None:
         return None
     raw_bytes = distribution_sidecar_path.read_bytes()
     read_distribution_observation_snapshot(distribution_sidecar_path)
-    return _DistributionVerification(
+    return _SidecarVerification(
         schema_version=DISTRIBUTION_OBSERVATION_SCHEMA_VERSION,
         byte_count=len(raw_bytes),
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
     )
 
 
+def _select_bundle_digest(
+    report_sha256: str,
+    observability: _SidecarVerification | None,
+    distribution: _SidecarVerification | None,
+) -> str | None:
+    """Select a backward-compatible bundle digest for the supplied validated sidecars."""
+
+    if observability is not None:
+        return _build_observability_bundle_digest(
+            report_sha256,
+            observability.sha256,
+            distribution.sha256 if distribution is not None else None,
+        )
+    if distribution is not None:
+        return _build_bundle_digest(report_sha256, distribution.sha256)
+    return None
+
+
 def _build_bundle_digest(report_sha256: str, distribution_sha256: str) -> str:
-    """Bind exact report and distribution digests into one domain-separated digest."""
+    """Bind exact report and distribution digests using the established v1 contract."""
 
     digest = hashlib.sha256()
     digest.update(_BUNDLE_DIGEST_DOMAIN)
     digest.update(bytes.fromhex(report_sha256))
     digest.update(bytes.fromhex(distribution_sha256))
+    return digest.hexdigest()
+
+
+def _build_observability_bundle_digest(
+    report_sha256: str,
+    observability_sha256: str,
+    distribution_sha256: str | None,
+) -> str:
+    """Bind report, aggregate telemetry, and optional distributions unambiguously."""
+
+    digest = hashlib.sha256()
+    digest.update(_OBSERVABILITY_BUNDLE_DIGEST_DOMAIN)
+    digest.update(bytes.fromhex(report_sha256))
+    digest.update(bytes.fromhex(observability_sha256))
+    if distribution_sha256 is None:
+        digest.update(b"\x00")
+    else:
+        digest.update(b"\x01")
+        digest.update(bytes.fromhex(distribution_sha256))
     return digest.hexdigest()
 
 
@@ -271,6 +355,7 @@ def main() -> int:
             arguments.manifest,
             arguments.preflight_evidence,
             arguments.distribution_sidecar,
+            arguments.observability_sidecar,
         )
     except (OSError, TypeError, ValueError) as error:
         print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
