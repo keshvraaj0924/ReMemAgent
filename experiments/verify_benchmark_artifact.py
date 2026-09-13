@@ -242,11 +242,7 @@ def _benchmark_completed_episode_count(snapshot: ObservationSnapshot) -> float |
 
     canonical_count = snapshot.counters.get(_BENCHMARK_EPISODES_COMPLETED_METRIC)
     legacy_count = snapshot.counters.get(_LEGACY_BENCHMARK_EPISODE_COMPLETED_METRIC)
-    if (
-        canonical_count is not None
-        and legacy_count is not None
-        and canonical_count != legacy_count
-    ):
+    if canonical_count is not None and legacy_count is not None and canonical_count != legacy_count:
         raise ValueError("observability sidecar has conflicting completed episode counters")
     return canonical_count if canonical_count is not None else legacy_count
 
@@ -262,9 +258,7 @@ def _verify_distribution_sidecar(
     snapshot = read_distribution_observation_snapshot(distribution_sidecar_path)
     histogram = snapshot.duration_histograms.get(BENCHMARK_EPISODE_DURATION_METRIC)
     if histogram is None:
-        raise ValueError(
-            "distribution sidecar is missing benchmark episode duration histogram"
-        )
+        raise ValueError("distribution sidecar is missing benchmark episode duration histogram")
     return _SidecarVerification(
         schema_version=DISTRIBUTION_OBSERVATION_SCHEMA_VERSION,
         byte_count=len(raw_bytes),
@@ -283,9 +277,7 @@ def _verify_sidecar_measurement_consistency(
     if observability is None or distribution is None:
         return
     if observability.episode_duration_total is None:
-        raise ValueError(
-            "observability sidecar is missing benchmark episode duration aggregate"
-        )
+        raise ValueError("observability sidecar is missing benchmark episode duration aggregate")
     if observability.episode_count is None:
         raise ValueError("observability sidecar is missing benchmark episodes completed counter")
     if distribution.episode_duration_total is None or distribution.episode_count is None:
