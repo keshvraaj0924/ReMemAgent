@@ -15,6 +15,7 @@ EXPECTED_SCRIPTS = {
     "remem-verify-benchmark": "experiments.verify_benchmark_artifact:main",
     "remem-verify-preflight": "experiments.verify_preflight_evidence:main",
     "remem-check-environments": "experiments.environment_cli:main",
+    "remem-research-evidence": "experiments.research_evidence_cli:main",
 }
 
 
