@@ -40,23 +40,28 @@ remem-verify-benchmark \
 
 The verifier authenticates the readiness object and requires its canonical `evidence_sha256` to match the digest embedded in the measured artifact's runtime provenance. A missing, malformed, tampered, or unrelated readiness object fails closed.
 
-## Bind a duration-distribution sidecar
+## Bind observability sidecars
 
-When a benchmark run also persisted the optional fixed-bucket duration sidecar, verification can validate and bind those exact bytes into the same machine-readable attestation:
+Measured runs can persist aggregate observability and fixed-bucket duration distributions as deterministic sidecars. The verifier can validate those retained files and bind their exact bytes into the machine-readable attestation:
 
 ```text
 remem-verify-benchmark \
   artifacts/webshop.json \
   --manifest artifacts/webshop.json.manifest.json \
+  --observability-sidecar artifacts/webshop.observability.json \
   --distribution-sidecar artifacts/webshop.distributions.json \
   --json
 ```
 
-The sidecar is first parsed through the versioned `DistributionObservationSnapshot` contract. Unsupported schemas, malformed histogram fields, and inconsistent derived values such as a persisted count or mean that disagrees with the bucket counts/total fail verification. Only after structural validation succeeds does the verifier attest the sidecar's exact byte count and SHA-256 digest.
+The aggregate sidecar is parsed through the versioned `ObservationSnapshot` contract. Unsupported schemas, malformed metric mappings, empty metric names, negative aggregates, and non-finite values fail verification. Only after schema validation succeeds does the verifier attest its exact byte count and SHA-256 digest.
 
-When a distribution sidecar is supplied, the verifier also emits `bundle_sha256`. This is a deterministic, domain-separated SHA-256 over the already-verified report digest and the validated distribution-sidecar digest. It gives CI and archival systems one stable identifier for that exact report/distribution pair without changing the benchmark-report or report-manifest schemas.
+The duration sidecar is parsed through the versioned `DistributionObservationSnapshot` contract. Unsupported schemas, malformed histogram fields, and inconsistent derived values such as a persisted count or mean that disagrees with the bucket counts or total likewise fail verification before any digest is emitted.
 
-`bundle_sha256` is an association checksum, not an authenticity mechanism. It proves which exact report and distribution bytes were presented together to the verifier; it does not prove that an untrusted writer originally produced those files together. Use authenticated storage or signatures when provenance against a malicious writer matters.
+When aggregate observability is supplied, `bundle_sha256` uses a dedicated domain-separated contract over the verified report digest, the validated aggregate-observability digest, and an explicit marker for whether a distribution digest is present. This gives CI and archival systems one deterministic identifier for the exact report plus retained telemetry set, while preventing an absent distribution sidecar from being confused with any concrete distribution digest.
+
+For backward compatibility, verification with only `--distribution-sidecar` retains the established `remem-benchmark-bundle-v1` digest contract. Existing archived report/distribution attestations therefore keep the same bundle identity. Supplying aggregate observability moves the bundle to the `remem-benchmark-observability-bundle-v1` domain instead of silently changing the meaning of the older digest.
+
+`bundle_sha256` is an association checksum, not an authenticity mechanism. It identifies which exact validated files were presented together to the verifier; it does not prove that an untrusted writer originally produced those files together. Use authenticated storage or signatures when provenance against a malicious writer matters.
 
 ## Machine-readable verification attestation
 
@@ -67,6 +72,8 @@ remem-verify-benchmark \
   artifacts/webshop-paired.json \
   --manifest artifacts/webshop-paired.json.manifest.json \
   --preflight-evidence artifacts/webshop-readiness.json \
+  --observability-sidecar artifacts/webshop.observability.json \
+  --distribution-sidecar artifacts/webshop.distributions.json \
   --json
 ```
 
@@ -78,14 +85,15 @@ Successful output is one canonical JSON object containing:
 - the verified top-level `configuration_fingerprint` when present;
 - the verified top-level `experiment_identity` when present;
 - the authenticated readiness-evidence SHA-256 when the artifact is evidence-bound;
+- the aggregate-observability schema version, exact byte count, and exact SHA-256 when `--observability-sidecar` is supplied;
 - the distribution schema version, exact byte count, and exact SHA-256 when `--distribution-sidecar` is supplied; and
-- `bundle_sha256` when a distribution sidecar is supplied.
+- `bundle_sha256` when at least one supported observability sidecar is supplied.
 
-Legacy artifacts that do not record one of these optional identity fields emit `null` rather than having an identity inferred for them. If an identity field is present but is not a non-empty string, verification fails instead of silently coercing it into an attestation. Distribution fields and `bundle_sha256` likewise remain `null` when no distribution sidecar is supplied, preserving backward-compatible verification behavior.
+Legacy artifacts that do not record an optional identity field emit `null` rather than having an identity inferred for them. If an identity field is present but is not a non-empty string, verification fails instead of silently coercing it into an attestation. Aggregate-observability and distribution fields remain `null` when their respective sidecars are omitted. `bundle_sha256` remains `null` when neither sidecar is supplied.
 
-The identity fields make the attestation directly useful for CI correlation and archival indexing: downstream automation can associate a verified byte-level artifact with its validated benchmark/configuration/experiment identity without reparsing the report. For legacy artifacts without readiness binding, `preflight_evidence_sha256` is `null`.
+The identity fields make the attestation directly useful for CI correlation and archival indexing: downstream automation can associate a verified byte-level artifact with its validated benchmark, configuration, experiment, and telemetry identity without reparsing the report or sidecars. For legacy artifacts without readiness binding, `preflight_evidence_sha256` is `null`.
 
-This output is derived only after all artifact, identity, controlled-admission, paired-provenance, readiness-binding, and requested distribution-sidecar checks succeed. It does not recollect mutable runtime or Git state. The attestation is intended for deterministic downstream automation; it is not a digital signature and should not be treated as proof against an untrusted artifact writer.
+This output is derived only after all artifact, identity, controlled-admission, paired-provenance, readiness-binding, and requested observability-sidecar checks succeed. It does not recollect mutable runtime or Git state. The attestation is intended for deterministic downstream automation; it is not a digital signature and should not be treated as proof against an untrusted artifact writer.
 
 ## Evidence boundary
 
@@ -98,10 +106,11 @@ Likewise, the manifest and optional bundle digest are not authenticity or signin
 1. Execute the benchmark with its declared configuration and seeds.
 2. Persist the deterministic benchmark report.
 3. Generate the exact-byte manifest with the benchmark CLI's `--manifest` option.
-4. When latency distributions are enabled, retain the deterministic distribution sidecar beside the report.
-5. Verify the report from the saved files, supplying the retained readiness evidence and distribution sidecar when applicable.
-6. Preserve the report, manifest, runtime provenance, readiness evidence when applicable, distribution sidecar when applicable, and code revision together.
-7. Optionally capture the `--json` verification attestation for downstream CI or archival indexing.
-8. Run statistical analysis only on the verified measured artifacts.
+4. When aggregate observability is enabled, retain its deterministic sidecar beside the report.
+5. When latency distributions are enabled, retain the deterministic distribution sidecar beside the report.
+6. Verify the report from the saved files, supplying retained readiness evidence and observability sidecars when applicable.
+7. Preserve the report, manifest, runtime provenance, readiness evidence when applicable, observability sidecars when applicable, and code revision together.
+8. Optionally capture the `--json` verification attestation for downstream CI or archival indexing.
+9. Run statistical analysis only on the verified measured artifacts.
 
 This workflow keeps integrity checking deterministic and dependency-light while avoiding any claim that a checksum or internally consistent experiment identity substitutes for reproducible scientific methodology.
