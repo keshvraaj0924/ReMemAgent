@@ -102,4 +102,10 @@ def _normalize_info(info: Any) -> dict[str, Any]:
 
     if not isinstance(info, Mapping):
         raise TypeError("ALFWorld info must be a mapping")
-    return {key: unwrap_singleton(value) for key, value in info.items()}
+
+    normalized_info: dict[str, Any] = {}
+    for key, value in info.items():
+        if not isinstance(key, str):
+            raise TypeError("ALFWorld info keys must be strings")
+        normalized_info[key] = unwrap_singleton(value)
+    return normalized_info

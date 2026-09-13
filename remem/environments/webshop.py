@@ -92,4 +92,10 @@ def _normalize_info(info: Any) -> dict[str, Any]:
 
     if not isinstance(info, Mapping):
         raise TypeError("WebShop info must be a mapping")
-    return dict(info)
+
+    normalized_info: dict[str, Any] = {}
+    for key, value in info.items():
+        if not isinstance(key, str):
+            raise TypeError("WebShop info keys must be strings")
+        normalized_info[key] = value
+    return normalized_info

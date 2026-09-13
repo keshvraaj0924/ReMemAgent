@@ -7,14 +7,14 @@ The ALFWorld adapter is intentionally strict at the boundary between the upstrea
 - A singleton batch dimension is removed from observations, rewards, and terminal flags.
 - Singleton unwrapping accepts ordinary Python sequences and array-like objects that expose `len()` plus integer indexing; the core package does not require NumPy.
 - Mapping values in `info` are unwrapped per field while the mapping itself remains metadata.
-- Step metadata must be mapping-like. Non-mapping `info` values are rejected instead of being silently replaced with `{}`.
+- Step metadata must be a string-keyed mapping. Non-mapping `info` values and non-string metadata keys are rejected instead of being silently replaced or coerced.
 - Rewards must already be numeric and finite. Booleans and numeric strings are rejected instead of being coerced.
 - `terminated` and `truncated` must be actual booleans after singleton unwrapping. Truthiness conversion is not performed.
 - Four-value legacy step results are accepted as `(observation, reward, done, info)` and normalized to `terminated=done`, `truncated=False`.
 - Five-value step results are accepted as `(observation, reward, terminated, truncated, info)`.
 - Invalid step payloads fail before a malformed `StepResult` can reach episode metrics or training artifacts.
 
-The same fail-closed metadata rule is applied by the WebShop adapter. This avoids recording a trajectory that appears valid after malformed upstream metadata was discarded.
+The same fail-closed metadata rule is applied by the WebShop adapter. This avoids recording a trajectory that appears valid after malformed upstream metadata was discarded or normalized into an incompatible shape.
 
 This fail-closed behavior is an integration invariant, not a benchmark result. It prevents ambiguous upstream values from changing episode termination, reward, or metadata semantics silently.
 
@@ -26,6 +26,6 @@ The equivalent WebShop factory applies the same callable `reset()` / `step()` ad
 
 ## Verification
 
-The adapter regression suite covers valid five-value normalization, legacy four-value normalization, array-like singleton batches, malformed observations, malformed terminal flags, malformed metadata, boolean rewards, and non-finite rewards. Official-factory tests additionally cover missing `reset()` / `step()` methods and cleanup on rejected environment admission.
+The adapter regression suite covers valid five-value normalization, legacy four-value normalization, array-like singleton batches, malformed observations, malformed terminal flags, malformed metadata mappings and keys, boolean rewards, and non-finite rewards. Official-factory tests additionally cover missing `reset()` / `step()` methods and cleanup on rejected environment admission.
 
 Real ALFWorld execution still requires the optional upstream installation and a caller-owned environment/model configuration; this repository does not claim that external execution has been run merely because the adapter contract is tested.

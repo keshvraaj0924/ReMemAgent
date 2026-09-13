@@ -79,6 +79,13 @@ def test_webshop_adapter_rejects_non_mapping_info() -> None:
         adapter.step("click[1]")
 
 
+def test_webshop_adapter_rejects_non_string_info_keys() -> None:
+    adapter = WebShopAdapter(FakeWebShop(("next", 0.0, False, False, {1: "bad"})))
+
+    with pytest.raises(TypeError, match="WebShop info keys must be strings"):
+        adapter.step("click[1]")
+
+
 def test_webshop_adapter_supports_legacy_four_value_step() -> None:
     adapter = WebShopAdapter(FakeWebShop(("next", 0.5, True, {"done": True})))
 

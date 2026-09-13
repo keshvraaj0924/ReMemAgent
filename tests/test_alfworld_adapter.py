@@ -84,6 +84,13 @@ def test_alfworld_adapter_rejects_non_mapping_info() -> None:
         adapter.step("look")
 
 
+def test_alfworld_adapter_rejects_non_string_info_keys() -> None:
+    adapter = AlfWorldAdapter(FakeAlfWorld((["next"], [0.0], [False], [False], {1: ["bad"]})))
+
+    with pytest.raises(TypeError, match="ALFWorld info keys must be strings"):
+        adapter.step("look")
+
+
 def test_alfworld_adapter_supports_legacy_four_value_step() -> None:
     adapter = AlfWorldAdapter(FakeAlfWorld((["next"], [0.5], [True], {"done": [True]})))
 
