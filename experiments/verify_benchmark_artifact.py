@@ -36,6 +36,7 @@ from remem.observability_distribution_artifacts import (
 _BUNDLE_DIGEST_DOMAIN = b"remem-benchmark-bundle-v1\0"
 _OBSERVABILITY_BUNDLE_DIGEST_DOMAIN = b"remem-benchmark-observability-bundle-v1\0"
 _BENCHMARK_EPISODES_COMPLETED_METRIC = "benchmark.episodes.completed"
+_LEGACY_BENCHMARK_EPISODE_COMPLETED_METRIC = "benchmark.episode.completed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,8 +233,22 @@ def _verify_observability_sidecar(
         byte_count=len(raw_bytes),
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
         episode_duration_total=snapshot.durations_seconds.get(BENCHMARK_EPISODE_DURATION_METRIC),
-        episode_count=snapshot.counters.get(_BENCHMARK_EPISODES_COMPLETED_METRIC),
+        episode_count=_benchmark_completed_episode_count(snapshot),
     )
+
+
+def _benchmark_completed_episode_count(snapshot: ObservationSnapshot) -> float | None:
+    """Resolve the canonical completed count while accepting one historical alias."""
+
+    canonical_count = snapshot.counters.get(_BENCHMARK_EPISODES_COMPLETED_METRIC)
+    legacy_count = snapshot.counters.get(_LEGACY_BENCHMARK_EPISODE_COMPLETED_METRIC)
+    if (
+        canonical_count is not None
+        and legacy_count is not None
+        and canonical_count != legacy_count
+    ):
+        raise ValueError("observability sidecar has conflicting completed episode counters")
+    return canonical_count if canonical_count is not None else legacy_count
 
 
 def _verify_distribution_sidecar(
