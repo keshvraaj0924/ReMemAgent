@@ -153,8 +153,13 @@ remem-research-evidence freeze \
   --note "predeclared seed set: 11,17,29,43,71" \
   --output artifacts/research-evidence.json
 
-remem-research-evidence verify artifacts/research-evidence.json
+remem-research-evidence verify \
+  artifacts/research-evidence.json \
+  --expected-revision <REMEM_COMMIT> \
+  --json
 ```
+
+For retained or published evidence, pass `--expected-revision` using the revision declared before measurement. Verification then fails closed if a different otherwise-valid evidence record is substituted. `--json` emits a deterministic machine-readable summary containing the experiment identity, declared evidence level, bound ReMemAgent revision, artifact count, and the exact byte count and SHA-256 of the evidence-record file itself. The record digest can be retained by downstream review or archival systems as an external identity for the exact verification input.
 
 The evidence record is an **index and exact-byte integrity contract**, not a semantic validator and not a digital signature. It does not decide whether `E3` has actually been earned. Run the specific preflight, benchmark, manifest, observability, and statistical checks first, then declare only the highest evidence level those retained artifacts genuinely support. If any indexed file is edited, replaced, deleted, or moved outside the retained experiment directory, record verification fails closed.
 
