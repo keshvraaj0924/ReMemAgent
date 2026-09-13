@@ -5,7 +5,11 @@ from __future__ import annotations
 from math import isfinite
 from typing import Any
 
-from remem.environments._compat import normalize_reset, require_callable
+from remem.environments._compat import (
+    normalize_reset,
+    normalize_text_observation,
+    require_callable,
+)
 from remem.environments.base import StepResult
 
 
@@ -30,9 +34,9 @@ class WebShopAdapter:
     def step(self, action: str) -> StepResult:
         """Execute one textual WebShop action and normalize its result.
 
-        The adapter intentionally rejects ambiguous reward and terminal values
-        instead of silently coercing them. This keeps malformed upstream
-        benchmark output from entering measured trajectories.
+        The adapter intentionally rejects ambiguous reward, terminal, and
+        observation values instead of silently coercing them. This keeps
+        malformed upstream benchmark output from entering measured trajectories.
         """
 
         if not isinstance(action, str) or not action.strip():
@@ -47,7 +51,7 @@ class WebShopAdapter:
             raise ValueError("WebShop step() must return four or five values")
 
         return StepResult(
-            observation=str(observation),
+            observation=normalize_text_observation(observation, benchmark_name="WebShop"),
             reward=_normalize_reward(reward),
             terminated=_normalize_terminal_flag(terminated, "terminated"),
             truncated=_normalize_terminal_flag(truncated, "truncated"),

@@ -6,7 +6,11 @@ from collections.abc import Mapping
 from math import isfinite
 from typing import Any
 
-from remem.environments._compat import require_callable, unwrap_singleton
+from remem.environments._compat import (
+    normalize_text_observation,
+    require_callable,
+    unwrap_singleton,
+)
 from remem.environments.base import StepResult
 
 
@@ -31,8 +35,12 @@ class AlfWorldAdapter:
         result = self._environment.reset(**kwargs)
         if isinstance(result, tuple) and len(result) == 2:
             observation, _info = result
-            return str(unwrap_singleton(observation))
-        return str(unwrap_singleton(result))
+        else:
+            observation = result
+        return normalize_text_observation(
+            unwrap_singleton(observation),
+            benchmark_name="ALFWorld",
+        )
 
     def step(self, action: str) -> StepResult:
         """Execute one textual ALFWorld action and normalize its result."""
@@ -50,7 +58,10 @@ class AlfWorldAdapter:
             raise ValueError("ALFWorld step() must return four or five values")
 
         return StepResult(
-            observation=str(unwrap_singleton(observation)),
+            observation=normalize_text_observation(
+                unwrap_singleton(observation),
+                benchmark_name="ALFWorld",
+            ),
             reward=_normalize_reward(reward),
             terminated=_normalize_terminal_flag(terminated, "terminated"),
             truncated=_normalize_terminal_flag(truncated, "truncated"),

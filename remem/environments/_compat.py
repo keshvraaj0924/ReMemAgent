@@ -8,6 +8,20 @@ from typing import Any
 from remem.environments.base import StepResult
 
 
+def normalize_text_observation(value: Any, *, benchmark_name: str = "environment") -> str:
+    """Validate one textual benchmark observation without lossy coercion.
+
+    External benchmarks occasionally surface malformed values when their data
+    or wrappers are misconfigured. Converting arbitrary objects with ``str``
+    would turn values such as ``None`` into apparently valid trajectory text,
+    contaminating benchmark evidence instead of failing at the adapter boundary.
+    """
+
+    if not isinstance(value, str):
+        raise TypeError(f"{benchmark_name} observation must be a string")
+    return value
+
+
 def normalize_reset(result: Any) -> str:
     """Normalize reset output from legacy and Gymnasium-style environments."""
 
@@ -15,7 +29,7 @@ def normalize_reset(result: Any) -> str:
         observation, _info = result
     else:
         observation = result
-    return str(observation)
+    return normalize_text_observation(observation)
 
 
 def normalize_step(
@@ -35,10 +49,16 @@ def normalize_step(
     values = tuple(result)
     if len(values) == 5:
         observation, reward, terminated, truncated, info = values
-        return str(observation), float(reward), bool(terminated), bool(truncated), dict(info)
+        return (
+            normalize_text_observation(observation),
+            float(reward),
+            bool(terminated),
+            bool(truncated),
+            dict(info),
+        )
     if len(values) == 4:
         observation, reward, done, info = values
-        return str(observation), float(reward), bool(done), False, dict(info)
+        return normalize_text_observation(observation), float(reward), bool(done), False, dict(info)
     raise ValueError("environment step() must return four or five values")
 
 

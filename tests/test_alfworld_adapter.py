@@ -6,11 +6,16 @@ from remem.environments.alfworld import AlfWorldAdapter
 
 
 class FakeAlfWorld:
-    def __init__(self, step_result):
+    def __init__(self, step_result, *, reset_result=None):
         self.step_result = step_result
+        self.reset_result = (
+            (["initial observation"], {"ignored": [1]})
+            if reset_result is None
+            else reset_result
+        )
 
     def reset(self):
-        return (["initial observation"], {"ignored": [1]})
+        return self.reset_result
 
     def step(self, actions):
         assert actions == ["look"]
@@ -31,6 +36,25 @@ def test_alfworld_adapter_normalizes_valid_five_value_step() -> None:
     assert result.terminated is True
     assert result.truncated is False
     assert result.info == {"score": 1}
+
+
+def test_alfworld_adapter_rejects_non_text_reset_observation() -> None:
+    adapter = AlfWorldAdapter(
+        FakeAlfWorld(
+            (["next"], [0.0], [False], [False], {}),
+            reset_result=([None], {}),
+        )
+    )
+
+    with pytest.raises(TypeError, match="ALFWorld observation must be a string"):
+        adapter.reset()
+
+
+def test_alfworld_adapter_rejects_non_text_step_observation() -> None:
+    adapter = AlfWorldAdapter(FakeAlfWorld(([None], [0.0], [False], [False], {})))
+
+    with pytest.raises(TypeError, match="ALFWorld observation must be a string"):
+        adapter.step("look")
 
 
 def test_alfworld_adapter_rejects_non_boolean_terminal_flags() -> None:
