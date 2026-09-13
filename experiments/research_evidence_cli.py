@@ -377,12 +377,18 @@ def _verify(arguments: argparse.Namespace) -> None:
             f"expected {arguments.expected_revision}, recorded {record.remem_revision}"
         )
 
-    require_plan_binding = arguments.require_plan_binding or arguments.require_complete_binding
-    require_report_binding = arguments.require_report_binding or arguments.require_complete_binding
+    require_plan_binding = (
+        arguments.require_plan_binding or arguments.require_complete_binding
+    )
+    require_report_binding = (
+        arguments.require_report_binding or arguments.require_complete_binding
+    )
     require_manifest_binding = (
         arguments.require_manifest_binding or arguments.require_complete_binding
     )
-    require_sidecar_binding = arguments.require_sidecar_binding or arguments.require_complete_binding
+    require_sidecar_binding = (
+        arguments.require_sidecar_binding or arguments.require_complete_binding
+    )
 
     plan_binding_sha256 = None
     if require_plan_binding:
