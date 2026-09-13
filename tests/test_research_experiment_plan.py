@@ -60,9 +60,9 @@ def test_plan_is_canonical_and_mapping_order_independent() -> None:
     )
 
     assert first.schema_version == RESEARCH_EXPERIMENT_PLAN_SCHEMA_VERSION
-    assert canonical_research_experiment_plan_json(first) == canonical_research_experiment_plan_json(
-        second
-    )
+    assert canonical_research_experiment_plan_json(
+        first
+    ) == canonical_research_experiment_plan_json(second)
     assert first.sha256 == second.sha256
     assert len(first.sha256) == 64
 

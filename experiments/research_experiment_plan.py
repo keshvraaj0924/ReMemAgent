@@ -153,16 +153,12 @@ def build_research_experiment_plan(
         seeds=_validated_seeds(seeds),
         environment_factory=_callable_spec(environment_factory, "environment_factory"),
         success_evaluator=_callable_spec(success_evaluator, "success_evaluator"),
-        baseline_policy_factory=_callable_spec(
-            baseline_policy_factory, "baseline_policy_factory"
-        ),
+        baseline_policy_factory=_callable_spec(baseline_policy_factory, "baseline_policy_factory"),
         treatment_policy_factory=_callable_spec(
             treatment_policy_factory, "treatment_policy_factory"
         ),
         source_revisions=_validated_revision_mapping(source_revisions, "source_revisions"),
-        dependency_versions=_validated_string_mapping(
-            dependency_versions, "dependency_versions"
-        ),
+        dependency_versions=_validated_string_mapping(dependency_versions, "dependency_versions"),
         parameters=_validated_parameters(parameters or {}),
         model_identity=validated_model_identity,
         notes=tuple(_non_empty_string(note, "note") for note in notes),
