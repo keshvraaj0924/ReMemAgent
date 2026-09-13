@@ -90,6 +90,50 @@ def _write_plan_bound_record(
     return record_path, plan.sha256
 
 
+def _write_report_bound_record(
+    root: Path,
+    *,
+    attested_report_sha256: str | None = None,
+    attested_report_byte_count: int | None = None,
+) -> tuple[Path, str]:
+    report_path = root / "paired-report.json"
+    report_path.write_text('{"benchmark_name":"webshop","paired":true}\n', encoding="utf-8")
+    report_bytes = report_path.read_bytes()
+    report_sha256 = hashlib.sha256(report_bytes).hexdigest()
+
+    attestation_path = root / "verification.json"
+    attestation_path.write_text(
+        json.dumps(
+            {
+                "byte_count": (
+                    len(report_bytes)
+                    if attested_report_byte_count is None
+                    else attested_report_byte_count
+                ),
+                "sha256": attested_report_sha256 or report_sha256,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    record_path = root / "research-evidence.json"
+    record = build_research_evidence_record(
+        experiment_name="webshop-seed-study",
+        evidence_level="E3",
+        remem_revision=REVISION,
+        artifacts={
+            "paired_report": report_path,
+            "verification": attestation_path,
+        },
+        record_directory=root,
+    )
+    write_research_evidence_record(record_path, record)
+    return record_path, report_sha256
+
+
 def test_verify_json_reports_exact_record_identity(
     tmp_path: Path,
     monkeypatch,
@@ -254,4 +298,83 @@ def test_verify_plan_binding_requires_canonical_evidence_roles(
     assert captured.out == ""
     assert "plan-binding verification requires evidence roles" in captured.err
     assert "experiment_plan" in captured.err
+    assert "verification" in captured.err
+
+
+def test_verify_report_binding_proves_exact_retained_report_identity(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    record_path, report_sha256 = _write_report_bound_record(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "remem-research-evidence",
+            "verify",
+            str(record_path),
+            "--require-report-binding",
+            "--json",
+        ],
+    )
+
+    assert main() == 0
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert captured.err == ""
+    assert payload["paired_report_sha256"] == report_sha256
+    assert payload["report_binding_verified"] is True
+
+
+def test_verify_report_binding_rejects_attestation_for_different_report(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    record_path, _ = _write_report_bound_record(
+        tmp_path,
+        attested_report_sha256="f" * 64,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "remem-research-evidence",
+            "verify",
+            str(record_path),
+            "--require-report-binding",
+        ],
+    )
+
+    assert main() == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "paired-report SHA-256 mismatch" in captured.err
+
+
+def test_verify_report_binding_requires_canonical_evidence_roles(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    record_path = _write_record(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "remem-research-evidence",
+            "verify",
+            str(record_path),
+            "--require-report-binding",
+        ],
+    )
+
+    assert main() == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "report-binding verification requires evidence roles" in captured.err
     assert "verification" in captured.err
