@@ -177,6 +177,7 @@ def build_alfworld_text_environment_factory(
                     train_eval=normalized_train_eval,
                 )
                 initialized_environment = environment.init_env(batch_size=1)
+                _validate_environment_interface(initialized_environment, benchmark_name="ALFWorld")
             except Exception:
                 if environment is not None:
                     _close_if_supported(environment)
@@ -226,10 +227,7 @@ def build_webshop_text_environment_factory(
                 kwargs["num_products"] = num_products
             environment = gym.make(normalized_environment_id, **kwargs)
 
-        reset = getattr(environment, "reset", None)
-        if not callable(reset):
-            _close_if_supported(environment)
-            raise TypeError("WebShop environment must expose reset()")
+        _validate_environment_interface(environment, benchmark_name="WebShop")
         return _SeededWebShopEnvironment(environment, seed)
 
     return create_environment
@@ -310,6 +308,17 @@ def _validate_webshop_gym_version(gym_module: Any) -> None:
         "reset/step during environment construction; use a WebShop-supported "
         "Gym release such as 0.23.1 instead"
     )
+
+
+def _validate_environment_interface(environment: Any, *, benchmark_name: str) -> None:
+    """Fail fast when an upstream benchmark lacks the runner's required methods."""
+
+    for method_name in ("reset", "step"):
+        method = getattr(environment, method_name, None)
+        if callable(method):
+            continue
+        _close_if_supported(environment)
+        raise TypeError(f"{benchmark_name} environment must expose callable {method_name}()")
 
 
 def _validate_seed(seed: int) -> None:
