@@ -26,6 +26,10 @@ from experiments.research_sidecar_binding import (
     ResearchSidecarBinding,
     verify_research_sidecar_binding,
 )
+from experiments.verify_model_configuration_binding import (
+    ModelConfigurationBindingResult,
+    verify_model_configuration_binding,
+)
 
 EXPERIMENT_PLAN_ROLE = "experiment_plan"
 PAIRED_REPORT_ROLE = "paired_report"
@@ -112,11 +116,20 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     verify_parser.add_argument(
+        "--require-model-binding",
+        action="store_true",
+        help=(
+            "Require canonical experiment_plan and paired_report roles and prove that the "
+            "measured model identity and experiment parameters match the frozen plan"
+        ),
+    )
+    verify_parser.add_argument(
         "--require-complete-binding",
         action="store_true",
         help=(
             "Require the complete retained experiment chain: plan, paired report, report "
-            "manifest, observability sidecars, and verification attestation bindings"
+            "manifest, observability sidecars, model configuration, and verification "
+            "attestation bindings"
         ),
     )
     verify_parser.add_argument(
@@ -165,6 +178,7 @@ def _verification_summary(
     report_binding_sha256: str | None = None,
     manifest_binding_sha256: str | None = None,
     sidecar_binding: ResearchSidecarBinding | None = None,
+    model_binding: ModelConfigurationBindingResult | None = None,
     complete_binding_verified: bool = False,
 ) -> dict[str, object]:
     """Build an exact-record identity summary after semantic verification succeeds."""
@@ -194,6 +208,10 @@ def _verification_summary(
         payload["distribution_sidecar_sha256"] = sidecar_binding.distribution_sha256
         payload["sidecar_bundle_sha256"] = sidecar_binding.bundle_sha256
         payload["sidecar_binding_verified"] = True
+    if model_binding is not None:
+        payload["model_identity"] = model_binding.model_identity
+        payload["experiment_parameters"] = dict(model_binding.parameters)
+        payload["model_configuration_binding_verified"] = True
     if complete_binding_verified:
         payload["complete_binding_verified"] = True
     return payload
@@ -283,18 +301,12 @@ def _verify_plan_binding(
 
     attestation_path = artifact_paths[VERIFICATION_ATTESTATION_ROLE]
     attestation = _load_json_object(attestation_path, "verification attestation")
-    attested_plan_sha256 = _required_attestation_string(
-        attestation,
-        "experiment_plan_sha256",
-    )
+    attested_plan_sha256 = _required_attestation_string(attestation, "experiment_plan_sha256")
     attested_plan_file_sha256 = _required_attestation_string(
         attestation,
         "experiment_plan_file_sha256",
     )
-    attested_plan_name = _required_attestation_string(
-        attestation,
-        "experiment_plan_name",
-    )
+    attested_plan_name = _required_attestation_string(attestation, "experiment_plan_name")
     attested_plan_revision = _required_attestation_string(
         attestation,
         "experiment_plan_remem_revision",
@@ -365,6 +377,30 @@ def _verify_manifest_binding(
     return artifacts_by_role[REPORT_MANIFEST_ROLE].sha256
 
 
+def _verify_model_binding(
+    record_path: Path,
+    record: ResearchEvidenceRecord,
+) -> ModelConfigurationBindingResult:
+    """Prove that retained measured model metadata matches the retained frozen plan."""
+
+    artifact_paths = _artifact_paths_by_role(record_path, record)
+    missing_roles = sorted(
+        role for role in (EXPERIMENT_PLAN_ROLE, PAIRED_REPORT_ROLE) if role not in artifact_paths
+    )
+    if missing_roles:
+        raise ValueError(
+            "model-binding verification requires evidence roles: " + ", ".join(missing_roles)
+        )
+
+    binding = verify_model_configuration_binding(
+        artifact_paths[PAIRED_REPORT_ROLE],
+        artifact_paths[EXPERIMENT_PLAN_ROLE],
+    )
+    if binding.remem_revision != record.remem_revision:
+        raise ValueError("model-binding revision does not match research evidence revision")
+    return binding
+
+
 def _verify(arguments: argparse.Namespace) -> None:
     record_path = arguments.record.resolve()
     record = verify_research_evidence_record(record_path)
@@ -385,6 +421,7 @@ def _verify(arguments: argparse.Namespace) -> None:
     require_sidecar_binding = (
         arguments.require_sidecar_binding or arguments.require_complete_binding
     )
+    require_model_binding = arguments.require_model_binding or arguments.require_complete_binding
 
     plan_binding_sha256 = None
     if require_plan_binding:
@@ -398,6 +435,9 @@ def _verify(arguments: argparse.Namespace) -> None:
     sidecar_binding = None
     if require_sidecar_binding:
         sidecar_binding = verify_research_sidecar_binding(record_path)
+    model_binding = None
+    if require_model_binding:
+        model_binding = _verify_model_binding(record_path, record)
 
     if arguments.json:
         print(
@@ -409,6 +449,7 @@ def _verify(arguments: argparse.Namespace) -> None:
                     report_binding_sha256=report_binding_sha256,
                     manifest_binding_sha256=manifest_binding_sha256,
                     sidecar_binding=sidecar_binding,
+                    model_binding=model_binding,
                     complete_binding_verified=arguments.require_complete_binding,
                 ),
                 sort_keys=True,
@@ -418,6 +459,7 @@ def _verify(arguments: argparse.Namespace) -> None:
             )
         )
         return
+
     binding_parts: list[str] = []
     if plan_binding_sha256 is not None:
         binding_parts.append(f"plan {plan_binding_sha256}")
@@ -427,6 +469,9 @@ def _verify(arguments: argparse.Namespace) -> None:
         binding_parts.append(f"manifest {manifest_binding_sha256}")
     if sidecar_binding is not None:
         binding_parts.append(f"sidecar bundle {sidecar_binding.bundle_sha256}")
+    if model_binding is not None:
+        model_label = model_binding.model_identity or "<none>"
+        binding_parts.append(f"model configuration {model_label}")
     if arguments.require_complete_binding:
         binding_parts.append("complete binding verified")
     binding_suffix = ""
