@@ -31,6 +31,9 @@ class FakeAlfWorldEnvironment:
         self.reset_random_values.append(value)
         return "observation"
 
+    def step(self, _action: Any) -> tuple[str, float, bool, dict[str, Any]]:
+        return "observation", 0.0, False, {}
+
 
 def test_alfworld_factory_isolates_mutation_between_environment_instances(
     monkeypatch: pytest.MonkeyPatch,
@@ -134,6 +137,47 @@ def test_alfworld_factory_seeds_reset_without_leaking_global_rng(
     assert random.random() == expected_next_value
 
 
+def test_alfworld_factory_closes_invalid_initialized_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class MissingStepEnvironment:
+        def __init__(self, _config: dict[str, Any], _train_eval: str) -> None:
+            self.close_calls = 0
+
+        def init_env(self, *, batch_size: int) -> "MissingStepEnvironment":
+            assert batch_size == 1
+            return self
+
+        def reset(self) -> str:
+            return "observation"
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    created: list[MissingStepEnvironment] = []
+
+    def get_environment(_env_type: str):
+        def constructor(config: dict[str, Any], train_eval: str) -> MissingStepEnvironment:
+            environment = MissingStepEnvironment(config, train_eval)
+            created.append(environment)
+            return environment
+
+        return constructor
+
+    environment_module = types.ModuleType("alfworld.agents.environment")
+    environment_module.get_environment = get_environment  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "alfworld", types.ModuleType("alfworld"))
+    monkeypatch.setitem(sys.modules, "alfworld.agents", types.ModuleType("alfworld.agents"))
+    monkeypatch.setitem(sys.modules, "alfworld.agents.environment", environment_module)
+
+    factory = build_alfworld_text_environment_factory({"env": {"type": "AlfredTWEnv"}})
+
+    with pytest.raises(TypeError, match="ALFWorld environment must expose callable step"):
+        factory(11)
+
+    assert created[0].close_calls >= 1
+
+
 def test_alfworld_factory_rejects_non_singleton_batch() -> None:
     with pytest.raises(ValueError, match="batch_size=1"):
         build_alfworld_text_environment_factory({}, batch_size=2)
@@ -232,6 +276,9 @@ def test_webshop_factory_closes_environment_when_reset_is_missing(
         def __init__(self) -> None:
             self.close_calls = 0
 
+        def step(self, _action: Any) -> None:
+            return None
+
         def close(self) -> None:
             self.close_calls += 1
 
@@ -242,7 +289,33 @@ def test_webshop_factory_closes_environment_when_reset_is_missing(
 
     factory = build_webshop_text_environment_factory()
 
-    with pytest.raises(TypeError, match="reset"):
+    with pytest.raises(TypeError, match="callable reset"):
+        factory(23)
+
+    assert environment.close_calls == 1
+
+
+def test_webshop_factory_closes_environment_when_step_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class MissingStepEnvironment:
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        def reset(self) -> None:
+            return None
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    environment = MissingStepEnvironment()
+    gym_module = types.ModuleType("gym")
+    gym_module.make = lambda _environment_id, **_kwargs: environment
+    monkeypatch.setitem(sys.modules, "gym", gym_module)
+
+    factory = build_webshop_text_environment_factory()
+
+    with pytest.raises(TypeError, match="callable step"):
         factory(23)
 
     assert environment.close_calls == 1
@@ -274,6 +347,9 @@ class FakeWebShopEnvironment:
         if self.reset_error is not None:
             raise self.reset_error
 
+    def step(self, _action: Any) -> tuple[str, float, bool, dict[str, Any]]:
+        return "observation", 0.0, False, {}
+
     def close(self) -> None:
         self.close_calls += 1
 
@@ -285,6 +361,9 @@ class LegacyWebShopEnvironment:
 
     def reset(self) -> None:
         self.reset_calls += 1
+
+    def step(self, _action: Any) -> tuple[str, float, bool, dict[str, Any]]:
+        return "observation", 0.0, False, {}
 
     def close(self) -> None:
         self.close_calls += 1
