@@ -145,6 +145,8 @@ After the experiment-specific validators have succeeded, create one machine-chec
 
 Keep the record in the same experiment directory as the files it indexes. Every `--artifact` path must resolve beneath the record's output directory so that the record is portable without embedding machine-specific absolute paths.
 
+Use the canonical semantic roles shown below when retaining artifacts that participate in binding verification. In particular, the benchmark integrity manifest role is `report_manifest`; `manifest` is not an alias. When observability artifacts were collected and incorporated into benchmark verification, retain both sidecars under `observability_sidecar` and `distribution_sidecar`.
+
 Example shape:
 
 ```bash
@@ -155,7 +157,9 @@ remem-research-evidence freeze \
   --artifact experiment_plan=artifacts/webshop-experiment-plan.json \
   --artifact readiness=artifacts/webshop-readiness.json \
   --artifact paired_report=artifacts/webshop-paired.json \
-  --artifact manifest=artifacts/webshop-paired.json.manifest.json \
+  --artifact report_manifest=artifacts/webshop-paired.json.manifest.json \
+  --artifact observability_sidecar=artifacts/webshop.observability.json \
+  --artifact distribution_sidecar=artifacts/webshop.duration-distribution.json \
   --artifact verification=artifacts/webshop.verification.json \
   --note "predeclared seed set: 11,17,29,43,71" \
   --output artifacts/research-evidence.json
@@ -163,12 +167,18 @@ remem-research-evidence freeze \
 remem-research-evidence verify \
   artifacts/research-evidence.json \
   --expected-revision <REMEM_COMMIT> \
+  --require-plan-binding \
+  --require-report-binding \
+  --require-manifest-binding \
+  --require-sidecar-binding \
   --json
 ```
 
-For retained or published evidence, pass `--expected-revision` using the revision declared before measurement. Verification then fails closed if a different otherwise-valid evidence record is substituted. `--json` emits a deterministic machine-readable summary containing the experiment identity, declared evidence level, bound ReMemAgent revision, artifact count, and the exact byte count and SHA-256 of the evidence-record file itself. The record digest can be retained by downstream review or archival systems as an external identity for the exact verification input.
+For retained or published evidence, pass `--expected-revision` using the revision declared before measurement. Verification then fails closed if a different otherwise-valid evidence record is substituted. The optional binding requirements add semantic association checks on top of exact-byte record verification: the frozen plan must match the benchmark attestation and declared revision, the attestation must identify the exact retained paired report, the benchmark manifest must verify that exact report, and the retained observability/distribution sidecars must match the exact sidecar identities and combined bundle digest recorded by the verification attestation.
 
-The evidence record is an **index and exact-byte integrity contract**, not a semantic validator and not a digital signature. It does not decide whether `E3` has actually been earned. Run the specific preflight, experiment-plan, benchmark, manifest, observability, and statistical checks first, then declare only the highest evidence level those retained artifacts genuinely support. If any indexed file is edited, replaced, deleted, or moved outside the retained experiment directory, record verification fails closed.
+`--json` emits a deterministic machine-readable summary containing the experiment identity, declared evidence level, bound ReMemAgent revision, artifact count, and the exact byte count and SHA-256 of the evidence-record file itself. When semantic binding checks are requested, it also emits the verified plan/report/manifest/sidecar identities. The record digest can be retained by downstream review or archival systems as an external identity for the exact verification input.
+
+The evidence record and semantic bindings are **integrity and association contracts**, not scientific validators and not digital signatures. They do not decide whether `E3` has actually been earned. Run the specific preflight, experiment-plan, benchmark, manifest, observability, and statistical checks first, then declare only the highest evidence level those retained artifacts genuinely support. If any indexed file is edited, replaced, deleted, or moved outside the retained experiment directory, record verification fails closed.
 
 ## Negative-transfer reporting
 
