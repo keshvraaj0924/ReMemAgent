@@ -63,8 +63,18 @@ verify_research_experiment_plan(
 
 Replace the angle-bracket values with identities observed from the actual environment. They are illustrative placeholders, not benchmark provenance.
 
+## Measurement admission
+
+`remem-paired-benchmark` can bind measured controlled execution to a frozen plan with `--require-experiment-plan PATH`. Plan-bound measurement also requires `--require-preflight-evidence` and `--strict-reproducibility`; it is not accepted as a weaker alternative to readiness evidence.
+
+Before measured execution begins, the bridge fails closed if the paired CLI differs from the frozen declaration in the benchmark name, episode count, maximum steps, ordered seeds, environment/evaluator callables, baseline or treatment policy mode, transfer evaluator, minimum-trust threshold, or condition labels. It also requires the exact ReMemAgent revision, a clean ReMemAgent working tree, exact dependency pins, exact source-checkout revisions, and clean source checkouts to match the plan.
+
+When admission succeeds, the canonical plan SHA-256 is persisted under `research_experiment_plan_sha256` in the paired report's runtime provenance. The preflight-evidence SHA remains separately persisted, so the measured artifact retains both the readiness identity and the frozen protocol identity.
+
+The generic paired CLI cannot inspect arbitrary model or decoding behavior hidden inside user policy factories. `parameters` and `model_identity` are therefore retained as reviewable protocol declarations, but their semantic enforcement remains the responsibility of the concrete policy/model integration. Do not interpret the plan digest as proof that opaque factory internals used those values.
+
 ## Evidence boundary
 
-The frozen plan is a **pre-measurement configuration identity**, not benchmark evidence. Its digest does not prove that a runner actually used the declaration, that an upstream checkout contained the expected code, or that a scientific claim is valid. Controlled preflight, exact source-checkout admission, measured artifact verification, paired analysis, and retained research-evidence indexing remain separate contracts.
+The frozen plan is a **pre-measurement configuration identity**, not scientific benchmark evidence by itself. Its digest does not prove that an upstream checkout contained scientifically correct code, that a benchmark implementation is valid, or that an effectiveness claim is supported. Controlled preflight, exact source-checkout admission, measured artifact verification, paired analysis, and retained research-evidence indexing remain separate contracts.
 
-The next integration step is to bind `ResearchExperimentPlan` directly into `remem-paired-benchmark` admission so measured execution fails closed when CLI/runtime configuration differs from the frozen plan. Until that binding exists, retain the plan beside the exact command and readiness evidence and treat it as a reviewable declaration rather than execution attestation.
+For controlled measurement, retain the frozen plan, readiness evidence, paired report, integrity manifest, verification outputs, and final research-evidence record together. A matching plan and green engineering gates establish reproducible execution constraints; they do not promote an experiment to E3 without genuine benchmark measurements and the required statistical analysis.
