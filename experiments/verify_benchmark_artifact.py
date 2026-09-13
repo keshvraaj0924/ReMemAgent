@@ -543,9 +543,7 @@ def _verify_experiment_plan_binding(
             "plan-bound benchmark artifact runtime provenance must contain code_revision"
         )
     if code_revision != plan.remem_revision:
-        raise ValueError(
-            "benchmark artifact code revision does not match research experiment plan"
-        )
+        raise ValueError("benchmark artifact code revision does not match research experiment plan")
 
     return _ExperimentPlanVerification(
         schema_version=RESEARCH_EXPERIMENT_PLAN_SCHEMA_VERSION,
