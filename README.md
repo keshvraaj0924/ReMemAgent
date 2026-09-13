@@ -112,7 +112,7 @@ ReMemAgent/
 
 **Active research prototype.**
 
-The deterministic research core, external benchmark contracts, reproducibility metadata, controlled artifact persistence, readiness-evidence binding, paired seed-level statistical analysis, observability sidecars, and persisted verification attestations are implemented. Every new branch increment is expected to earn its own green Quality run before it is treated as verified.
+The deterministic research core, external benchmark contracts, reproducibility metadata, controlled artifact persistence, readiness-evidence binding, paired seed-level statistical analysis, observability sidecars, persisted verification attestations, and machine-checkable retained-evidence records are implemented. Every new branch increment is expected to earn its own green Quality run before it is treated as verified.
 
 The statistical layer supports exact paired sign-flip tests, Holm-Bonferroni correction across primary metrics, and paired Cohen's *d_z*. These are analysis primitives only; they do not constitute benchmark evidence until real matched runs are produced.
 
@@ -214,6 +214,23 @@ E3  repeated paired baseline-vs-treatment analysis across independent seeds
 ```
 
 Claims should not exceed the highest retained evidence level actually achieved. Full definitions, required artifacts, negative-transfer reporting, and ablation guidance are in [`docs/research-experiment-protocol.md`](docs/research-experiment-protocol.md).
+
+Once experiment-specific validators have passed, the retained evidence set can be frozen into a deterministic, no-overwrite exact-byte index:
+
+```bash
+remem-research-evidence freeze \
+  --experiment webshop-memory-study \
+  --level E3 \
+  --revision <REMEM_COMMIT> \
+  --artifact readiness=artifacts/webshop-readiness.json \
+  --artifact report=artifacts/webshop-paired.json \
+  --artifact manifest=artifacts/webshop-paired.json.manifest.json \
+  --output artifacts/research-evidence.json
+
+remem-research-evidence verify artifacts/research-evidence.json
+```
+
+This record binds retained files by safe relative path, exact byte count, and SHA-256. It does not promote an experiment to a higher evidence level or replace semantic benchmark verification.
 
 ## Quality checks
 
