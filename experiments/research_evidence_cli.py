@@ -324,9 +324,7 @@ def _verify_manifest_binding(
     artifacts_by_role = _artifacts_by_role(record)
     artifact_paths = _artifact_paths_by_role(record_path, record)
     missing_roles = sorted(
-        role
-        for role in (PAIRED_REPORT_ROLE, REPORT_MANIFEST_ROLE)
-        if role not in artifacts_by_role
+        role for role in (PAIRED_REPORT_ROLE, REPORT_MANIFEST_ROLE) if role not in artifacts_by_role
     )
     if missing_roles:
         raise ValueError(
