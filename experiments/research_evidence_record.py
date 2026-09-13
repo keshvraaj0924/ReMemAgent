@@ -188,7 +188,9 @@ def write_research_evidence_record(path: str | Path, record: ResearchEvidenceRec
             try:
                 os.link(temporary_path, destination)
             except FileExistsError as exc:
-                raise FileExistsError(f"research evidence record already exists: {destination}") from exc
+                raise FileExistsError(
+                    f"research evidence record already exists: {destination}"
+                ) from exc
             temporary_path.unlink()
         finally:
             if temporary_path.exists():
@@ -218,7 +220,9 @@ def verify_research_evidence_record(path: str | Path) -> ResearchEvidenceRecord:
         try:
             artifact_path.relative_to(root)
         except ValueError as exc:
-            raise ValueError(f"artifact escapes research evidence record directory: {artifact.path}") from exc
+            raise ValueError(
+                f"artifact escapes research evidence record directory: {artifact.path}"
+            ) from exc
         if not artifact_path.is_file():
             raise ValueError(f"retained evidence artifact is missing: {artifact.path}")
         raw_bytes = artifact_path.read_bytes()
