@@ -133,6 +133,31 @@ For matched seed-level baseline-versus-treatment results:
 
 A positive mean delta alone is not sufficient evidence of a robust improvement.
 
+## Phase 6: freeze the retained evidence set
+
+After the experiment-specific validators have succeeded, create one machine-checkable index over the exact files that support the claim. The evidence record stores a versioned schema, the declared evidence level, the exact ReMemAgent commit SHA, safe relative artifact paths, exact byte counts, and SHA-256 digests. Publication is atomic and refuses to overwrite an existing record.
+
+Keep the record in the same experiment directory as the files it indexes. Every `--artifact` path must resolve beneath the record's output directory so that the record is portable without embedding machine-specific absolute paths.
+
+Example shape:
+
+```bash
+remem-research-evidence freeze \
+  --experiment webshop-memory-study \
+  --level E3 \
+  --revision <REMEM_COMMIT> \
+  --artifact readiness=artifacts/webshop-readiness.json \
+  --artifact paired_report=artifacts/webshop-paired.json \
+  --artifact manifest=artifacts/webshop-paired.json.manifest.json \
+  --artifact verification=artifacts/webshop.verification.json \
+  --note "predeclared seed set: 11,17,29,43,71" \
+  --output artifacts/research-evidence.json
+
+remem-research-evidence verify artifacts/research-evidence.json
+```
+
+The evidence record is an **index and exact-byte integrity contract**, not a semantic validator and not a digital signature. It does not decide whether `E3` has actually been earned. Run the specific preflight, benchmark, manifest, observability, and statistical checks first, then declare only the highest evidence level those retained artifacts genuinely support. If any indexed file is edited, replaced, deleted, or moved outside the retained experiment directory, record verification fails closed.
+
 ## Negative-transfer reporting
 
 Because ReMemAgent explicitly studies whether memory can hurt decisions, external experiments should report negative transfer rather than only aggregate success. At minimum, preserve enough condition-level evidence to identify seeds or task subsets where memory-guided behavior underperforms the matched baseline.
@@ -159,7 +184,8 @@ For a result intended to be cited later, retain at least:
 - per-seed paired results and statistical analysis inputs;
 - observability/distribution sidecars when collected;
 - persisted verification attestation when produced;
-- experiment notes describing any interruption, retry, exclusion, or protocol deviation.
+- experiment notes describing any interruption, retry, exclusion, or protocol deviation;
+- a verified `remem-research-evidence` record indexing the exact retained files when the result is intended for later citation.
 
 If any required evidence is missing, describe that limitation instead of reconstructing provenance from memory.
 
@@ -175,4 +201,4 @@ Do not convert those statements into "production ready," "universally better," o
 
 ## Current scientific boundary
 
-At the time this protocol was added, ReMemAgent had engineering tests for its memory engine, synthetic evaluation, ALFWorld/WebShop adapters, paired execution, GRPO/verl boundaries, reproducibility, artifact verification, and observability. It did **not** yet contain real pinned multi-seed ALFWorld/WebShop effectiveness results or a completed real GRPO/verl optimization run. Those remain experimental work, not documentation placeholders to be filled with invented numbers.
+At the time this protocol was added, ReMemAgent had engineering tests for its memory engine, synthetic evaluation, ALFWorld/WebShop adapters, paired execution, GRPO/verl boundaries, reproducibility, artifact verification, observability, and machine-checkable retained-evidence indexing. It did **not** yet contain real pinned multi-seed ALFWorld/WebShop effectiveness results or a completed real GRPO/verl optimization run. Those remain experimental work, not documentation placeholders to be filled with invented numbers.
