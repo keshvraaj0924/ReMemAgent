@@ -7,10 +7,12 @@ import hashlib
 import hmac
 import json
 import math
+import os
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from experiments.benchmark_distribution_config import BENCHMARK_EPISODE_DURATION_METRIC
@@ -124,6 +126,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--attestation-output",
+        type=Path,
+        help=(
+            "Optional output path for the canonical verification attestation; refuses to "
+            "overwrite an existing file"
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -187,6 +197,55 @@ def verify_report_artifact(
         distribution_byte_count=(distribution.byte_count if distribution is not None else None),
         distribution_sha256=distribution.sha256 if distribution is not None else None,
         bundle_sha256=bundle_sha256,
+    )
+
+
+def write_verification_attestation(
+    path: str | Path,
+    result: BenchmarkVerificationResult,
+) -> None:
+    """Atomically persist one canonical verification result without overwriting evidence."""
+
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = _canonical_verification_json(result)
+    with NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=destination.parent,
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as temporary_file:
+        temporary_path = Path(temporary_file.name)
+        try:
+            temporary_file.write(payload)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+            try:
+                os.link(temporary_path, destination)
+            except FileExistsError as exc:
+                raise FileExistsError(
+                    f"verification attestation already exists: {destination}"
+                ) from exc
+            temporary_path.unlink()
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
+
+
+def _canonical_verification_json(result: BenchmarkVerificationResult) -> str:
+    """Return the exact canonical JSON representation used by stdout and persistence."""
+
+    return (
+        json.dumps(
+            result.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
+        + "\n"
     )
 
 
@@ -408,20 +467,14 @@ def main() -> int:
             arguments.distribution_sidecar,
             arguments.observability_sidecar,
         )
+        if arguments.attestation_output is not None:
+            write_verification_attestation(arguments.attestation_output, result)
     except (OSError, TypeError, ValueError) as error:
         print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
         return 1
 
     if arguments.json_output:
-        print(
-            json.dumps(
-                result.to_dict(),
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=True,
-                allow_nan=False,
-            )
-        )
+        print(_canonical_verification_json(result), end="")
     else:
         # Preserve the established CLI success prefix for callers that parse it.
         # Configuration identity is still verified by verify_report_artifact when present.
