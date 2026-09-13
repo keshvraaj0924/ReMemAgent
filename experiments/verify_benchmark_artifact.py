@@ -6,12 +6,14 @@ import argparse
 import hashlib
 import hmac
 import json
+import math
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from experiments.benchmark_distribution_config import BENCHMARK_EPISODE_DURATION_METRIC
 from experiments.benchmark_manifest import (
     load_benchmark_artifact_manifest,
     verify_benchmark_artifact,
@@ -33,6 +35,7 @@ from remem.observability_distribution_artifacts import (
 
 _BUNDLE_DIGEST_DOMAIN = b"remem-benchmark-bundle-v1\0"
 _OBSERVABILITY_BUNDLE_DIGEST_DOMAIN = b"remem-benchmark-observability-bundle-v1\0"
+_BENCHMARK_EPISODES_COMPLETED_METRIC = "benchmark.episodes.completed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,11 +80,13 @@ class BenchmarkVerificationResult:
 
 @dataclass(frozen=True, slots=True)
 class _SidecarVerification:
-    """Exact-byte integrity metadata for one validated benchmark sidecar."""
+    """Exact-byte integrity metadata plus comparable benchmark measurements."""
 
     schema_version: int
     byte_count: int
     sha256: str
+    episode_duration_total: float | None = None
+    episode_count: float | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,6 +161,7 @@ def verify_report_artifact(
     )
     observability = _verify_observability_sidecar(observability_sidecar_path)
     distribution = _verify_distribution_sidecar(distribution_sidecar_path)
+    _verify_sidecar_measurement_consistency(observability, distribution)
     bundle_sha256 = _select_bundle_digest(
         manifest.sha256,
         observability,
@@ -220,11 +226,13 @@ def _verify_observability_sidecar(
         raise ValueError("observability sidecar must contain valid JSON") from exc
     if not isinstance(payload, Mapping):
         raise TypeError("observability sidecar root must be a JSON object")
-    ObservationSnapshot.from_dict(payload)
+    snapshot = ObservationSnapshot.from_dict(payload)
     return _SidecarVerification(
         schema_version=OBSERVATION_SNAPSHOT_SCHEMA_VERSION,
         byte_count=len(raw_bytes),
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
+        episode_duration_total=snapshot.durations_seconds.get(BENCHMARK_EPISODE_DURATION_METRIC),
+        episode_count=snapshot.counters.get(_BENCHMARK_EPISODES_COMPLETED_METRIC),
     )
 
 
@@ -236,12 +244,50 @@ def _verify_distribution_sidecar(
     if distribution_sidecar_path is None:
         return None
     raw_bytes = distribution_sidecar_path.read_bytes()
-    read_distribution_observation_snapshot(distribution_sidecar_path)
+    snapshot = read_distribution_observation_snapshot(distribution_sidecar_path)
+    histogram = snapshot.duration_histograms.get(BENCHMARK_EPISODE_DURATION_METRIC)
+    if histogram is None:
+        raise ValueError(
+            "distribution sidecar is missing benchmark episode duration histogram"
+        )
     return _SidecarVerification(
         schema_version=DISTRIBUTION_OBSERVATION_SCHEMA_VERSION,
         byte_count=len(raw_bytes),
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
+        episode_duration_total=histogram.total,
+        episode_count=float(histogram.count),
     )
+
+
+def _verify_sidecar_measurement_consistency(
+    observability: _SidecarVerification | None,
+    distribution: _SidecarVerification | None,
+) -> None:
+    """Reject sidecars that are individually valid but describe different measurements."""
+
+    if observability is None or distribution is None:
+        return
+    if observability.episode_duration_total is None:
+        raise ValueError(
+            "observability sidecar is missing benchmark episode duration aggregate"
+        )
+    if observability.episode_count is None:
+        raise ValueError("observability sidecar is missing benchmark episodes completed counter")
+    if distribution.episode_duration_total is None or distribution.episode_count is None:
+        raise ValueError("distribution sidecar is missing benchmark duration measurements")
+    if observability.episode_count != distribution.episode_count:
+        raise ValueError(
+            "observability and distribution sidecars disagree on completed episode count"
+        )
+    if not math.isclose(
+        observability.episode_duration_total,
+        distribution.episode_duration_total,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        raise ValueError(
+            "observability and distribution sidecars disagree on episode duration total"
+        )
 
 
 def _select_bundle_digest(
