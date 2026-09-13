@@ -47,9 +47,20 @@ remem-verify-model-binding \
 
 The verifier fails closed when the report plan digest, code revision, model identity, or parameter mapping differs from the retained plan. Parameter comparison uses canonical JSON rather than Python's loose numeric equality, so `128` and `128.0` are treated as different declarations. It also rejects missing provenance fields instead of interpreting absence as a match.
 
-Successful JSON output includes the exact report byte count and SHA-256 together with the verified plan SHA-256, ReMemAgent revision, model identity, parameter mapping, and `model_configuration_binding_verified: true`. Retain this output next to the report when publishing controlled external benchmark evidence.
+Successful JSON output includes the exact report byte count and SHA-256 together with the verified plan SHA-256, ReMemAgent revision, model identity, parameter mapping, and `model_configuration_binding_verified: true`.
 
-This command verifies semantic model-configuration binding. Run the normal benchmark integrity/evidence verification as well; the model-binding command does not replace the report manifest, preflight-evidence, plan-file, sidecar, or complete research-evidence checks.
+The same semantic check is available directly through the retained research-evidence verifier when the evidence record contains the canonical `experiment_plan` and `paired_report` roles:
+
+```bash
+remem-research-evidence verify \
+  artifacts/webshop-research-evidence.json \
+  --require-model-binding \
+  --json
+```
+
+`--require-complete-binding` now includes this model-configuration check together with the frozen-plan, exact-report, report-manifest, observability/distribution-sidecar, and verification-attestation bindings. A package cannot therefore claim complete semantic binding while omitting or drifting the measured model declaration.
+
+The research-evidence JSON summary exposes `model_identity`, `experiment_parameters`, and `model_configuration_binding_verified: true` when this check succeeds. Retain that verified evidence record with the measured artifacts when publishing controlled external benchmark evidence.
 
 ## Boundary of the guarantee
 
