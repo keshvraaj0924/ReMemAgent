@@ -169,6 +169,7 @@ def build_alfworld_text_environment_factory(
 
         _validate_seed(seed)
         environment: Any | None = None
+        initialized_environment: Any | None = None
         with _ALFWORLD_RANDOM_LOCK, _scoped_random_seed(seed):
             try:
                 environment_config = _copy_alfworld_config(config_snapshot)
@@ -179,6 +180,8 @@ def build_alfworld_text_environment_factory(
                 initialized_environment = environment.init_env(batch_size=1)
                 _validate_environment_interface(initialized_environment, benchmark_name="ALFWorld")
             except Exception:
+                if initialized_environment is not None and initialized_environment is not environment:
+                    _close_if_supported(initialized_environment)
                 if environment is not None:
                     _close_if_supported(environment)
                 raise
@@ -227,7 +230,11 @@ def build_webshop_text_environment_factory(
                 kwargs["num_products"] = num_products
             environment = gym.make(normalized_environment_id, **kwargs)
 
-        _validate_environment_interface(environment, benchmark_name="WebShop")
+        try:
+            _validate_environment_interface(environment, benchmark_name="WebShop")
+        except Exception:
+            _close_if_supported(environment)
+            raise
         return _SeededWebShopEnvironment(environment, seed)
 
     return create_environment
@@ -317,7 +324,6 @@ def _validate_environment_interface(environment: Any, *, benchmark_name: str) ->
         method = getattr(environment, method_name, None)
         if callable(method):
             continue
-        _close_if_supported(environment)
         raise TypeError(f"{benchmark_name} environment must expose callable {method_name}()")
 
 
