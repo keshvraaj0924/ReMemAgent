@@ -172,9 +172,7 @@ def verify_report_artifact(
         observability_schema_version=(
             observability.schema_version if observability is not None else None
         ),
-        observability_byte_count=(
-            observability.byte_count if observability is not None else None
-        ),
+        observability_byte_count=(observability.byte_count if observability is not None else None),
         observability_sha256=observability.sha256 if observability is not None else None,
         distribution_schema_version=(
             distribution.schema_version if distribution is not None else None
