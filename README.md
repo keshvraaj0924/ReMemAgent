@@ -112,11 +112,11 @@ ReMemAgent/
 
 **Active research prototype.**
 
-The deterministic research core, external benchmark contracts, reproducibility metadata, controlled artifact persistence, readiness-evidence binding, and paired seed-level statistical analysis are implemented. Every new branch increment is expected to earn its own green Quality run before it is treated as verified.
+The deterministic research core, external benchmark contracts, reproducibility metadata, controlled artifact persistence, readiness-evidence binding, paired seed-level statistical analysis, observability sidecars, and persisted verification attestations are implemented. Every new branch increment is expected to earn its own green Quality run before it is treated as verified.
 
 The statistical layer supports exact paired sign-flip tests, Holm-Bonferroni correction across primary metrics, and paired Cohen's *d_z*. These are analysis primitives only; they do not constitute benchmark evidence until real matched runs are produced.
 
-The repository does **not** claim benchmark improvements or production readiness until the corresponding real-world experiments have been executed, repeated, and reproduced. See [`docs/research-status.md`](docs/research-status.md) for the evidence boundary and [`docs/strict-reproducibility.md`](docs/strict-reproducibility.md) for the fail-closed paired execution contract.
+The repository does **not** claim benchmark improvements or production readiness until the corresponding real-world experiments have been executed, repeated, and reproduced. See [`docs/research-status.md`](docs/research-status.md) for the current evidence boundary, [`docs/research-experiment-protocol.md`](docs/research-experiment-protocol.md) for the canonical end-to-end experiment and claim protocol, and [`docs/strict-reproducibility.md`](docs/strict-reproducibility.md) for the fail-closed paired execution contract.
 
 ## Engineering principles
 
@@ -201,6 +201,19 @@ remem-verify-benchmark \
 Readiness evidence proves that the recorded runtime/source contract passed the controlled preflight represented by that artifact. It is not a benchmark result and does not establish model effectiveness. Evidence-bound measured artifacts record the readiness fingerprint in their identity-bound runtime provenance; verification requires the retained readiness JSON and rejects a missing, tampered, or unrelated object.
 
 The placeholders are intentional. Upstream revisions, dependency versions, model checkpoints, and benchmark outcomes must come from the actual controlled execution environment; ReMemAgent does not invent them.
+
+## Research evidence levels
+
+The canonical protocol distinguishes four levels so engineering success cannot be mistaken for scientific evidence:
+
+```text
+E0  green engineering Quality workflow
+E1  verified controlled preflight/readiness evidence
+E2  verified measured benchmark artifact bundle
+E3  repeated paired baseline-vs-treatment analysis across independent seeds
+```
+
+Claims should not exceed the highest retained evidence level actually achieved. Full definitions, required artifacts, negative-transfer reporting, and ablation guidance are in [`docs/research-experiment-protocol.md`](docs/research-experiment-protocol.md).
 
 ## Quality checks
 
