@@ -63,9 +63,21 @@ def test_complete_binding_runs_every_semantic_verifier_and_reports_identity(
             bundle_sha256=BUNDLE_SHA256,
         )
 
-    monkeypatch.setattr(research_evidence_cli, "_verify_plan_binding", verify_plan_binding)
-    monkeypatch.setattr(research_evidence_cli, "_verify_report_binding", verify_report_binding)
-    monkeypatch.setattr(research_evidence_cli, "_verify_manifest_binding", verify_manifest_binding)
+    monkeypatch.setattr(
+        research_evidence_cli,
+        "_verify_plan_binding",
+        verify_plan_binding,
+    )
+    monkeypatch.setattr(
+        research_evidence_cli,
+        "_verify_report_binding",
+        verify_report_binding,
+    )
+    monkeypatch.setattr(
+        research_evidence_cli,
+        "_verify_manifest_binding",
+        verify_manifest_binding,
+    )
     monkeypatch.setattr(
         research_evidence_cli,
         "verify_research_sidecar_binding",
