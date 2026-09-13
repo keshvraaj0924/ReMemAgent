@@ -9,9 +9,7 @@ class FakeAlfWorld:
     def __init__(self, step_result, *, reset_result=None):
         self.step_result = step_result
         self.reset_result = (
-            (["initial observation"], {"ignored": [1]})
-            if reset_result is None
-            else reset_result
+            (["initial observation"], {"ignored": [1]}) if reset_result is None else reset_result
         )
 
     def reset(self):

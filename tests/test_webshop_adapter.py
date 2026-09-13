@@ -9,9 +9,7 @@ class FakeWebShop:
     def __init__(self, step_result, *, reset_result=None):
         self.step_result = step_result
         self.reset_result = (
-            ("initial observation", {"ignored": True})
-            if reset_result is None
-            else reset_result
+            ("initial observation", {"ignored": True}) if reset_result is None else reset_result
         )
 
     def reset(self):
@@ -39,9 +37,7 @@ def test_webshop_adapter_normalizes_valid_five_value_step() -> None:
 
 
 def test_webshop_adapter_rejects_non_text_reset_observation() -> None:
-    adapter = WebShopAdapter(
-        FakeWebShop(("next", 0.0, False, False, {}), reset_result=(None, {}))
-    )
+    adapter = WebShopAdapter(FakeWebShop(("next", 0.0, False, False, {}), reset_result=(None, {})))
 
     with pytest.raises(TypeError, match="environment observation must be a string"):
         adapter.reset()

@@ -130,7 +130,9 @@ def test_alfworld_factory_scopes_construction_randomness(monkeypatch: Any) -> No
         def reset(self) -> tuple[str, float]:
             return "reset", random.random()
 
-        def step(self, _actions: list[str]) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
+        def step(
+            self, _actions: list[str]
+        ) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
             return ["state"], [0.0], [False], {}
 
     class FakeEnvironment:
@@ -215,7 +217,9 @@ def test_alfworld_factory_freezes_mutable_configuration(monkeypatch: Any) -> Non
         def reset(self) -> str:
             return "state"
 
-        def step(self, _actions: list[str]) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
+        def step(
+            self, _actions: list[str]
+        ) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
             return ["state"], [0.0], [False], {}
 
     class FakeEnvironment:
@@ -257,7 +261,9 @@ def test_alfworld_factory_normalizes_train_eval_before_external_construction(
         def reset(self) -> str:
             return "state"
 
-        def step(self, _actions: list[str]) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
+        def step(
+            self, _actions: list[str]
+        ) -> tuple[list[str], list[float], list[bool], dict[str, Any]]:
             return ["state"], [0.0], [False], {}
 
     class FakeEnvironment:

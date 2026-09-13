@@ -180,7 +180,10 @@ def build_alfworld_text_environment_factory(
                 initialized_environment = environment.init_env(batch_size=1)
                 _validate_environment_interface(initialized_environment, benchmark_name="ALFWorld")
             except Exception:
-                if initialized_environment is not None and initialized_environment is not environment:
+                if (
+                    initialized_environment is not None
+                    and initialized_environment is not environment
+                ):
                     _close_if_supported(initialized_environment)
                 if environment is not None:
                     _close_if_supported(environment)
