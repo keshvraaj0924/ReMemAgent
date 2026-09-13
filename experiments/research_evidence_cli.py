@@ -112,6 +112,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     verify_parser.add_argument(
+        "--require-complete-binding",
+        action="store_true",
+        help=(
+            "Require the complete retained experiment chain: plan, paired report, report "
+            "manifest, observability sidecars, and verification attestation bindings"
+        ),
+    )
+    verify_parser.add_argument(
         "--json",
         action="store_true",
         help="Emit a deterministic machine-readable verification summary",
@@ -157,6 +165,7 @@ def _verification_summary(
     report_binding_sha256: str | None = None,
     manifest_binding_sha256: str | None = None,
     sidecar_binding: ResearchSidecarBinding | None = None,
+    complete_binding_verified: bool = False,
 ) -> dict[str, object]:
     """Build an exact-record identity summary after semantic verification succeeds."""
 
@@ -185,6 +194,8 @@ def _verification_summary(
         payload["distribution_sidecar_sha256"] = sidecar_binding.distribution_sha256
         payload["sidecar_bundle_sha256"] = sidecar_binding.bundle_sha256
         payload["sidecar_binding_verified"] = True
+    if complete_binding_verified:
+        payload["complete_binding_verified"] = True
     return payload
 
 
@@ -365,18 +376,27 @@ def _verify(arguments: argparse.Namespace) -> None:
             "research evidence revision mismatch: "
             f"expected {arguments.expected_revision}, recorded {record.remem_revision}"
         )
+
+    require_plan_binding = arguments.require_plan_binding or arguments.require_complete_binding
+    require_report_binding = arguments.require_report_binding or arguments.require_complete_binding
+    require_manifest_binding = (
+        arguments.require_manifest_binding or arguments.require_complete_binding
+    )
+    require_sidecar_binding = arguments.require_sidecar_binding or arguments.require_complete_binding
+
     plan_binding_sha256 = None
-    if arguments.require_plan_binding:
+    if require_plan_binding:
         plan_binding_sha256 = _verify_plan_binding(record_path, record)
     report_binding_sha256 = None
-    if arguments.require_report_binding:
+    if require_report_binding:
         report_binding_sha256 = _verify_report_binding(record_path, record)
     manifest_binding_sha256 = None
-    if arguments.require_manifest_binding:
+    if require_manifest_binding:
         manifest_binding_sha256 = _verify_manifest_binding(record_path, record)
     sidecar_binding = None
-    if arguments.require_sidecar_binding:
+    if require_sidecar_binding:
         sidecar_binding = verify_research_sidecar_binding(record_path)
+
     if arguments.json:
         print(
             json.dumps(
@@ -387,6 +407,7 @@ def _verify(arguments: argparse.Namespace) -> None:
                     report_binding_sha256=report_binding_sha256,
                     manifest_binding_sha256=manifest_binding_sha256,
                     sidecar_binding=sidecar_binding,
+                    complete_binding_verified=arguments.require_complete_binding,
                 ),
                 sort_keys=True,
                 separators=(",", ":"),
@@ -404,6 +425,8 @@ def _verify(arguments: argparse.Namespace) -> None:
         binding_parts.append(f"manifest {manifest_binding_sha256}")
     if sidecar_binding is not None:
         binding_parts.append(f"sidecar bundle {sidecar_binding.bundle_sha256}")
+    if arguments.require_complete_binding:
+        binding_parts.append("complete binding verified")
     binding_suffix = ""
     if binding_parts:
         binding_suffix = ", " + ", ".join(binding_parts)
@@ -427,7 +450,3 @@ def main() -> int:
         print(f"research evidence command failed: {error}", file=sys.stderr)
         return 1
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
