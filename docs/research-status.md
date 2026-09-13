@@ -4,7 +4,7 @@ This document records what the repository has implemented and verified without t
 
 ## Verified engineering baseline
 
-The `feat/core-memory-engine` branch has a verified green GitHub `Quality` workflow at commit `80ab3459bfe81d63ea4cb18df1410c6b7bd304f6` (run `1370`) on September 13, 2026. Both Python 3.11 and 3.12 completed the configured quality pipeline successfully. The Python 3.12 job collected **1031 pytest tests** and passed all 1031. The workflow also passed Ruff formatting and linting, mypy type checking across 91 source files, dependency validation, Python compilation, wheel/source-distribution builds, isolated distribution smoke tests, and artifact upload.
+The `feat/core-memory-engine` branch has a verified green GitHub `Quality` workflow at commit `4d1c6359e1ba34e7da24c79723ebc9e5676e3fc0` (run `1414`) on September 13, 2026. Both Python 3.11 and 3.12 completed the configured quality pipeline successfully. The workflow passed the complete pytest suite, Ruff formatting and linting, mypy type checking, dependency validation, Python compilation, wheel/source-distribution builds, isolated distribution smoke tests, and artifact upload.
 
 This is an engineering verification statement. It does **not** establish benchmark improvement, transfer advantage, statistical significance, model-training effectiveness, or production readiness.
 
@@ -27,6 +27,7 @@ The framework currently provides tested implementations for the planned research
 - runtime and source-checkout preflight before controlled measurement;
 - exact runtime dependency, code revision, working-tree, and external source revision admission contracts;
 - identity-bound persistence of the exact runtime/source snapshots admitted before measurement;
+- frozen experiment-plan admission and downstream plan verification;
 - deterministic benchmark report serialization, experiment identities, and exact-byte integrity manifests;
 - artifact verification that fails closed on malformed schemas, stale identities, source/runtime evidence drift, or byte tampering;
 - deterministic local observability snapshots, deltas, checkpoint persistence, additive worker merging, and explicit success/failure accounting;
@@ -35,6 +36,9 @@ The framework currently provides tested implementations for the planned research
 - cross-sidecar verification that rejects inconsistent completed-episode counts or duration totals;
 - deterministic bundle digests that bind verified reports to retained observability evidence without claiming digital-signature semantics;
 - canonical persisted verification attestations with atomic no-overwrite publication;
+- machine-checkable retained research-evidence records with exact byte counts and SHA-256 identities;
+- semantic retained-evidence binding checks for the frozen plan, paired report, report manifest, observability sidecars, and verification attestation;
+- a fail-closed `--require-complete-binding` verification mode that executes the complete retained-chain contract in one command while preserving the individual binding flags;
 - CI quality, package build, installed-package import, and wheel/source-distribution smoke checks.
 
 ## Strict paired reproducibility
@@ -55,13 +59,13 @@ See [`strict-reproducibility.md`](strict-reproducibility.md) for the command-lin
 
 ## Reproducibility and evidence boundary
 
-External benchmark evidence can record the benchmark protocol, ordered independent seeds, code revision, working-tree state, installed dependency versions, source-checkout revisions, callable specifications, policy trust threshold, per-seed reports, paired statistics, experiment identities, preflight provenance, exact-byte artifact manifests, aggregate observability, latency-distribution evidence, and persisted verification attestations.
+External benchmark evidence can record the benchmark protocol, ordered independent seeds, code revision, working-tree state, installed dependency versions, source-checkout revisions, callable specifications, policy trust threshold, per-seed reports, paired statistics, experiment identities, preflight provenance, exact-byte artifact manifests, aggregate observability, latency-distribution evidence, persisted verification attestations, and the exact retained evidence index.
 
 Repeated execution does not pool episodes across independent seeds. Paired execution aligns baseline and treatment by shared seed and preserves explicit protocol configuration. Statistical utilities are available for descriptive and paired analysis, but their existence is not itself evidence that ReMemAgent improves an agent.
 
 The deterministic ALFWorld/WebShop fixtures exercised in CI are engineering regression gates. They verify adapter and execution contracts without claiming to be official benchmark measurements. Likewise, GRPO/verl integration tests verify data and agent-loop boundaries without claiming that a real checkpoint has been trained successfully.
 
-Observability and integrity evidence are also bounded. A valid manifest or bundle digest can establish that retained bytes and associated sidecars match the verifier's contract; it does not prove that the benchmark protocol was scientifically appropriate or that the measured policy is superior.
+Observability and integrity evidence are also bounded. A valid manifest, bundle digest, or complete retained-chain verification can establish that retained bytes and associations match the verifier's contract; it does not prove that the benchmark protocol was scientifically appropriate or that the measured policy is superior.
 
 ## What has not been established
 
@@ -77,9 +81,9 @@ No upstream Git revision, dependency version, model checkpoint, metric, or bench
 
 ## Engineering gates for publishable experiments
 
-A candidate external result should pass the repository quality workflow, strict reproducibility declaration, runtime/source admission, environment preflight, measured execution, identity-bound artifact persistence, exact-byte artifact verification, and retained verification attestation where used. The resulting artifact should then be analyzed using the stored per-seed results and explicit protocol rather than reconstructed from console output.
+A candidate external result should pass the repository quality workflow, strict reproducibility declaration, frozen experiment-plan admission, runtime/source admission, environment preflight, measured execution, identity-bound artifact persistence, exact-byte artifact verification, retained verification attestation, and retained evidence verification where used. For published evidence, `remem-research-evidence verify --require-complete-binding` provides the single fail-closed check for the complete plan/report/manifest/sidecar/attestation association chain after exact-byte record verification.
 
-For paired claims, the seed is the primary independent analysis unit. Report raw per-seed values and paired deltas alongside any exact sign-flip test, Holm-adjusted primary-metric inference, or paired effect size. Negative-transfer cases should remain visible rather than being hidden by aggregate averages.
+The resulting artifact should then be analyzed using the stored per-seed results and explicit protocol rather than reconstructed from console output. For paired claims, the seed is the primary independent analysis unit. Report raw per-seed values and paired deltas alongside any exact sign-flip test, Holm-adjusted primary-metric inference, or paired effect size. Negative-transfer cases should remain visible rather than being hidden by aggregate averages.
 
 CI success proves only that the covered software contracts passed. It does not substitute for executing the real benchmark. A historical green workflow also does not certify later code changes; each implementation increment must earn its own successful quality run before it is described as verified.
 
