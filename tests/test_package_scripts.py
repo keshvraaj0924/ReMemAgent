@@ -13,6 +13,7 @@ EXPECTED_SCRIPTS = {
     "remem-benchmark": "experiments.benchmark_cli:main",
     "remem-paired-benchmark": "experiments.evidence_bound_paired_cli:main",
     "remem-verify-benchmark": "experiments.verify_benchmark_artifact:main",
+    "remem-verify-model-binding": "experiments.verify_model_configuration_binding:main",
     "remem-verify-preflight": "experiments.verify_preflight_evidence:main",
     "remem-check-environments": "experiments.environment_cli:main",
     "remem-research-evidence": "experiments.research_evidence_cli:main",
