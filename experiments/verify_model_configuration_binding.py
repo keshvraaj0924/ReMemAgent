@@ -128,7 +128,7 @@ def _verify_parameters(
         )
 
 
-def _canonical_parameter_json(parameters: Mapping[object, object]) -> str:
+def _canonical_parameter_json(parameters: Mapping[Any, Any]) -> str:
     normalized: dict[str, JsonScalar] = {}
     for name, value in parameters.items():
         if not isinstance(name, str) or not name:
@@ -180,12 +180,14 @@ def main() -> int:
                 result.to_dict(),
                 sort_keys=True,
                 separators=(",", ":"),
-                ensure_ascii=True,
-                allow_nan=False,
             )
         )
     else:
-        print(f"model configuration binding verified: {arguments.report}")
+        print(
+            "model configuration binding verified: "
+            f"report_sha256={result.report_sha256} "
+            f"experiment_plan_sha256={result.experiment_plan_sha256}"
+        )
     return 0
 
 
