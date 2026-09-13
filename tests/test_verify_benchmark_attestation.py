@@ -11,6 +11,7 @@ import pytest
 from experiments.benchmark_manifest import save_benchmark_artifact_manifest
 from experiments.preflight_evidence import PREFLIGHT_EVIDENCE_PROVENANCE_KEY
 from experiments.verify_benchmark_artifact import main, verify_report_artifact
+from remem.observability import ObservationSnapshot, write_observation_snapshot
 from remem.observability_distribution_artifacts import (
     DistributionObservationSnapshot,
     write_distribution_observation_snapshot,
@@ -40,6 +41,19 @@ def _readiness_evidence() -> dict[str, object]:
     return payload
 
 
+def _write_observability_sidecar(path: Path) -> None:
+    """Persist one valid aggregate observability sidecar."""
+
+    write_observation_snapshot(
+        path,
+        ObservationSnapshot(
+            counters={"benchmark.episode.completed": 2.0},
+            durations_seconds={"benchmark.episode.duration_seconds": 0.75},
+        ),
+        overwrite=False,
+    )
+
+
 def _write_distribution_sidecar(path: Path) -> None:
     """Persist one valid deterministic duration-distribution sidecar."""
 
@@ -56,12 +70,31 @@ def _write_distribution_sidecar(path: Path) -> None:
 
 
 def _expected_bundle_digest(report_sha256: str, distribution_sha256: str) -> str:
-    """Recompute the public bundle-digest contract used by verification attestations."""
+    """Recompute the established distribution-only bundle-digest contract."""
 
     digest = hashlib.sha256()
     digest.update(b"remem-benchmark-bundle-v1\0")
     digest.update(bytes.fromhex(report_sha256))
     digest.update(bytes.fromhex(distribution_sha256))
+    return digest.hexdigest()
+
+
+def _expected_observability_bundle_digest(
+    report_sha256: str,
+    observability_sha256: str,
+    distribution_sha256: str | None,
+) -> str:
+    """Recompute the aggregate-observability bundle-digest contract."""
+
+    digest = hashlib.sha256()
+    digest.update(b"remem-benchmark-observability-bundle-v1\0")
+    digest.update(bytes.fromhex(report_sha256))
+    digest.update(bytes.fromhex(observability_sha256))
+    if distribution_sha256 is None:
+        digest.update(b"\x00")
+    else:
+        digest.update(b"\x01")
+        digest.update(bytes.fromhex(distribution_sha256))
     return digest.hexdigest()
 
 
@@ -84,6 +117,9 @@ def test_verify_report_artifact_returns_exact_manifest_attestation(
     assert result.configuration_fingerprint is None
     assert result.experiment_identity is None
     assert result.preflight_evidence_sha256 is None
+    assert result.observability_schema_version is None
+    assert result.observability_byte_count is None
+    assert result.observability_sha256 is None
     assert result.distribution_schema_version is None
     assert result.distribution_byte_count is None
     assert result.distribution_sha256 is None
@@ -172,10 +208,98 @@ def test_verify_report_artifact_attests_matching_readiness_digest(
     assert result.preflight_evidence_sha256 == evidence_digest
 
 
+def test_verify_report_artifact_binds_valid_observability_sidecar(
+    tmp_path: Path,
+) -> None:
+    """Aggregate telemetry should be validated and bound to the exact report bytes."""
+
+    report_path = tmp_path / "benchmark.json"
+    report_path.write_text('{"schema_version":1,"episodes":[]}', encoding="utf-8")
+    manifest_path = save_benchmark_artifact_manifest(report_path)
+    observability_path = tmp_path / "benchmark.observability.json"
+    _write_observability_sidecar(observability_path)
+
+    result = verify_report_artifact(
+        report_path,
+        manifest_path,
+        observability_sidecar_path=observability_path,
+    )
+
+    observability_bytes = observability_path.read_bytes()
+    observability_sha256 = hashlib.sha256(observability_bytes).hexdigest()
+    assert result.observability_schema_version == 1
+    assert result.observability_byte_count == len(observability_bytes)
+    assert result.observability_sha256 == observability_sha256
+    assert result.bundle_sha256 == _expected_observability_bundle_digest(
+        result.sha256,
+        observability_sha256,
+        None,
+    )
+
+
+def test_verify_report_artifact_rejects_invalid_observability_sidecar(
+    tmp_path: Path,
+) -> None:
+    """Malformed aggregate telemetry must fail before any bundle identity is emitted."""
+
+    report_path = tmp_path / "benchmark.json"
+    report_path.write_text('{"schema_version":1,"episodes":[]}', encoding="utf-8")
+    manifest_path = save_benchmark_artifact_manifest(report_path)
+    observability_path = tmp_path / "benchmark.observability.json"
+    observability_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "counters": {"benchmark.episode.completed": -1.0},
+                "durations_seconds": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-negative"):
+        verify_report_artifact(
+            report_path,
+            manifest_path,
+            observability_sidecar_path=observability_path,
+        )
+
+
+def test_verify_report_artifact_binds_observability_and_distribution_sidecars(
+    tmp_path: Path,
+) -> None:
+    """One digest should identify exact report, aggregate, and distribution evidence."""
+
+    report_path = tmp_path / "benchmark.json"
+    report_path.write_text('{"schema_version":1,"episodes":[]}', encoding="utf-8")
+    manifest_path = save_benchmark_artifact_manifest(report_path)
+    observability_path = tmp_path / "benchmark.observability.json"
+    distribution_path = tmp_path / "benchmark.distributions.json"
+    _write_observability_sidecar(observability_path)
+    _write_distribution_sidecar(distribution_path)
+
+    result = verify_report_artifact(
+        report_path,
+        manifest_path,
+        distribution_sidecar_path=distribution_path,
+        observability_sidecar_path=observability_path,
+    )
+
+    observability_sha256 = hashlib.sha256(observability_path.read_bytes()).hexdigest()
+    distribution_sha256 = hashlib.sha256(distribution_path.read_bytes()).hexdigest()
+    assert result.observability_sha256 == observability_sha256
+    assert result.distribution_sha256 == distribution_sha256
+    assert result.bundle_sha256 == _expected_observability_bundle_digest(
+        result.sha256,
+        observability_sha256,
+        distribution_sha256,
+    )
+
+
 def test_verify_report_artifact_binds_valid_distribution_sidecar(
     tmp_path: Path,
 ) -> None:
-    """A validated sidecar should be bound to the exact report bytes in one digest."""
+    """A validated sidecar should retain the established report/distribution digest."""
 
     report_path = tmp_path / "benchmark.json"
     report_path.write_text('{"schema_version":1,"episodes":[]}', encoding="utf-8")
@@ -253,6 +377,9 @@ def test_main_json_output_is_canonical_and_machine_readable(
         "distribution_schema_version": None,
         "distribution_sha256": None,
         "experiment_identity": None,
+        "observability_byte_count": None,
+        "observability_schema_version": None,
+        "observability_sha256": None,
         "preflight_evidence_sha256": None,
         "schema_version": 1,
         "sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
@@ -266,6 +393,47 @@ def test_main_json_output_is_canonical_and_machine_readable(
             allow_nan=False,
         )
         + "\n"
+    )
+
+
+def test_main_json_output_attests_observability_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CLI JSON should expose exact aggregate-observability evidence and bundle identity."""
+
+    report_path = tmp_path / "benchmark.json"
+    report_path.write_text('{"schema_version":1,"episodes":[]}', encoding="utf-8")
+    save_benchmark_artifact_manifest(report_path)
+    observability_path = tmp_path / "benchmark.observability.json"
+    _write_observability_sidecar(observability_path)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "remem-verify-benchmark",
+            str(report_path),
+            "--observability-sidecar",
+            str(observability_path),
+            "--json",
+        ],
+    )
+
+    exit_code = main()
+
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    report_sha256 = hashlib.sha256(report_path.read_bytes()).hexdigest()
+    observability_sha256 = hashlib.sha256(observability_path.read_bytes()).hexdigest()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert parsed["observability_sha256"] == observability_sha256
+    assert parsed["observability_byte_count"] == len(observability_path.read_bytes())
+    assert parsed["observability_schema_version"] == 1
+    assert parsed["bundle_sha256"] == _expected_observability_bundle_digest(
+        report_sha256,
+        observability_sha256,
+        None,
     )
 
 
