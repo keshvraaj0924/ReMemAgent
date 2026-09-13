@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
 from pathlib import Path
 
 from experiments.research_evidence_record import (
     EVIDENCE_LEVELS,
+    ResearchEvidenceRecord,
     build_research_evidence_record,
     verify_research_evidence_record,
     write_research_evidence_record,
@@ -56,6 +59,15 @@ def parse_args() -> argparse.Namespace:
         help="Verify every artifact bound by an existing evidence record",
     )
     verify_parser.add_argument("record", type=Path, help="Persisted research evidence record")
+    verify_parser.add_argument(
+        "--expected-revision",
+        help="Fail unless the record is bound to this exact ReMemAgent commit SHA",
+    )
+    verify_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a deterministic machine-readable verification summary",
+    )
     return parser.parse_args()
 
 
@@ -89,11 +101,51 @@ def _freeze(arguments: argparse.Namespace) -> None:
     print(f"research evidence frozen: {output_path}")
 
 
+def _verification_summary(
+    record_path: Path,
+    record: ResearchEvidenceRecord,
+) -> dict[str, object]:
+    """Build an exact-record identity summary after semantic verification succeeds."""
+
+    raw_bytes = record_path.read_bytes()
+    return {
+        "artifact_count": len(record.artifacts),
+        "evidence_level": record.evidence_level,
+        "experiment_name": record.experiment_name,
+        "record_byte_count": len(raw_bytes),
+        "record_sha256": hashlib.sha256(raw_bytes).hexdigest(),
+        "remem_revision": record.remem_revision,
+        "schema_version": record.schema_version,
+        "verified": True,
+    }
+
+
 def _verify(arguments: argparse.Namespace) -> None:
-    record = verify_research_evidence_record(arguments.record)
+    record_path = arguments.record.resolve()
+    record = verify_research_evidence_record(record_path)
+    if (
+        arguments.expected_revision is not None
+        and record.remem_revision != arguments.expected_revision
+    ):
+        raise ValueError(
+            "research evidence revision mismatch: "
+            f"expected {arguments.expected_revision}, recorded {record.remem_revision}"
+        )
+    if arguments.json:
+        print(
+            json.dumps(
+                _verification_summary(record_path, record),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+                allow_nan=False,
+            )
+        )
+        return
     print(
         "research evidence verified: "
-        f"{arguments.record} ({record.evidence_level}, {len(record.artifacts)} artifacts)"
+        f"{arguments.record} ({record.evidence_level}, {len(record.artifacts)} artifacts, "
+        f"revision {record.remem_revision})"
     )
 
 
