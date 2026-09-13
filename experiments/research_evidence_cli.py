@@ -11,6 +11,7 @@ from pathlib import Path
 
 from experiments.research_evidence_record import (
     EVIDENCE_LEVELS,
+    EvidenceArtifact,
     ResearchEvidenceRecord,
     build_research_evidence_record,
     verify_research_evidence_record,
@@ -19,6 +20,7 @@ from experiments.research_evidence_record import (
 from experiments.research_experiment_plan import verify_research_experiment_plan
 
 EXPERIMENT_PLAN_ROLE = "experiment_plan"
+PAIRED_REPORT_ROLE = "paired_report"
 VERIFICATION_ATTESTATION_ROLE = "verification"
 
 
@@ -77,6 +79,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     verify_parser.add_argument(
+        "--require-report-binding",
+        action="store_true",
+        help=(
+            "Require canonical paired_report and verification roles and prove that the "
+            "retained verification attestation identifies the exact retained report bytes"
+        ),
+    )
+    verify_parser.add_argument(
         "--json",
         action="store_true",
         help="Emit a deterministic machine-readable verification summary",
@@ -119,6 +129,7 @@ def _verification_summary(
     record: ResearchEvidenceRecord,
     *,
     plan_binding_sha256: str | None = None,
+    report_binding_sha256: str | None = None,
 ) -> dict[str, object]:
     """Build an exact-record identity summary after semantic verification succeeds."""
 
@@ -136,6 +147,9 @@ def _verification_summary(
     if plan_binding_sha256 is not None:
         payload["experiment_plan_sha256"] = plan_binding_sha256
         payload["plan_binding_verified"] = True
+    if report_binding_sha256 is not None:
+        payload["paired_report_sha256"] = report_binding_sha256
+        payload["report_binding_verified"] = True
     return payload
 
 
@@ -147,6 +161,12 @@ def _artifact_paths_by_role(
 
     root = record_path.parent.resolve()
     return {artifact.role: root / artifact.path for artifact in record.artifacts}
+
+
+def _artifacts_by_role(record: ResearchEvidenceRecord) -> dict[str, EvidenceArtifact]:
+    """Index already validated exact-byte artifact identities by their canonical role."""
+
+    return {artifact.role: artifact for artifact in record.artifacts}
 
 
 def _load_json_object(path: Path, description: str) -> Mapping[str, object]:
@@ -170,6 +190,20 @@ def _required_attestation_string(
     value = payload.get(field_name)
     if not isinstance(value, str) or not value:
         raise ValueError(f"verification attestation missing required {field_name}")
+    return value
+
+
+def _required_attestation_integer(
+    payload: Mapping[str, object],
+    field_name: str,
+) -> int:
+    """Return one required non-negative integer from a verification attestation."""
+
+    value = payload.get(field_name)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(
+            f"verification attestation missing valid non-negative integer {field_name}"
+        )
     return value
 
 
@@ -232,6 +266,38 @@ def _verify_plan_binding(
     return plan.sha256
 
 
+def _verify_report_binding(
+    record_path: Path,
+    record: ResearchEvidenceRecord,
+) -> str:
+    """Prove that the verification attestation identifies the exact retained report bytes."""
+
+    artifacts_by_role = _artifacts_by_role(record)
+    artifact_paths = _artifact_paths_by_role(record_path, record)
+    missing_roles = sorted(
+        role
+        for role in (PAIRED_REPORT_ROLE, VERIFICATION_ATTESTATION_ROLE)
+        if role not in artifacts_by_role
+    )
+    if missing_roles:
+        raise ValueError(
+            "report-binding verification requires evidence roles: " + ", ".join(missing_roles)
+        )
+
+    report_artifact = artifacts_by_role[PAIRED_REPORT_ROLE]
+    attestation = _load_json_object(
+        artifact_paths[VERIFICATION_ATTESTATION_ROLE],
+        "verification attestation",
+    )
+    attested_report_sha256 = _required_attestation_string(attestation, "sha256")
+    attested_report_byte_count = _required_attestation_integer(attestation, "byte_count")
+    if attested_report_sha256 != report_artifact.sha256:
+        raise ValueError("verification attestation paired-report SHA-256 mismatch")
+    if attested_report_byte_count != report_artifact.byte_count:
+        raise ValueError("verification attestation paired-report byte-count mismatch")
+    return report_artifact.sha256
+
+
 def _verify(arguments: argparse.Namespace) -> None:
     record_path = arguments.record.resolve()
     record = verify_research_evidence_record(record_path)
@@ -246,6 +312,9 @@ def _verify(arguments: argparse.Namespace) -> None:
     plan_binding_sha256 = None
     if arguments.require_plan_binding:
         plan_binding_sha256 = _verify_plan_binding(record_path, record)
+    report_binding_sha256 = None
+    if arguments.require_report_binding:
+        report_binding_sha256 = _verify_report_binding(record_path, record)
     if arguments.json:
         print(
             json.dumps(
@@ -253,6 +322,7 @@ def _verify(arguments: argparse.Namespace) -> None:
                     record_path,
                     record,
                     plan_binding_sha256=plan_binding_sha256,
+                    report_binding_sha256=report_binding_sha256,
                 ),
                 sort_keys=True,
                 separators=(",", ":"),
@@ -261,9 +331,14 @@ def _verify(arguments: argparse.Namespace) -> None:
             )
         )
         return
-    binding_suffix = ""
+    binding_parts: list[str] = []
     if plan_binding_sha256 is not None:
-        binding_suffix = f", plan {plan_binding_sha256}"
+        binding_parts.append(f"plan {plan_binding_sha256}")
+    if report_binding_sha256 is not None:
+        binding_parts.append(f"report {report_binding_sha256}")
+    binding_suffix = ""
+    if binding_parts:
+        binding_suffix = ", " + ", ".join(binding_parts)
     print(
         "research evidence verified: "
         f"{arguments.record} ({record.evidence_level}, {len(record.artifacts)} artifacts, "
