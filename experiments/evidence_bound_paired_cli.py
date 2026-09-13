@@ -25,13 +25,18 @@ from experiments.preflight_evidence import (
     verify_controlled_paired_preflight_evidence,
 )
 from experiments.research_experiment_plan import (
+    JsonScalar,
     ResearchExperimentPlan,
     load_research_experiment_plan,
 )
 
 READINESS_EVIDENCE_OPTION = "--require-preflight-evidence"
 EXPERIMENT_PLAN_OPTION = "--require-experiment-plan"
+MODEL_IDENTITY_OPTION = "--model-identity"
+EXPERIMENT_PARAMETER_OPTION = "--experiment-parameter"
 EXPERIMENT_PLAN_PROVENANCE_KEY = "research_experiment_plan_sha256"
+MODEL_IDENTITY_PROVENANCE_KEY = "research_model_identity"
+EXPERIMENT_PARAMETERS_PROVENANCE_KEY = "research_experiment_parameters"
 SOURCE_CHECKOUT_OPTION = "--source-checkout"
 SOURCE_REVISION_OPTION = "--require-source-revision"
 
@@ -42,14 +47,19 @@ def main() -> int:
     original_argv = list(sys.argv)
     try:
         evidence_path, argv_without_evidence = _extract_readiness_evidence_path(original_argv)
-        plan_path, delegated_argv = _extract_experiment_plan_path(argv_without_evidence)
+        plan_path, argv_without_plan = _extract_experiment_plan_path(argv_without_evidence)
+        model_identity, argv_without_model = _extract_model_identity(argv_without_plan)
+        experiment_parameters, delegated_argv = _extract_experiment_parameters(argv_without_model)
         if evidence_path is None and plan_path is None:
+            _reject_unbound_model_configuration(model_identity, experiment_parameters)
             return paired_cli.main()
         if plan_path is not None and evidence_path is None:
             raise SystemExit(
                 f"error: {EXPERIMENT_PLAN_OPTION} requires {READINESS_EVIDENCE_OPTION} "
                 "for measured controlled execution"
             )
+        if plan_path is None:
+            _reject_unbound_model_configuration(model_identity, experiment_parameters)
         if evidence_path is None:  # pragma: no cover - guarded above
             raise RuntimeError("readiness evidence path unexpectedly missing")
         if _contains_option(delegated_argv, "--preflight-only"):
@@ -66,6 +76,7 @@ def main() -> int:
             plan = _load_experiment_plan(plan_path)
             arguments = _parse_delegated_arguments(delegated_argv)
             _validate_experiment_plan_contract(plan, arguments)
+            _validate_experiment_model_contract(plan, model_identity, experiment_parameters)
             plan_sha256 = plan.sha256
 
         original_runner = paired_cli.run_controlled_paired_external_benchmarks
@@ -85,6 +96,12 @@ def main() -> int:
             if plan_sha256 is not None:
                 _reserve_provenance_key(runtime_provenance, EXPERIMENT_PLAN_PROVENANCE_KEY)
                 runtime_provenance[EXPERIMENT_PLAN_PROVENANCE_KEY] = plan_sha256
+                _reserve_provenance_key(runtime_provenance, MODEL_IDENTITY_PROVENANCE_KEY)
+                _reserve_provenance_key(runtime_provenance, EXPERIMENT_PARAMETERS_PROVENANCE_KEY)
+                runtime_provenance[MODEL_IDENTITY_PROVENANCE_KEY] = model_identity
+                runtime_provenance[EXPERIMENT_PARAMETERS_PROVENANCE_KEY] = dict(
+                    sorted(experiment_parameters.items())
+                )
             kwargs["runtime_provenance"] = runtime_provenance
             return original_saver(*args, **kwargs)
 
@@ -110,6 +127,106 @@ def _extract_experiment_plan_path(argv: Sequence[str]) -> tuple[Path | None, lis
     """Remove the frozen-plan option from argv and return its path exactly once."""
 
     return _extract_path_option(argv, EXPERIMENT_PLAN_OPTION)
+
+
+def _extract_model_identity(argv: Sequence[str]) -> tuple[str | None, list[str]]:
+    """Remove one explicit model/checkpoint identity from bridge-owned arguments."""
+
+    selected_identity: str | None = None
+    delegated = [argv[0]] if argv else []
+    index = 1
+    while index < len(argv):
+        argument = argv[index]
+        if argument == MODEL_IDENTITY_OPTION:
+            if selected_identity is not None:
+                raise SystemExit(f"error: {MODEL_IDENTITY_OPTION} may be specified only once")
+            if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
+                raise SystemExit(f"error: {MODEL_IDENTITY_OPTION} requires a value")
+            selected_identity = _non_empty_cli_value(argv[index + 1], MODEL_IDENTITY_OPTION)
+            index += 2
+            continue
+        prefix = f"{MODEL_IDENTITY_OPTION}="
+        if argument.startswith(prefix):
+            if selected_identity is not None:
+                raise SystemExit(f"error: {MODEL_IDENTITY_OPTION} may be specified only once")
+            selected_identity = _non_empty_cli_value(argument[len(prefix) :], MODEL_IDENTITY_OPTION)
+            index += 1
+            continue
+        delegated.append(argument)
+        index += 1
+    return selected_identity, delegated
+
+
+def _extract_experiment_parameters(
+    argv: Sequence[str],
+) -> tuple[dict[str, JsonScalar], list[str]]:
+    """Remove repeatable ``NAME=JSON_SCALAR`` experiment parameters from argv."""
+
+    parameters: dict[str, JsonScalar] = {}
+    delegated = [argv[0]] if argv else []
+    index = 1
+    while index < len(argv):
+        argument = argv[index]
+        if argument == EXPERIMENT_PARAMETER_OPTION:
+            if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
+                raise SystemExit(f"error: {EXPERIMENT_PARAMETER_OPTION} requires NAME=JSON_SCALAR")
+            _add_experiment_parameter(parameters, argv[index + 1])
+            index += 2
+            continue
+        prefix = f"{EXPERIMENT_PARAMETER_OPTION}="
+        if argument.startswith(prefix):
+            _add_experiment_parameter(parameters, argument[len(prefix) :])
+            index += 1
+            continue
+        delegated.append(argument)
+        index += 1
+    return parameters, delegated
+
+
+def _add_experiment_parameter(parameters: dict[str, JsonScalar], declaration: str) -> None:
+    """Parse and add one deterministic scalar parameter declaration."""
+
+    name, separator, raw_value = declaration.partition("=")
+    normalized_name = name.strip()
+    if not separator or not normalized_name or not raw_value:
+        raise SystemExit(f"error: {EXPERIMENT_PARAMETER_OPTION} requires NAME=JSON_SCALAR")
+    if normalized_name in parameters:
+        raise SystemExit(
+            f"error: duplicate {EXPERIMENT_PARAMETER_OPTION} name: {normalized_name!r}"
+        )
+    try:
+        value = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"error: invalid JSON scalar for {EXPERIMENT_PARAMETER_OPTION} {normalized_name!r}: {exc}"
+        ) from exc
+    if isinstance(value, (dict, list)):
+        raise SystemExit(
+            f"error: {EXPERIMENT_PARAMETER_OPTION} {normalized_name!r} must be a JSON scalar"
+        )
+    parameters[normalized_name] = value
+
+
+def _non_empty_cli_value(value: str, option: str) -> str:
+    """Return a trimmed non-empty bridge-owned CLI value."""
+
+    normalized = value.strip()
+    if not normalized:
+        raise SystemExit(f"error: {option} requires a non-empty value")
+    return normalized
+
+
+def _reject_unbound_model_configuration(
+    model_identity: str | None,
+    parameters: Mapping[str, JsonScalar],
+) -> None:
+    """Prevent bridge-owned model declarations from being silently ignored without a plan."""
+
+    if model_identity is not None or parameters:
+        raise SystemExit(
+            f"error: {MODEL_IDENTITY_OPTION} and {EXPERIMENT_PARAMETER_OPTION} require "
+            f"{EXPERIMENT_PLAN_OPTION}"
+        )
 
 
 def _extract_path_option(argv: Sequence[str], option: str) -> tuple[Path | None, list[str]]:
@@ -224,6 +341,26 @@ def _validate_experiment_plan_contract(
     )
 
 
+def _validate_experiment_model_contract(
+    plan: ResearchExperimentPlan,
+    model_identity: str | None,
+    parameters: Mapping[str, JsonScalar],
+) -> None:
+    """Require exact model/checkpoint and scalar parameter agreement with the frozen plan."""
+
+    if model_identity != plan.model_identity:
+        raise ValueError(
+            "research experiment plan mismatch for model_identity: "
+            f"expected {plan.model_identity!r}, got {model_identity!r}"
+        )
+    expected_parameters = dict(plan.parameters)
+    if dict(parameters) != expected_parameters:
+        raise ValueError(
+            "research experiment plan mismatch for parameters: "
+            f"expected {expected_parameters!r}, got {dict(parameters)!r}"
+        )
+
+
 def _require_normalized_mapping_match(
     *,
     expected: Mapping[str, str],
@@ -302,8 +439,12 @@ def _reserve_provenance_key(runtime_provenance: Mapping[str, Any], key: str) -> 
 
 
 __all__ = [
+    "EXPERIMENT_PARAMETER_OPTION",
+    "EXPERIMENT_PARAMETERS_PROVENANCE_KEY",
     "EXPERIMENT_PLAN_OPTION",
     "EXPERIMENT_PLAN_PROVENANCE_KEY",
+    "MODEL_IDENTITY_OPTION",
+    "MODEL_IDENTITY_PROVENANCE_KEY",
     "PREFLIGHT_EVIDENCE_PROVENANCE_KEY",
     "READINESS_EVIDENCE_OPTION",
     "main",
