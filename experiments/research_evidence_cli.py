@@ -22,6 +22,10 @@ from experiments.research_evidence_record import (
     write_research_evidence_record,
 )
 from experiments.research_experiment_plan import verify_research_experiment_plan
+from experiments.research_sidecar_binding import (
+    ResearchSidecarBinding,
+    verify_research_sidecar_binding,
+)
 
 EXPERIMENT_PLAN_ROLE = "experiment_plan"
 PAIRED_REPORT_ROLE = "paired_report"
@@ -100,6 +104,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     verify_parser.add_argument(
+        "--require-sidecar-binding",
+        action="store_true",
+        help=(
+            "Require canonical observability_sidecar, distribution_sidecar, and verification "
+            "roles and prove that the attestation identifies those exact sidecar bytes"
+        ),
+    )
+    verify_parser.add_argument(
         "--json",
         action="store_true",
         help="Emit a deterministic machine-readable verification summary",
@@ -144,6 +156,7 @@ def _verification_summary(
     plan_binding_sha256: str | None = None,
     report_binding_sha256: str | None = None,
     manifest_binding_sha256: str | None = None,
+    sidecar_binding: ResearchSidecarBinding | None = None,
 ) -> dict[str, object]:
     """Build an exact-record identity summary after semantic verification succeeds."""
 
@@ -167,6 +180,11 @@ def _verification_summary(
     if manifest_binding_sha256 is not None:
         payload["report_manifest_sha256"] = manifest_binding_sha256
         payload["manifest_binding_verified"] = True
+    if sidecar_binding is not None:
+        payload["observability_sidecar_sha256"] = sidecar_binding.observability_sha256
+        payload["distribution_sidecar_sha256"] = sidecar_binding.distribution_sha256
+        payload["sidecar_bundle_sha256"] = sidecar_binding.bundle_sha256
+        payload["sidecar_binding_verified"] = True
     return payload
 
 
@@ -356,6 +374,9 @@ def _verify(arguments: argparse.Namespace) -> None:
     manifest_binding_sha256 = None
     if arguments.require_manifest_binding:
         manifest_binding_sha256 = _verify_manifest_binding(record_path, record)
+    sidecar_binding = None
+    if arguments.require_sidecar_binding:
+        sidecar_binding = verify_research_sidecar_binding(record_path)
     if arguments.json:
         print(
             json.dumps(
@@ -365,6 +386,7 @@ def _verify(arguments: argparse.Namespace) -> None:
                     plan_binding_sha256=plan_binding_sha256,
                     report_binding_sha256=report_binding_sha256,
                     manifest_binding_sha256=manifest_binding_sha256,
+                    sidecar_binding=sidecar_binding,
                 ),
                 sort_keys=True,
                 separators=(",", ":"),
@@ -380,6 +402,8 @@ def _verify(arguments: argparse.Namespace) -> None:
         binding_parts.append(f"report {report_binding_sha256}")
     if manifest_binding_sha256 is not None:
         binding_parts.append(f"manifest {manifest_binding_sha256}")
+    if sidecar_binding is not None:
+        binding_parts.append(f"sidecar bundle {sidecar_binding.bundle_sha256}")
     binding_suffix = ""
     if binding_parts:
         binding_suffix = ", " + ", ".join(binding_parts)
