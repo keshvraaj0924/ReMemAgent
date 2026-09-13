@@ -276,10 +276,7 @@ def test_main_binds_matching_frozen_plan_digest_into_persisted_provenance(
         runtime_provenance[evidence_cli.PREFLIGHT_EVIDENCE_PROVENANCE_KEY]
         == readiness_payload["evidence_sha256"]
     )
-    assert (
-        runtime_provenance[evidence_cli.EXPERIMENT_PLAN_PROVENANCE_KEY]
-        == expected_plan.sha256
-    )
+    assert runtime_provenance[evidence_cli.EXPERIMENT_PLAN_PROVENANCE_KEY] == expected_plan.sha256
 
 
 def test_frozen_plan_contract_rejects_cli_drift(tmp_path: Path) -> None:
