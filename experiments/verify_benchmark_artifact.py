@@ -74,7 +74,7 @@ class BenchmarkVerificationResult:
     def to_dict(self) -> dict[str, object]:
         """Return a deterministic JSON-compatible representation."""
 
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "byte_count": self.byte_count,
             "sha256": self.sha256,
@@ -82,12 +82,6 @@ class BenchmarkVerificationResult:
             "configuration_fingerprint": self.configuration_fingerprint,
             "experiment_identity": self.experiment_identity,
             "preflight_evidence_sha256": self.preflight_evidence_sha256,
-            "experiment_plan_schema_version": self.experiment_plan_schema_version,
-            "experiment_plan_sha256": self.experiment_plan_sha256,
-            "experiment_plan_byte_count": self.experiment_plan_byte_count,
-            "experiment_plan_file_sha256": self.experiment_plan_file_sha256,
-            "experiment_plan_name": self.experiment_plan_name,
-            "experiment_plan_remem_revision": self.experiment_plan_remem_revision,
             "observability_schema_version": self.observability_schema_version,
             "observability_byte_count": self.observability_byte_count,
             "observability_sha256": self.observability_sha256,
@@ -96,6 +90,18 @@ class BenchmarkVerificationResult:
             "distribution_sha256": self.distribution_sha256,
             "bundle_sha256": self.bundle_sha256,
         }
+        if self.experiment_plan_sha256 is not None:
+            payload.update(
+                {
+                    "experiment_plan_schema_version": self.experiment_plan_schema_version,
+                    "experiment_plan_sha256": self.experiment_plan_sha256,
+                    "experiment_plan_byte_count": self.experiment_plan_byte_count,
+                    "experiment_plan_file_sha256": self.experiment_plan_file_sha256,
+                    "experiment_plan_name": self.experiment_plan_name,
+                    "experiment_plan_remem_revision": self.experiment_plan_remem_revision,
+                }
+            )
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
