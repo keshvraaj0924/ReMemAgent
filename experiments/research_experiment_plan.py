@@ -34,11 +34,17 @@ class ResearchExperimentPlan:
     seeds: tuple[int, ...]
     environment_factory: str
     success_evaluator: str
-    baseline_policy_factory: str
-    treatment_policy_factory: str
     source_revisions: tuple[tuple[str, str], ...]
     dependency_versions: tuple[tuple[str, str], ...]
     parameters: tuple[tuple[str, JsonScalar], ...]
+    baseline_policy_factory: str | None = None
+    baseline_action_policy_factory: str | None = None
+    treatment_policy_factory: str | None = None
+    treatment_action_policy_factory: str | None = None
+    transfer_success_evaluator: str | None = None
+    minimum_trust: float = 0.0
+    baseline_label: str = "baseline"
+    treatment_label: str = "treatment"
     model_identity: str | None = None
     notes: tuple[str, ...] = ()
 
@@ -62,11 +68,17 @@ class ResearchExperimentPlan:
             "seeds": list(self.seeds),
             "environment_factory": self.environment_factory,
             "success_evaluator": self.success_evaluator,
-            "baseline_policy_factory": self.baseline_policy_factory,
-            "treatment_policy_factory": self.treatment_policy_factory,
             "source_revisions": dict(self.source_revisions),
             "dependency_versions": dict(self.dependency_versions),
             "parameters": dict(self.parameters),
+            "baseline_policy_factory": self.baseline_policy_factory,
+            "baseline_action_policy_factory": self.baseline_action_policy_factory,
+            "treatment_policy_factory": self.treatment_policy_factory,
+            "treatment_action_policy_factory": self.treatment_action_policy_factory,
+            "transfer_success_evaluator": self.transfer_success_evaluator,
+            "minimum_trust": self.minimum_trust,
+            "baseline_label": self.baseline_label,
+            "treatment_label": self.treatment_label,
             "model_identity": self.model_identity,
             "notes": list(self.notes),
         }
@@ -85,11 +97,17 @@ class ResearchExperimentPlan:
             "seeds",
             "environment_factory",
             "success_evaluator",
-            "baseline_policy_factory",
-            "treatment_policy_factory",
             "source_revisions",
             "dependency_versions",
             "parameters",
+            "baseline_policy_factory",
+            "baseline_action_policy_factory",
+            "treatment_policy_factory",
+            "treatment_action_policy_factory",
+            "transfer_success_evaluator",
+            "minimum_trust",
+            "baseline_label",
+            "treatment_label",
             "model_identity",
             "notes",
         }
@@ -108,13 +126,19 @@ class ResearchExperimentPlan:
             seeds=_require_sequence(payload["seeds"], "seeds"),
             environment_factory=payload["environment_factory"],
             success_evaluator=payload["success_evaluator"],
-            baseline_policy_factory=payload["baseline_policy_factory"],
-            treatment_policy_factory=payload["treatment_policy_factory"],
             source_revisions=_require_mapping(payload["source_revisions"], "source_revisions"),
             dependency_versions=_require_mapping(
                 payload["dependency_versions"], "dependency_versions"
             ),
             parameters=_require_mapping(payload["parameters"], "parameters"),
+            baseline_policy_factory=payload["baseline_policy_factory"],
+            baseline_action_policy_factory=payload["baseline_action_policy_factory"],
+            treatment_policy_factory=payload["treatment_policy_factory"],
+            treatment_action_policy_factory=payload["treatment_action_policy_factory"],
+            transfer_success_evaluator=payload["transfer_success_evaluator"],
+            minimum_trust=payload["minimum_trust"],
+            baseline_label=payload["baseline_label"],
+            treatment_label=payload["treatment_label"],
             model_identity=payload["model_identity"],
             notes=_require_sequence(payload["notes"], "notes"),
         )
@@ -130,16 +154,36 @@ def build_research_experiment_plan(
     seeds: Sequence[object],
     environment_factory: object,
     success_evaluator: object,
-    baseline_policy_factory: object,
-    treatment_policy_factory: object,
     source_revisions: Mapping[object, object],
     dependency_versions: Mapping[object, object],
     parameters: Mapping[object, object] | None = None,
+    baseline_policy_factory: object = None,
+    baseline_action_policy_factory: object = None,
+    treatment_policy_factory: object = None,
+    treatment_action_policy_factory: object = None,
+    transfer_success_evaluator: object = None,
+    minimum_trust: object = 0.0,
+    baseline_label: object = "baseline",
+    treatment_label: object = "treatment",
     model_identity: object = None,
     notes: Sequence[object] = (),
 ) -> ResearchExperimentPlan:
     """Build and validate a complete pre-measurement experiment declaration."""
 
+    baseline_policy, baseline_action_policy = _validated_policy_factory_pair(
+        policy_factory=baseline_policy_factory,
+        action_policy_factory=baseline_action_policy_factory,
+        condition="baseline",
+    )
+    treatment_policy, treatment_action_policy = _validated_policy_factory_pair(
+        policy_factory=treatment_policy_factory,
+        action_policy_factory=treatment_action_policy_factory,
+        condition="treatment",
+    )
+    validated_transfer_evaluator = _optional_callable_spec(
+        transfer_success_evaluator,
+        "transfer_success_evaluator",
+    )
     validated_model_identity = None
     if model_identity is not None:
         validated_model_identity = _non_empty_string(model_identity, "model_identity")
@@ -153,13 +197,17 @@ def build_research_experiment_plan(
         seeds=_validated_seeds(seeds),
         environment_factory=_callable_spec(environment_factory, "environment_factory"),
         success_evaluator=_callable_spec(success_evaluator, "success_evaluator"),
-        baseline_policy_factory=_callable_spec(baseline_policy_factory, "baseline_policy_factory"),
-        treatment_policy_factory=_callable_spec(
-            treatment_policy_factory, "treatment_policy_factory"
-        ),
         source_revisions=_validated_revision_mapping(source_revisions, "source_revisions"),
         dependency_versions=_validated_string_mapping(dependency_versions, "dependency_versions"),
         parameters=_validated_parameters(parameters or {}),
+        baseline_policy_factory=baseline_policy,
+        baseline_action_policy_factory=baseline_action_policy,
+        treatment_policy_factory=treatment_policy,
+        treatment_action_policy_factory=treatment_action_policy,
+        transfer_success_evaluator=validated_transfer_evaluator,
+        minimum_trust=_validated_probability(minimum_trust, "minimum_trust"),
+        baseline_label=_non_empty_string(baseline_label, "baseline_label"),
+        treatment_label=_non_empty_string(treatment_label, "treatment_label"),
         model_identity=validated_model_identity,
         notes=tuple(_non_empty_string(note, "note") for note in notes),
     )
@@ -250,6 +298,25 @@ def verify_research_experiment_plan(
     return plan
 
 
+def _validated_policy_factory_pair(
+    *,
+    policy_factory: object,
+    action_policy_factory: object,
+    condition: str,
+) -> tuple[str | None, str | None]:
+    if policy_factory is None and action_policy_factory is None:
+        raise ValueError(
+            f"{condition} requires exactly one of policy_factory or action_policy_factory"
+        )
+    if policy_factory is not None and action_policy_factory is not None:
+        raise ValueError(
+            f"{condition} policy_factory and action_policy_factory are mutually exclusive"
+        )
+    if policy_factory is not None:
+        return _callable_spec(policy_factory, f"{condition}_policy_factory"), None
+    return None, _callable_spec(action_policy_factory, f"{condition}_action_policy_factory")
+
+
 def _validated_seeds(values: Sequence[object]) -> tuple[int, ...]:
     if isinstance(values, (str, bytes)):
         raise TypeError("seeds must be a sequence of integers")
@@ -317,6 +384,15 @@ def _positive_integer(value: object, field_name: str) -> int:
     return value
 
 
+def _validated_probability(value: object, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{field_name} must be a finite number between 0 and 1")
+    probability = float(value)
+    if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+        raise ValueError(f"{field_name} must be between 0 and 1")
+    return probability
+
+
 def _non_empty_string(value: object, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
@@ -329,6 +405,12 @@ def _callable_spec(value: object, field_name: str) -> str:
     if not separator or not module_name.strip() or not attribute_name.strip():
         raise ValueError(f"{field_name} must use module:attribute syntax")
     return specification
+
+
+def _optional_callable_spec(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    return _callable_spec(value, field_name)
 
 
 def _revision(value: object, field_name: str) -> str:

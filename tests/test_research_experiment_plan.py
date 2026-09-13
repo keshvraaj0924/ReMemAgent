@@ -29,11 +29,15 @@ def _build_plan() -> ResearchExperimentPlan:
         seeds=(11, 17, 29, 43, 71),
         environment_factory="study.environments:build_webshop",
         success_evaluator="study.metrics:is_success",
-        baseline_policy_factory="study.policies:build_baseline",
-        treatment_policy_factory="study.policies:build_remem",
         source_revisions={"webshop": WEBSHOP_REVISION},
         dependency_versions={"torch": "2.6.0", "transformers": "4.51.0"},
-        parameters={"minimum_trust": 0.6, "temperature": 0.0, "do_sample": False},
+        baseline_policy_factory="study.policies:build_baseline",
+        treatment_action_policy_factory="study.policies:build_remem_action",
+        transfer_success_evaluator="study.metrics:is_transfer_success",
+        minimum_trust=0.6,
+        baseline_label="baseline",
+        treatment_label="remem",
+        parameters={"temperature": 0.0, "do_sample": False},
         model_identity="provider/model@checkpoint",
         notes=("primary metric: success rate",),
     )
@@ -50,11 +54,15 @@ def test_plan_is_canonical_and_mapping_order_independent() -> None:
         seeds=(11, 17, 29, 43, 71),
         environment_factory="study.environments:build_webshop",
         success_evaluator="study.metrics:is_success",
-        baseline_policy_factory="study.policies:build_baseline",
-        treatment_policy_factory="study.policies:build_remem",
         source_revisions={"webshop": WEBSHOP_REVISION},
         dependency_versions={"transformers": "4.51.0", "torch": "2.6.0"},
-        parameters={"do_sample": False, "temperature": 0.0, "minimum_trust": 0.6},
+        baseline_policy_factory="study.policies:build_baseline",
+        treatment_action_policy_factory="study.policies:build_remem_action",
+        transfer_success_evaluator="study.metrics:is_transfer_success",
+        minimum_trust=0.6,
+        baseline_label="baseline",
+        treatment_label="remem",
+        parameters={"do_sample": False, "temperature": 0.0},
         model_identity="provider/model@checkpoint",
         notes=("primary metric: success rate",),
     )
@@ -106,10 +114,10 @@ def test_paired_plan_requires_multiple_unique_integer_seeds() -> None:
         max_steps=10,
         environment_factory="study.environments:build_webshop",
         success_evaluator="study.metrics:is_success",
-        baseline_policy_factory="study.policies:build_baseline",
-        treatment_policy_factory="study.policies:build_remem",
         source_revisions={"webshop": WEBSHOP_REVISION},
         dependency_versions={"torch": "2.6.0"},
+        baseline_policy_factory="study.policies:baseline",
+        treatment_policy_factory="study.policies:treatment",
     )
 
     with pytest.raises(ValueError, match="at least two"):
@@ -120,37 +128,87 @@ def test_paired_plan_requires_multiple_unique_integer_seeds() -> None:
         build_research_experiment_plan(seeds=(11, True), **arguments)
 
 
+def test_plan_requires_exactly_one_policy_mode_per_condition() -> None:
+    common = dict(
+        experiment_name="policy-mode",
+        remem_revision=REMEM_REVISION,
+        benchmark_name="webshop",
+        episode_count=10,
+        max_steps=10,
+        seeds=(11, 17),
+        environment_factory="study.environments:build_webshop",
+        success_evaluator="study.metrics:is_success",
+        source_revisions={"webshop": WEBSHOP_REVISION},
+        dependency_versions={"torch": "2.6.0"},
+        treatment_policy_factory="study.policies:treatment",
+    )
+
+    with pytest.raises(ValueError, match="baseline requires exactly one"):
+        build_research_experiment_plan(**common)
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        build_research_experiment_plan(
+            baseline_policy_factory="study.policies:baseline",
+            baseline_action_policy_factory="study.policies:baseline_action",
+            **common,
+        )
+
+    action_plan = build_research_experiment_plan(
+        baseline_action_policy_factory="study.policies:baseline_action",
+        **common,
+    )
+    assert action_plan.baseline_policy_factory is None
+    assert action_plan.baseline_action_policy_factory == "study.policies:baseline_action"
+
+
 def test_plan_requires_pinned_sources_and_dependencies() -> None:
+    common = dict(
+        experiment_name="missing-pin",
+        remem_revision=REMEM_REVISION,
+        benchmark_name="webshop",
+        episode_count=10,
+        max_steps=10,
+        seeds=(11, 17),
+        environment_factory="study.environments:build_webshop",
+        success_evaluator="study.metrics:is_success",
+        baseline_policy_factory="study.policies:baseline",
+        treatment_policy_factory="study.policies:treatment",
+    )
     with pytest.raises(ValueError, match="pinned source revision"):
         build_research_experiment_plan(
-            experiment_name="missing-source",
-            remem_revision=REMEM_REVISION,
-            benchmark_name="webshop",
-            episode_count=10,
-            max_steps=10,
-            seeds=(11, 17),
-            environment_factory="study.environments:build_webshop",
-            success_evaluator="study.metrics:is_success",
-            baseline_policy_factory="study.policies:build_baseline",
-            treatment_policy_factory="study.policies:build_remem",
             source_revisions={},
             dependency_versions={"torch": "2.6.0"},
+            **common,
         )
 
     with pytest.raises(ValueError, match="exact dependency version"):
         build_research_experiment_plan(
-            experiment_name="missing-dependency",
-            remem_revision=REMEM_REVISION,
-            benchmark_name="webshop",
-            episode_count=10,
-            max_steps=10,
-            seeds=(11, 17),
-            environment_factory="study.environments:build_webshop",
-            success_evaluator="study.metrics:is_success",
-            baseline_policy_factory="study.policies:build_baseline",
-            treatment_policy_factory="study.policies:build_remem",
             source_revisions={"webshop": WEBSHOP_REVISION},
             dependency_versions={},
+            **common,
+        )
+
+
+def test_plan_validates_trust_and_optional_transfer_evaluator() -> None:
+    common = dict(
+        experiment_name="trust-contract",
+        remem_revision=REMEM_REVISION,
+        benchmark_name="webshop",
+        episode_count=10,
+        max_steps=10,
+        seeds=(11, 17),
+        environment_factory="study.environments:build_webshop",
+        success_evaluator="study.metrics:is_success",
+        source_revisions={"webshop": WEBSHOP_REVISION},
+        dependency_versions={"torch": "2.6.0"},
+        baseline_policy_factory="study.policies:baseline",
+        treatment_policy_factory="study.policies:treatment",
+    )
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        build_research_experiment_plan(minimum_trust=1.1, **common)
+    with pytest.raises(ValueError, match="module:attribute"):
+        build_research_experiment_plan(
+            transfer_success_evaluator="missing_separator",
+            **common,
         )
 
 
@@ -164,10 +222,10 @@ def test_plan_rejects_non_finite_or_structured_parameters() -> None:
         seeds=(11, 17),
         environment_factory="study.environments:build_webshop",
         success_evaluator="study.metrics:is_success",
-        baseline_policy_factory="study.policies:build_baseline",
-        treatment_policy_factory="study.policies:build_remem",
         source_revisions={"webshop": WEBSHOP_REVISION},
         dependency_versions={"torch": "2.6.0"},
+        baseline_policy_factory="study.policies:baseline",
+        treatment_policy_factory="study.policies:treatment",
     )
 
     with pytest.raises(ValueError, match="finite"):
