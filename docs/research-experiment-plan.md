@@ -73,6 +73,19 @@ When admission succeeds, the canonical plan SHA-256 is persisted under `research
 
 The generic paired CLI cannot inspect arbitrary model or decoding behavior hidden inside user policy factories. `parameters` and `model_identity` are therefore retained as reviewable protocol declarations, but their semantic enforcement remains the responsibility of the concrete policy/model integration. Do not interpret the plan digest as proof that opaque factory internals used those values.
 
+## Downstream verification
+
+A report that persists `research_experiment_plan_sha256` is plan-bound evidence. `remem-verify-benchmark` therefore requires the retained plan to be supplied with `--experiment-plan PATH`; verification fails closed if the plan is missing, if its canonical SHA-256 differs from the report provenance, or if the report's measured `code_revision` differs from the plan's `remem_revision`.
+
+Successful machine-readable verification records two different identities deliberately:
+
+- `experiment_plan_sha256` is the canonical semantic identity of the validated plan;
+- `experiment_plan_file_sha256` plus `experiment_plan_byte_count` identify the exact retained plan file bytes.
+
+The attestation also records the plan schema version, experiment name, and bound ReMemAgent revision. Legacy reports that do not contain a plan binding preserve their established verification JSON shape. Supplying `--experiment-plan` for an unbound report is rejected rather than silently implying that the report was produced under that plan.
+
+This verification proves consistency between the retained measured artifact and the declared frozen-plan identity. It does not prove that opaque policy internals honored model parameters that the generic runner cannot inspect, and it is not a digital signature or scientific-validity proof.
+
 ## Evidence boundary
 
 The frozen plan is a **pre-measurement configuration identity**, not scientific benchmark evidence by itself. Its digest does not prove that an upstream checkout contained scientifically correct code, that a benchmark implementation is valid, or that an effectiveness claim is supported. Controlled preflight, exact source-checkout admission, measured artifact verification, paired analysis, and retained research-evidence indexing remain separate contracts.

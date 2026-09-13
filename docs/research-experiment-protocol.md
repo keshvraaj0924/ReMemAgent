@@ -30,7 +30,7 @@ Before running ALFWorld or WebShop, record the following values from the actual 
 - ReMemAgent trust threshold and any treatment-specific memory configuration;
 - output, manifest, readiness-evidence, observability, distribution, and attestation paths.
 
-Changing any value that can alter the measured behavior starts a new experiment identity. Do not silently replace a failed or inconvenient run while keeping the same claimed protocol.
+Persist those behavior-affecting values in a `ResearchExperimentPlan` before measured execution and retain that plan with the experiment artifacts. Changing any value that can alter measured behavior starts a new experiment identity. Do not silently replace a failed or inconvenient run while keeping the same claimed protocol.
 
 ## Phase 1: engineering gate
 
@@ -74,7 +74,7 @@ A failed preflight is an experiment-admission failure. Fix the environment or de
 
 ## Phase 3: measured paired execution
 
-Run baseline and treatment through the paired runner using the retained readiness evidence. The exact command should be archived with the experiment.
+Run baseline and treatment through the paired runner using both the retained readiness evidence and the frozen experiment plan. The exact command should be archived with the experiment.
 
 ```bash
 remem-paired-benchmark \
@@ -93,15 +93,18 @@ remem-paired-benchmark \
   --source-checkout webshop=/path/to/webshop \
   --require-source-revision webshop=<WEBSHOP_COMMIT> \
   --require-preflight-evidence artifacts/webshop-readiness.json \
+  --require-experiment-plan artifacts/webshop-experiment-plan.json \
   --output artifacts/webshop-paired.json \
   --manifest artifacts/webshop-paired.json.manifest.json
 ```
+
+Plan-bound measurement fails before measured episodes begin if the frozen protocol does not match the actual CLI/runtime admission inputs. When admitted, the report persists the canonical plan SHA-256 in runtime provenance alongside the readiness-evidence digest.
 
 The primary scientific unit is the independent seed, not an individual episode pooled across seeds. Preserve per-seed reports so paired deltas remain auditable.
 
 ## Phase 4: artifact verification
 
-For single/repeated benchmark artifacts that include observability evidence, retain the report, manifest, aggregate observability snapshot, duration distribution sidecar, and verification attestation together.
+For plan-bound measured artifacts, retain the frozen experiment plan together with the report, manifest, readiness evidence, aggregate observability snapshot, duration distribution sidecar when collected, and verification attestation.
 
 Example verification shape:
 
@@ -110,13 +113,16 @@ remem-verify-benchmark \
   artifacts/webshop.json \
   --manifest artifacts/webshop.json.manifest.json \
   --preflight-evidence artifacts/webshop-readiness.json \
+  --experiment-plan artifacts/webshop-experiment-plan.json \
   --observability-sidecar artifacts/webshop.observability.json \
   --distribution-sidecar artifacts/webshop.duration-distribution.json \
   --attestation-output artifacts/webshop.verification.json \
   --json
 ```
 
-Verification checks retained schemas and artifact identities and, when both telemetry sidecars are present, cross-checks completed-episode counts and measured-duration totals before producing the combined evidence digest. The digest is an integrity/association checksum, not a digital signature and not proof of model quality.
+For a report that contains `research_experiment_plan_sha256`, verification fails closed unless the retained plan is supplied. The verifier checks the plan's canonical digest against the report provenance and checks the measured report `code_revision` against the plan's declared ReMemAgent revision. Successful plan-bound attestations record both the canonical plan identity and the exact retained plan-file SHA-256/byte count. Legacy reports without a plan binding preserve their established verification JSON contract and reject an unrelated plan argument rather than implying a binding that never existed.
+
+Verification also checks retained schemas and artifact identities and, when both telemetry sidecars are present, cross-checks completed-episode counts and measured-duration totals before producing the combined evidence digest. These digests are integrity/association checksums, not digital signatures and not proof of model quality.
 
 Never edit a measured JSON artifact by hand and then continue using its original manifest or verification attestation.
 
@@ -146,6 +152,7 @@ remem-research-evidence freeze \
   --experiment webshop-memory-study \
   --level E3 \
   --revision <REMEM_COMMIT> \
+  --artifact experiment_plan=artifacts/webshop-experiment-plan.json \
   --artifact readiness=artifacts/webshop-readiness.json \
   --artifact paired_report=artifacts/webshop-paired.json \
   --artifact manifest=artifacts/webshop-paired.json.manifest.json \
@@ -161,7 +168,7 @@ remem-research-evidence verify \
 
 For retained or published evidence, pass `--expected-revision` using the revision declared before measurement. Verification then fails closed if a different otherwise-valid evidence record is substituted. `--json` emits a deterministic machine-readable summary containing the experiment identity, declared evidence level, bound ReMemAgent revision, artifact count, and the exact byte count and SHA-256 of the evidence-record file itself. The record digest can be retained by downstream review or archival systems as an external identity for the exact verification input.
 
-The evidence record is an **index and exact-byte integrity contract**, not a semantic validator and not a digital signature. It does not decide whether `E3` has actually been earned. Run the specific preflight, benchmark, manifest, observability, and statistical checks first, then declare only the highest evidence level those retained artifacts genuinely support. If any indexed file is edited, replaced, deleted, or moved outside the retained experiment directory, record verification fails closed.
+The evidence record is an **index and exact-byte integrity contract**, not a semantic validator and not a digital signature. It does not decide whether `E3` has actually been earned. Run the specific preflight, experiment-plan, benchmark, manifest, observability, and statistical checks first, then declare only the highest evidence level those retained artifacts genuinely support. If any indexed file is edited, replaced, deleted, or moved outside the retained experiment directory, record verification fails closed.
 
 ## Negative-transfer reporting
 
@@ -180,6 +187,7 @@ Ablations should use the same independent seed set and benchmark protocol as the
 For a result intended to be cited later, retain at least:
 
 - exact command/configuration used for readiness and measurement;
+- frozen `ResearchExperimentPlan` and its canonical SHA-256;
 - ReMemAgent revision and Quality workflow reference;
 - upstream benchmark revision and clean-tree state;
 - dependency/runtime provenance;
@@ -206,4 +214,4 @@ Do not convert those statements into "production ready," "universally better," o
 
 ## Current scientific boundary
 
-At the time this protocol was added, ReMemAgent had engineering tests for its memory engine, synthetic evaluation, ALFWorld/WebShop adapters, paired execution, GRPO/verl boundaries, reproducibility, artifact verification, observability, and machine-checkable retained-evidence indexing. It did **not** yet contain real pinned multi-seed ALFWorld/WebShop effectiveness results or a completed real GRPO/verl optimization run. Those remain experimental work, not documentation placeholders to be filled with invented numbers.
+At the time this protocol was updated, ReMemAgent had engineering tests for its memory engine, synthetic evaluation, ALFWorld/WebShop adapters, paired execution, frozen experiment-plan admission and downstream verification, GRPO/verl boundaries, reproducibility, artifact verification, observability, and machine-checkable retained-evidence indexing. It did **not** yet contain real pinned multi-seed ALFWorld/WebShop effectiveness results or a completed real GRPO/verl optimization run. Those remain experimental work, not documentation placeholders to be filled with invented numbers.
