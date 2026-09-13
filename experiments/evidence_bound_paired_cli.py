@@ -197,8 +197,7 @@ def _validate_experiment_plan_contract(
         raise ValueError("research experiment plan requires explicit runtime requirements")
     if runtime_requirements.expected_code_revision != plan.remem_revision:
         raise ValueError(
-            "research experiment plan ReMemAgent revision does not match "
-            "--require-code-revision"
+            "research experiment plan ReMemAgent revision does not match --require-code-revision"
         )
     if not runtime_requirements.require_clean_working_tree:
         raise ValueError("research experiment plan requires --require-clean-working-tree")
@@ -211,7 +210,9 @@ def _validate_experiment_plan_contract(
     _, source_requirements = paired_cli._build_source_checkout_contract(arguments)
     if source_requirements is None:
         raise ValueError("research experiment plan requires declared source checkouts")
-    if any(not requirement.require_clean_working_tree for requirement in source_requirements.values()):
+    if any(
+        not requirement.require_clean_working_tree for requirement in source_requirements.values()
+    ):
         raise ValueError("research experiment plan requires clean source checkouts")
     observed_source_revisions = {
         name: requirement.expected_revision for name, requirement in source_requirements.items()
