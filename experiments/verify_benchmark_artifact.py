@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import hmac
 import json
 import sys
@@ -24,6 +25,12 @@ from experiments.preflight_evidence import (
     verify_controlled_paired_preflight_evidence,
 )
 from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
+from remem.observability_distribution_artifacts import (
+    DISTRIBUTION_OBSERVATION_SCHEMA_VERSION,
+    read_distribution_observation_snapshot,
+)
+
+_BUNDLE_DIGEST_DOMAIN = b"remem-benchmark-bundle-v1\0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +44,10 @@ class BenchmarkVerificationResult:
     configuration_fingerprint: str | None = None
     experiment_identity: str | None = None
     preflight_evidence_sha256: str | None = None
+    distribution_schema_version: int | None = None
+    distribution_byte_count: int | None = None
+    distribution_sha256: str | None = None
+    bundle_sha256: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return a deterministic JSON-compatible representation."""
@@ -49,7 +60,20 @@ class BenchmarkVerificationResult:
             "configuration_fingerprint": self.configuration_fingerprint,
             "experiment_identity": self.experiment_identity,
             "preflight_evidence_sha256": self.preflight_evidence_sha256,
+            "distribution_schema_version": self.distribution_schema_version,
+            "distribution_byte_count": self.distribution_byte_count,
+            "distribution_sha256": self.distribution_sha256,
+            "bundle_sha256": self.bundle_sha256,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class _DistributionVerification:
+    """Exact-byte integrity metadata for one validated distribution sidecar."""
+
+    schema_version: int
+    byte_count: int
+    sha256: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +94,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--distribution-sidecar",
+        type=Path,
+        help=(
+            "Optional persisted duration-distribution sidecar to validate and bind into "
+            "the verification attestation"
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -82,8 +114,9 @@ def verify_report_artifact(
     report_path: Path,
     manifest_path: Path | None = None,
     preflight_evidence_path: Path | None = None,
+    distribution_sidecar_path: Path | None = None,
 ) -> BenchmarkVerificationResult:
-    """Verify report bytes, identities, admission evidence, and readiness binding."""
+    """Verify report bytes, identities, admission evidence, and optional sidecars."""
 
     selected_manifest_path = manifest_path or report_path.with_suffix(
         report_path.suffix + ".manifest.json"
@@ -104,6 +137,12 @@ def verify_report_artifact(
         payload,
         preflight_evidence_path,
     )
+    distribution = _verify_distribution_sidecar(distribution_sidecar_path)
+    bundle_sha256 = (
+        _build_bundle_digest(manifest.sha256, distribution.sha256)
+        if distribution is not None
+        else None
+    )
     return BenchmarkVerificationResult(
         schema_version=manifest.schema_version,
         byte_count=manifest.byte_count,
@@ -112,6 +151,14 @@ def verify_report_artifact(
         configuration_fingerprint=configuration_fingerprint,
         experiment_identity=experiment_identity,
         preflight_evidence_sha256=preflight_evidence_sha256,
+        distribution_schema_version=(
+            distribution.schema_version if distribution is not None else None
+        ),
+        distribution_byte_count=(
+            distribution.byte_count if distribution is not None else None
+        ),
+        distribution_sha256=distribution.sha256 if distribution is not None else None,
+        bundle_sha256=bundle_sha256,
     )
 
 
@@ -136,6 +183,32 @@ def _load_report_payload(report_path: Path) -> Mapping[str, Any]:
     if not isinstance(payload, Mapping):
         raise ValueError("benchmark artifact root must be a JSON object")
     return payload
+
+
+def _verify_distribution_sidecar(
+    distribution_sidecar_path: Path | None,
+) -> _DistributionVerification | None:
+    """Validate and hash one retained distribution sidecar without mutating it."""
+
+    if distribution_sidecar_path is None:
+        return None
+    raw_bytes = distribution_sidecar_path.read_bytes()
+    read_distribution_observation_snapshot(distribution_sidecar_path)
+    return _DistributionVerification(
+        schema_version=DISTRIBUTION_OBSERVATION_SCHEMA_VERSION,
+        byte_count=len(raw_bytes),
+        sha256=hashlib.sha256(raw_bytes).hexdigest(),
+    )
+
+
+def _build_bundle_digest(report_sha256: str, distribution_sha256: str) -> str:
+    """Bind exact report and distribution digests into one domain-separated digest."""
+
+    digest = hashlib.sha256()
+    digest.update(_BUNDLE_DIGEST_DOMAIN)
+    digest.update(bytes.fromhex(report_sha256))
+    digest.update(bytes.fromhex(distribution_sha256))
+    return digest.hexdigest()
 
 
 def _verify_preflight_evidence_binding(
@@ -199,8 +272,9 @@ def main() -> int:
             arguments.report,
             arguments.manifest,
             arguments.preflight_evidence,
+            arguments.distribution_sidecar,
         )
-    except (OSError, ValueError) as error:
+    except (OSError, TypeError, ValueError) as error:
         print(f"benchmark artifact verification failed: {error}", file=sys.stderr)
         return 1
 
