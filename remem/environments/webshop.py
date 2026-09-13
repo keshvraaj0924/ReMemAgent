@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from math import isfinite
 from typing import Any
 
@@ -34,9 +35,10 @@ class WebShopAdapter:
     def step(self, action: str) -> StepResult:
         """Execute one textual WebShop action and normalize its result.
 
-        The adapter intentionally rejects ambiguous reward, terminal, and
-        observation values instead of silently coercing them. This keeps
-        malformed upstream benchmark output from entering measured trajectories.
+        The adapter intentionally rejects ambiguous reward, terminal,
+        observation, and metadata values instead of silently coercing them.
+        This keeps malformed upstream benchmark output from entering measured
+        trajectories.
         """
 
         if not isinstance(action, str) or not action.strip():
@@ -55,7 +57,7 @@ class WebShopAdapter:
             reward=_normalize_reward(reward),
             terminated=_normalize_terminal_flag(terminated, "terminated"),
             truncated=_normalize_terminal_flag(truncated, "truncated"),
-            info=dict(info) if isinstance(info, dict) else {},
+            info=_normalize_info(info),
         )
 
     def close(self) -> None:
@@ -83,3 +85,11 @@ def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
     if not isinstance(value, bool):
         raise TypeError(f"WebShop {field_name} flag must be a boolean")
     return value
+
+
+def _normalize_info(info: Any) -> dict[str, Any]:
+    """Normalize WebShop metadata without hiding malformed step payloads."""
+
+    if not isinstance(info, Mapping):
+        raise TypeError("WebShop info must be a mapping")
+    return dict(info)

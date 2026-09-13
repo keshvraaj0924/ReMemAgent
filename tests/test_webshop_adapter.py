@@ -72,6 +72,13 @@ def test_webshop_adapter_rejects_non_finite_reward(reward: float) -> None:
         adapter.step("click[1]")
 
 
+def test_webshop_adapter_rejects_non_mapping_info() -> None:
+    adapter = WebShopAdapter(FakeWebShop(("next", 0.0, False, False, None)))
+
+    with pytest.raises(TypeError, match="WebShop info must be a mapping"):
+        adapter.step("click[1]")
+
+
 def test_webshop_adapter_supports_legacy_four_value_step() -> None:
     adapter = WebShopAdapter(FakeWebShop(("next", 0.5, True, {"done": True})))
 

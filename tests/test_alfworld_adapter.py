@@ -77,6 +77,13 @@ def test_alfworld_adapter_rejects_non_finite_reward(reward: float) -> None:
         adapter.step("look")
 
 
+def test_alfworld_adapter_rejects_non_mapping_info() -> None:
+    adapter = AlfWorldAdapter(FakeAlfWorld((["next"], [0.0], [False], [False], None)))
+
+    with pytest.raises(TypeError, match="ALFWorld info must be a mapping"):
+        adapter.step("look")
+
+
 def test_alfworld_adapter_supports_legacy_four_value_step() -> None:
     adapter = AlfWorldAdapter(FakeAlfWorld((["next"], [0.5], [True], {"done": [True]})))
 

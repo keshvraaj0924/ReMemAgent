@@ -65,7 +65,7 @@ class AlfWorldAdapter:
             reward=_normalize_reward(reward),
             terminated=_normalize_terminal_flag(terminated, "terminated"),
             truncated=_normalize_terminal_flag(truncated, "truncated"),
-            info=_unwrap_info(info),
+            info=_normalize_info(info),
         )
 
     def close(self) -> None:
@@ -97,9 +97,9 @@ def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
     return unwrapped
 
 
-def _unwrap_info(info: Any) -> dict[str, Any]:
-    """Remove the first batch dimension from ALFWorld info values."""
+def _normalize_info(info: Any) -> dict[str, Any]:
+    """Normalize ALFWorld metadata without hiding malformed step payloads."""
 
     if not isinstance(info, Mapping):
-        return {}
+        raise TypeError("ALFWorld info must be a mapping")
     return {key: unwrap_singleton(value) for key, value in info.items()}
