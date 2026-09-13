@@ -123,7 +123,9 @@ def _verify_parameters(
     expected_json = _canonical_parameter_json(expected_parameters)
     recorded_json = _canonical_parameter_json(recorded_parameters)
     if not hmac.compare_digest(recorded_json, expected_json):
-        raise ValueError("benchmark report experiment parameters do not match research experiment plan")
+        raise ValueError(
+            "benchmark report experiment parameters do not match research experiment plan"
+        )
 
 
 def _canonical_parameter_json(parameters: Mapping[object, object]) -> str:
@@ -155,7 +157,9 @@ def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path, help="Persisted measured benchmark report")
-    parser.add_argument("experiment_plan", type=Path, help="Retained frozen research experiment plan")
+    parser.add_argument(
+        "experiment_plan", type=Path, help="Retained frozen research experiment plan"
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser.parse_args()
 
