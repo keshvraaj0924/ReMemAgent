@@ -9,6 +9,10 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+from experiments.benchmark_manifest import (
+    load_benchmark_artifact_manifest,
+    verify_benchmark_artifact,
+)
 from experiments.research_evidence_record import (
     EVIDENCE_LEVELS,
     EvidenceArtifact,
@@ -21,6 +25,7 @@ from experiments.research_experiment_plan import verify_research_experiment_plan
 
 EXPERIMENT_PLAN_ROLE = "experiment_plan"
 PAIRED_REPORT_ROLE = "paired_report"
+REPORT_MANIFEST_ROLE = "report_manifest"
 VERIFICATION_ATTESTATION_ROLE = "verification"
 
 
@@ -87,6 +92,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     verify_parser.add_argument(
+        "--require-manifest-binding",
+        action="store_true",
+        help=(
+            "Require canonical paired_report and report_manifest roles and prove that the "
+            "retained benchmark manifest verifies the exact retained report bytes"
+        ),
+    )
+    verify_parser.add_argument(
         "--json",
         action="store_true",
         help="Emit a deterministic machine-readable verification summary",
@@ -130,6 +143,7 @@ def _verification_summary(
     *,
     plan_binding_sha256: str | None = None,
     report_binding_sha256: str | None = None,
+    manifest_binding_sha256: str | None = None,
 ) -> dict[str, object]:
     """Build an exact-record identity summary after semantic verification succeeds."""
 
@@ -150,6 +164,9 @@ def _verification_summary(
     if report_binding_sha256 is not None:
         payload["paired_report_sha256"] = report_binding_sha256
         payload["report_binding_verified"] = True
+    if manifest_binding_sha256 is not None:
+        payload["report_manifest_sha256"] = manifest_binding_sha256
+        payload["manifest_binding_verified"] = True
     return payload
 
 
@@ -298,6 +315,29 @@ def _verify_report_binding(
     return report_artifact.sha256
 
 
+def _verify_manifest_binding(
+    record_path: Path,
+    record: ResearchEvidenceRecord,
+) -> str:
+    """Prove that the retained benchmark manifest verifies the exact retained report bytes."""
+
+    artifacts_by_role = _artifacts_by_role(record)
+    artifact_paths = _artifact_paths_by_role(record_path, record)
+    missing_roles = sorted(
+        role
+        for role in (PAIRED_REPORT_ROLE, REPORT_MANIFEST_ROLE)
+        if role not in artifacts_by_role
+    )
+    if missing_roles:
+        raise ValueError(
+            "manifest-binding verification requires evidence roles: " + ", ".join(missing_roles)
+        )
+
+    manifest = load_benchmark_artifact_manifest(artifact_paths[REPORT_MANIFEST_ROLE])
+    verify_benchmark_artifact(artifact_paths[PAIRED_REPORT_ROLE], manifest)
+    return artifacts_by_role[REPORT_MANIFEST_ROLE].sha256
+
+
 def _verify(arguments: argparse.Namespace) -> None:
     record_path = arguments.record.resolve()
     record = verify_research_evidence_record(record_path)
@@ -315,6 +355,9 @@ def _verify(arguments: argparse.Namespace) -> None:
     report_binding_sha256 = None
     if arguments.require_report_binding:
         report_binding_sha256 = _verify_report_binding(record_path, record)
+    manifest_binding_sha256 = None
+    if arguments.require_manifest_binding:
+        manifest_binding_sha256 = _verify_manifest_binding(record_path, record)
     if arguments.json:
         print(
             json.dumps(
@@ -323,6 +366,7 @@ def _verify(arguments: argparse.Namespace) -> None:
                     record,
                     plan_binding_sha256=plan_binding_sha256,
                     report_binding_sha256=report_binding_sha256,
+                    manifest_binding_sha256=manifest_binding_sha256,
                 ),
                 sort_keys=True,
                 separators=(",", ":"),
@@ -336,6 +380,8 @@ def _verify(arguments: argparse.Namespace) -> None:
         binding_parts.append(f"plan {plan_binding_sha256}")
     if report_binding_sha256 is not None:
         binding_parts.append(f"report {report_binding_sha256}")
+    if manifest_binding_sha256 is not None:
+        binding_parts.append(f"manifest {manifest_binding_sha256}")
     binding_suffix = ""
     if binding_parts:
         binding_suffix = ", " + ", ".join(binding_parts)
