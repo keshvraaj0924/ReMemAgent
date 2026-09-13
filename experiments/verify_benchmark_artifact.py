@@ -154,9 +154,7 @@ def verify_report_artifact(
         distribution_schema_version=(
             distribution.schema_version if distribution is not None else None
         ),
-        distribution_byte_count=(
-            distribution.byte_count if distribution is not None else None
-        ),
+        distribution_byte_count=(distribution.byte_count if distribution is not None else None),
         distribution_sha256=distribution.sha256 if distribution is not None else None,
         bundle_sha256=bundle_sha256,
     )
