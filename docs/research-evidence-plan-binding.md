@@ -1,6 +1,6 @@
 # Research evidence semantic-binding verification
 
-`remem-research-evidence verify` can optionally perform semantic cross-checks between retained evidence artifacts that have already passed exact-byte verification. These checks close identity gaps between the frozen experiment declaration, the measured paired report, and the benchmark verification attestation.
+`remem-research-evidence verify` can optionally perform semantic cross-checks between retained evidence artifacts that have already passed exact-byte verification. These checks close identity gaps between the frozen experiment declaration, measured paired report, benchmark integrity manifest, and benchmark verification attestation.
 
 Use these checks after the experiment-specific benchmark verifier has produced a persisted attestation and after the final evidence record has indexed the retained files. They complement exact-byte record verification; they do not replace preflight, benchmark, statistical, or scientific validation.
 
@@ -36,9 +36,20 @@ Report binding cross-checks the attestation against the exact-byte identity alre
 
 This rejects a subtle but important substitution case where both the report and verification files are individually intact but the verification attestation was produced for a different report.
 
+## Manifest-binding roles
+
+For `--require-manifest-binding`, the evidence record must contain:
+
+- `paired_report`: the exact persisted paired benchmark report;
+- `report_manifest`: the persisted benchmark integrity manifest intended for that report.
+
+Manifest binding loads the retained manifest through the versioned benchmark-manifest contract and reruns exact report verification against the retained `paired_report`. This proves that the manifest's report schema, byte count, and SHA-256 refer to the report actually frozen in the evidence record.
+
+This rejects another substitution case where the report and manifest are individually intact artifacts but the manifest was generated for a different benchmark report. The JSON verification summary reports the exact retained manifest-file SHA-256 as `report_manifest_sha256` and sets `manifest_binding_verified` to `true` after this semantic check succeeds.
+
 ## Verification command
 
-For a fully retained plan-bound paired experiment, run both checks together:
+For a fully retained plan-bound paired experiment, run all three checks together:
 
 ```bash
 remem-research-evidence verify \
@@ -46,6 +57,7 @@ remem-research-evidence verify \
   --expected-revision <REMEM_COMMIT> \
   --require-plan-binding \
   --require-report-binding \
+  --require-manifest-binding \
   --json
 ```
 
@@ -56,7 +68,9 @@ On success, the JSON summary retains the existing exact evidence-record identity
   "experiment_plan_sha256": "<canonical-plan-sha256>",
   "paired_report_sha256": "<exact-retained-report-sha256>",
   "plan_binding_verified": true,
-  "report_binding_verified": true
+  "report_binding_verified": true,
+  "report_manifest_sha256": "<exact-retained-manifest-file-sha256>",
+  "manifest_binding_verified": true
 }
 ```
 
@@ -64,4 +78,4 @@ Without the binding flags, existing evidence records and their machine-readable 
 
 ## Evidence boundary
 
-Successful plan and report binding establishes that the exact retained frozen plan, paired benchmark report, and benchmark verification attestation refer to one consistent retained evidence chain. It does **not** establish that an E3 claim is scientifically justified, that benchmark outcomes improved, that the attestation is digitally signed, or that the system is production-ready. Statistical analysis, protocol review, benchmark validity, model-policy semantic enforcement, and claim selection remain separate research responsibilities.
+Successful plan, report, and manifest binding establishes that the exact retained frozen plan, paired benchmark report, benchmark integrity manifest, and benchmark verification attestation form a consistent retained evidence chain. It does **not** establish that an E3 claim is scientifically justified, that benchmark outcomes improved, that any retained artifact is digitally signed, or that the system is production-ready. Statistical analysis, protocol review, benchmark validity, model-policy semantic enforcement, and claim selection remain separate research responsibilities.
