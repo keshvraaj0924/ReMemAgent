@@ -5,7 +5,12 @@ from pathlib import Path
 
 from experiments.benchmark_report import save_benchmark_report
 from experiments.external_benchmark import ExternalBenchmarkSpec, run_external_benchmark
-from experiments.smoke_benchmark import SMOKE_ACTION, SMOKE_OBSERVATION
+from experiments.smoke_benchmark import (
+    SMOKE_ACTION,
+    SMOKE_OBSERVATION,
+    SmokeAlfWorldEnvironment,
+)
+from remem.environments.alfworld import AlfWorldAdapter
 
 
 SMOKE_ENVIRONMENT_FACTORY = "experiments.smoke_benchmark:build_environment"
@@ -26,6 +31,15 @@ def _build_smoke_spec() -> ExternalBenchmarkSpec:
         success_evaluator=SMOKE_SUCCESS_EVALUATOR,
         seed=0,
     )
+
+
+def test_smoke_environment_matches_alfworld_metadata_contract() -> None:
+    """Keep the smoke double aligned with ALFWorld's mapping-of-batches metadata."""
+
+    adapter = AlfWorldAdapter(SmokeAlfWorldEnvironment(seed=17))
+    result = adapter.step(SMOKE_ACTION)
+
+    assert result.info == {"seed": 17}
 
 
 def test_external_benchmark_executes_memory_guided_smoke_path() -> None:

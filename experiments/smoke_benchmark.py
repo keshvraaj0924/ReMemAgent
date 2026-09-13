@@ -35,7 +35,7 @@ class SmokeAlfWorldEnvironment:
 
     def step(
         self, actions: list[str]
-    ) -> tuple[list[str], list[float], list[bool], list[dict[str, Any]]]:
+    ) -> tuple[list[str], list[float], list[bool], dict[str, list[int]]]:
         """Accept the target action and finish the deterministic episode."""
 
         if len(actions) != 1:
@@ -43,7 +43,7 @@ class SmokeAlfWorldEnvironment:
         self.step_count += 1
         success = actions[0] == SMOKE_ACTION
         observation = SMOKE_SUCCESS_OBSERVATION if success else "drawer remains closed"
-        return [observation], [1.0 if success else 0.0], [True], [{"seed": self.seed}]
+        return [observation], [1.0 if success else 0.0], [True], {"seed": [self.seed]}
 
     def close(self) -> None:
         """Mark the environment as closed."""
