@@ -23,10 +23,15 @@ from experiments.benchmark_manifest import (
 from experiments.controlled_benchmark_artifacts import (
     validate_persisted_controlled_benchmark_artifact,
 )
+from experiments.evidence_bound_paired_cli import EXPERIMENT_PLAN_PROVENANCE_KEY
 from experiments.paired_artifacts import validate_persisted_paired_artifact
 from experiments.preflight_evidence import (
     PREFLIGHT_EVIDENCE_PROVENANCE_KEY,
     verify_controlled_paired_preflight_evidence,
+)
+from experiments.research_experiment_plan import (
+    RESEARCH_EXPERIMENT_PLAN_SCHEMA_VERSION,
+    verify_research_experiment_plan,
 )
 from remem.benchmark_artifacts import validate_persisted_benchmark_artifact
 from remem.observability import OBSERVATION_SNAPSHOT_SCHEMA_VERSION, ObservationSnapshot
@@ -52,6 +57,12 @@ class BenchmarkVerificationResult:
     configuration_fingerprint: str | None = None
     experiment_identity: str | None = None
     preflight_evidence_sha256: str | None = None
+    experiment_plan_schema_version: int | None = None
+    experiment_plan_sha256: str | None = None
+    experiment_plan_byte_count: int | None = None
+    experiment_plan_file_sha256: str | None = None
+    experiment_plan_name: str | None = None
+    experiment_plan_remem_revision: str | None = None
     observability_schema_version: int | None = None
     observability_byte_count: int | None = None
     observability_sha256: str | None = None
@@ -71,6 +82,12 @@ class BenchmarkVerificationResult:
             "configuration_fingerprint": self.configuration_fingerprint,
             "experiment_identity": self.experiment_identity,
             "preflight_evidence_sha256": self.preflight_evidence_sha256,
+            "experiment_plan_schema_version": self.experiment_plan_schema_version,
+            "experiment_plan_sha256": self.experiment_plan_sha256,
+            "experiment_plan_byte_count": self.experiment_plan_byte_count,
+            "experiment_plan_file_sha256": self.experiment_plan_file_sha256,
+            "experiment_plan_name": self.experiment_plan_name,
+            "experiment_plan_remem_revision": self.experiment_plan_remem_revision,
             "observability_schema_version": self.observability_schema_version,
             "observability_byte_count": self.observability_byte_count,
             "observability_sha256": self.observability_sha256,
@@ -92,6 +109,18 @@ class _SidecarVerification:
     episode_count: float | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _ExperimentPlanVerification:
+    """Validated frozen-plan identity and exact retained-file metadata."""
+
+    schema_version: int
+    canonical_sha256: str
+    byte_count: int
+    file_sha256: str
+    experiment_name: str
+    remem_revision: str
+
+
 def parse_args() -> argparse.Namespace:
     """Parse the report and optional integrity/readiness evidence paths."""
 
@@ -107,6 +136,14 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help=(
             "Persisted readiness evidence required to verify an evidence-bound measured artifact"
+        ),
+    )
+    parser.add_argument(
+        "--experiment-plan",
+        type=Path,
+        help=(
+            "Persisted frozen research experiment plan required to verify a plan-bound "
+            "measured artifact"
         ),
     )
     parser.add_argument(
@@ -148,6 +185,7 @@ def verify_report_artifact(
     preflight_evidence_path: Path | None = None,
     distribution_sidecar_path: Path | None = None,
     observability_sidecar_path: Path | None = None,
+    experiment_plan_path: Path | None = None,
 ) -> BenchmarkVerificationResult:
     """Verify report bytes, identities, admission evidence, and optional sidecars."""
 
@@ -170,6 +208,7 @@ def verify_report_artifact(
         payload,
         preflight_evidence_path,
     )
+    experiment_plan = _verify_experiment_plan_binding(payload, experiment_plan_path)
     observability = _verify_observability_sidecar(observability_sidecar_path)
     distribution = _verify_distribution_sidecar(distribution_sidecar_path)
     _verify_sidecar_measurement_consistency(observability, distribution)
@@ -186,6 +225,24 @@ def verify_report_artifact(
         configuration_fingerprint=configuration_fingerprint,
         experiment_identity=experiment_identity,
         preflight_evidence_sha256=preflight_evidence_sha256,
+        experiment_plan_schema_version=(
+            experiment_plan.schema_version if experiment_plan is not None else None
+        ),
+        experiment_plan_sha256=(
+            experiment_plan.canonical_sha256 if experiment_plan is not None else None
+        ),
+        experiment_plan_byte_count=(
+            experiment_plan.byte_count if experiment_plan is not None else None
+        ),
+        experiment_plan_file_sha256=(
+            experiment_plan.file_sha256 if experiment_plan is not None else None
+        ),
+        experiment_plan_name=(
+            experiment_plan.experiment_name if experiment_plan is not None else None
+        ),
+        experiment_plan_remem_revision=(
+            experiment_plan.remem_revision if experiment_plan is not None else None
+        ),
         observability_schema_version=(
             observability.schema_version if observability is not None else None
         ),
@@ -443,6 +500,57 @@ def _verify_preflight_evidence_binding(
     return evidence_digest
 
 
+def _verify_experiment_plan_binding(
+    payload: Mapping[str, Any],
+    experiment_plan_path: Path | None,
+) -> _ExperimentPlanVerification | None:
+    """Verify a report's frozen-plan digest against the exact retained plan file."""
+
+    runtime_provenance = payload.get("runtime_provenance")
+    stored_digest = (
+        runtime_provenance.get(EXPERIMENT_PLAN_PROVENANCE_KEY)
+        if isinstance(runtime_provenance, Mapping)
+        else None
+    )
+
+    if stored_digest is None and experiment_plan_path is None:
+        return None
+    if stored_digest is None:
+        raise ValueError("benchmark artifact is not bound to a research experiment plan")
+    if not isinstance(stored_digest, str):
+        raise ValueError("research experiment plan provenance digest must be a string")
+    if experiment_plan_path is None:
+        raise ValueError(
+            "plan-bound benchmark artifact requires --experiment-plan for verification"
+        )
+
+    raw_bytes = experiment_plan_path.read_bytes()
+    plan = verify_research_experiment_plan(
+        experiment_plan_path,
+        expected_sha256=stored_digest,
+    )
+    if not isinstance(runtime_provenance, Mapping):
+        raise ValueError("plan-bound benchmark artifact requires runtime provenance")
+    code_revision = runtime_provenance.get("code_revision")
+    if not isinstance(code_revision, str) or not code_revision:
+        raise ValueError(
+            "plan-bound benchmark artifact runtime provenance must contain code_revision"
+        )
+    if code_revision != plan.remem_revision:
+        raise ValueError(
+            "benchmark artifact code revision does not match research experiment plan"
+        )
+
+    return _ExperimentPlanVerification(
+        schema_version=RESEARCH_EXPERIMENT_PLAN_SCHEMA_VERSION,
+        canonical_sha256=plan.sha256,
+        byte_count=len(raw_bytes),
+        file_sha256=hashlib.sha256(raw_bytes).hexdigest(),
+        experiment_name=plan.experiment_name,
+        remem_revision=plan.remem_revision,
+    )
+
+
 def _load_preflight_evidence(path: Path) -> Mapping[str, Any]:
     """Load retained readiness evidence without recollecting mutable runtime state."""
 
@@ -461,11 +569,12 @@ def main() -> int:
     arguments = parse_args()
     try:
         result = verify_report_artifact(
-            arguments.report,
-            arguments.manifest,
-            arguments.preflight_evidence,
-            arguments.distribution_sidecar,
-            arguments.observability_sidecar,
+            report_path=arguments.report,
+            manifest_path=arguments.manifest,
+            preflight_evidence_path=arguments.preflight_evidence,
+            distribution_sidecar_path=arguments.distribution_sidecar,
+            observability_sidecar_path=arguments.observability_sidecar,
+            experiment_plan_path=arguments.experiment_plan,
         )
         if arguments.attestation_output is not None:
             write_verification_attestation(arguments.attestation_output, result)
