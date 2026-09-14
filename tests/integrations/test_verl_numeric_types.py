@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import cast
 
 import pytest
 
@@ -19,6 +20,29 @@ def _trajectory() -> VerlTrajectory:
         reward=1.0,
         metadata={},
     )
+
+
+def test_verl_trajectory_detaches_mutable_token_sequences() -> None:
+    """Direct construction must not retain caller-owned mutable token containers."""
+
+    prompt_ids = [1, 2]
+    response_ids = [3, 4]
+
+    trajectory = VerlTrajectory(
+        prompt_ids=cast(tuple[int, ...], prompt_ids),
+        response_ids=cast(tuple[int, ...], response_ids),
+        response_mask=(1, 1),
+        reward=1.0,
+        metadata={},
+    )
+
+    prompt_ids.append(99)
+    response_ids[0] = 88
+
+    assert trajectory.prompt_ids == (1, 2)
+    assert trajectory.response_ids == (3, 4)
+    assert type(trajectory.prompt_ids) is tuple
+    assert type(trajectory.response_ids) is tuple
 
 
 def test_verl_trajectory_rejects_boolean_reward() -> None:
