@@ -240,8 +240,10 @@ def _run_single_seed_condition(
     """Run one paired condition and require exactly one report for its seed.
 
     Paired analysis assumes a one-to-one mapping between each requested seed and
-    each condition report. Silently accepting zero or multiple reports would
-    corrupt seed alignment, so this boundary fails closed before comparison.
+    each condition report. Silently accepting zero or multiple reports, or a
+    real benchmark report tagged with a different seed, would corrupt pair
+    alignment. This boundary therefore fails closed before the opposite
+    condition or statistical comparison can consume mismatched measurements.
     """
 
     reports = run_repeated_external_benchmarks(spec, (seed,))
@@ -250,7 +252,13 @@ def _run_single_seed_condition(
             "paired benchmark single-seed execution must return exactly one report "
             f"for {condition_role} seed {seed}; received {len(reports)}"
         )
-    return reports[0]
+    report = reports[0]
+    if isinstance(report, BenchmarkRunReport) and report.seed != seed:
+        raise RuntimeError(
+            "paired benchmark single-seed execution returned a report for the wrong seed "
+            f"for {condition_role}: requested {seed}, received {report.seed!r}"
+        )
+    return report
 
 
 def _run_counterbalanced_pairs(
