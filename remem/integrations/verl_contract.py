@@ -101,7 +101,7 @@ def _validate_response_mask(
     response_mask: object,
     response_length: int,
 ) -> tuple[int, ...]:
-    """Validate a binary response mask with one entry per response token."""
+    """Validate a non-empty binary response mask aligned to response tokens."""
 
     if isinstance(response_mask, (str, bytes)) or not isinstance(response_mask, Sequence):
         raise TypeError("response_mask must contain only integer values")
@@ -112,6 +112,8 @@ def _validate_response_mask(
         raise TypeError("response_mask must contain only integer values")
     if any(mask not in (0, 1) for mask in normalized):
         raise ValueError("response_mask values must be either 0 or 1")
+    if normalized and not any(normalized):
+        raise ValueError("response_mask must contain at least one active response token")
     return normalized
 
 
