@@ -13,6 +13,7 @@ from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from math import isfinite, sqrt
+from numbers import Real
 
 from remem.execution import EpisodeResult
 from remem.memory.policy import MemoryGuidanceDecision
@@ -40,8 +41,10 @@ class GrpoSample:
             raise ValueError("completion must be a non-empty string")
         if not isinstance(self.group_id, str) or not self.group_id.strip():
             raise ValueError("group_id must be a non-empty string")
-        if not isfinite(self.reward):
-            raise ValueError("reward must be finite")
+
+        normalized_reward = _normalize_finite_real(self.reward, field_name="reward")
+        object.__setattr__(self, "reward", normalized_reward)
+
         if not isinstance(self.memory_ids, tuple):
             raise TypeError("memory_ids must be a tuple of strings")
         if any(
@@ -75,8 +78,12 @@ class GrpoBatch:
             raise ValueError("samples and advantages must have equal lengths")
         if not self.samples:
             raise ValueError("GRPO batches must contain at least one sample")
-        if any(not isfinite(advantage) for advantage in self.advantages):
-            raise ValueError("advantages must be finite")
+
+        normalized_advantages = tuple(
+            _normalize_finite_real(advantage, field_name="advantage")
+            for advantage in self.advantages
+        )
+        object.__setattr__(self, "advantages", normalized_advantages)
 
     def to_dicts(self) -> tuple[dict[str, object], ...]:
         """Return ordered rows suitable for a framework-specific dataset writer."""
@@ -215,6 +222,18 @@ def _validate_group_sizes(samples: Sequence[GrpoSample]) -> None:
     if singleton_groups:
         groups = ", ".join(sorted(singleton_groups))
         raise ValueError(f"each GRPO group needs at least two samples; singleton groups: {groups}")
+
+
+def _normalize_finite_real(value: object, *, field_name: str) -> float:
+    """Normalize one real-valued training scalar while rejecting bools and non-finite values."""
+
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise TypeError(f"{field_name} must be a real number")
+
+    normalized_value = float(value)
+    if not isfinite(normalized_value):
+        raise ValueError(f"{field_name} must be finite")
+    return normalized_value
 
 
 def _default_prompt_builder(episode: EpisodeResult) -> str:
