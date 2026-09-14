@@ -8,6 +8,7 @@ lightweight while giving an external adapter an explicit, testable boundary.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from math import isfinite
 import numbers
@@ -60,7 +61,9 @@ class VerlTrajectory:
                 raise ValueError("response_logprobs must have the same length as response_ids")
             object.__setattr__(self, "response_logprobs", normalized_logprobs)
 
-        object.__setattr__(self, "metadata", dict(self.metadata))
+        if not isinstance(self.metadata, Mapping):
+            raise TypeError("metadata must be a mapping")
+        object.__setattr__(self, "metadata", deepcopy(dict(self.metadata)))
 
     def to_agent_loop_output(self) -> dict[str, list[int] | list[float]]:
         """Return fields required by verl plus optional rollout log probabilities."""
@@ -75,12 +78,12 @@ class VerlTrajectory:
         return output
 
     def to_dict(self) -> dict[str, object]:
-        """Return a JSON-compatible offline-training representation."""
+        """Return a detached JSON-compatible offline-training representation."""
 
         return {
             **self.to_agent_loop_output(),
             "reward": self.reward,
-            "metadata": dict(self.metadata),
+            "metadata": deepcopy(dict(self.metadata)),
         }
 
 
