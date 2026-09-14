@@ -16,7 +16,7 @@ def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
     )
 
 
-def test_paired_execution_order_uses_normalized_comparison_labels(monkeypatch) -> None:
+def test_paired_execution_roles_stay_stable_while_labels_are_normalized(monkeypatch) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")
 
@@ -59,12 +59,12 @@ def test_paired_execution_order_uses_normalized_comparison_labels(monkeypatch) -
     assert result.execution_order == (
         PairedSeedExecution(
             seed=11,
-            first_condition="no-memory",
-            second_condition="memory",
+            first_condition="baseline",
+            second_condition="treatment",
         ),
         PairedSeedExecution(
             seed=17,
-            first_condition="memory",
-            second_condition="no-memory",
+            first_condition="treatment",
+            second_condition="baseline",
         ),
     )
