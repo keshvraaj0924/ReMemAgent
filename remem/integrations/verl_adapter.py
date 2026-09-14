@@ -184,12 +184,16 @@ async def run_agent_loop(
 
     The bridge mirrors verl's real ``AgentLoopBase.run`` boundary: sampling
     parameters are passed explicitly and dataset-specific fields are forwarded
-    through ``kwargs``. ReMemAgent does not construct prompts, tokenize inputs,
-    or assume a particular inference server. It only validates and records the
-    token-level output after the external coroutine completes.
+    through ``kwargs``. Both mappings are deeply detached before external
+    execution so runner-side mutation cannot rewrite caller-owned request
+    state. ReMemAgent does not construct prompts, tokenize inputs, or assume a
+    particular inference server. It only validates and records the token-level
+    output after the external coroutine completes.
     """
 
-    output = await agent_loop(sampling_params, **kwargs)
+    detached_sampling_params = deepcopy(dict(sampling_params))
+    detached_kwargs = deepcopy(kwargs)
+    output = await agent_loop(detached_sampling_params, **detached_kwargs)
     return adapt_agent_loop_output(output, reward=reward, metadata=metadata)
 
 
