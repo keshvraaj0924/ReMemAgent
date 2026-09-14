@@ -5,6 +5,7 @@ from experiments.paired_benchmark import (
     preflight_paired_external_benchmarks,
     run_paired_external_benchmarks,
 )
+from remem.benchmark import BenchmarkRunReport
 
 BASELINE_POLICY = "tests.test_external_benchmark:make_policy"
 TREATMENT_POLICY = "tests.test_external_benchmark:make_memory_policy"
@@ -22,6 +23,15 @@ def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
     )
 
 
+def _report(spec: ExternalBenchmarkSpec, seed: int) -> BenchmarkRunReport:
+    return BenchmarkRunReport(
+        benchmark_name=spec.benchmark_name,
+        episodes=(),
+        final_memory_count=0,
+        seed=seed,
+    )
+
+
 def test_paired_execution_is_invariant_to_input_seed_order(monkeypatch) -> None:
     baseline = _spec(BASELINE_POLICY)
     treatment = _spec(TREATMENT_POLICY)
@@ -32,14 +42,17 @@ def test_paired_execution_is_invariant_to_input_seed_order(monkeypatch) -> None:
         lambda spec: None,
     )
 
-    def fake_run(spec: ExternalBenchmarkSpec, seeds: tuple[int, ...]):
+    def fake_run(
+        spec: ExternalBenchmarkSpec,
+        seeds: tuple[int, ...],
+    ) -> tuple[BenchmarkRunReport, ...]:
         seed = seeds[0]
         calls.append((spec.policy_factory or "", seed))
-        return ((spec.policy_factory, seed),)
+        return (_report(spec, seed),)
 
     def fake_compare(baseline_reports, treatment_reports, *, baseline_label, treatment_label):
-        assert baseline_reports == ((BASELINE_POLICY, 11), (BASELINE_POLICY, 17))
-        assert treatment_reports == ((TREATMENT_POLICY, 11), (TREATMENT_POLICY, 17))
+        assert tuple(report.seed for report in baseline_reports) == (11, 17)
+        assert tuple(report.seed for report in treatment_reports) == (11, 17)
         return (baseline_label, treatment_label)
 
     monkeypatch.setattr(
@@ -65,8 +78,8 @@ def test_paired_execution_is_invariant_to_input_seed_order(monkeypatch) -> None:
         (TREATMENT_POLICY, 17),
         (BASELINE_POLICY, 17),
     ]
-    assert result.baseline_reports == ((BASELINE_POLICY, 11), (BASELINE_POLICY, 17))
-    assert result.treatment_reports == ((TREATMENT_POLICY, 11), (TREATMENT_POLICY, 17))
+    assert tuple(report.seed for report in result.baseline_reports) == (11, 17)
+    assert tuple(report.seed for report in result.treatment_reports) == (11, 17)
 
 
 def test_paired_preflight_is_invariant_to_input_seed_order(monkeypatch) -> None:

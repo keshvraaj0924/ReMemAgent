@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from experiments.external_benchmark import ExternalBenchmarkSpec
 from experiments.paired_benchmark import PairedSeedExecution, run_paired_external_benchmarks
+from remem.benchmark import BenchmarkRunReport
 
 
 def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
@@ -16,6 +17,15 @@ def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
     )
 
 
+def _report(spec: ExternalBenchmarkSpec, seed: int) -> BenchmarkRunReport:
+    return BenchmarkRunReport(
+        benchmark_name=spec.benchmark_name,
+        episodes=(),
+        final_memory_count=0,
+        seed=seed,
+    )
+
+
 def test_paired_execution_roles_stay_stable_while_labels_are_normalized(monkeypatch) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")
@@ -26,7 +36,7 @@ def test_paired_execution_roles_stay_stable_while_labels_are_normalized(monkeypa
     )
     monkeypatch.setattr(
         "experiments.paired_benchmark.run_repeated_external_benchmarks",
-        lambda spec, seeds: ((spec.policy_factory, seeds[0]),),
+        lambda spec, seeds: (_report(spec, seeds[0]),),
     )
 
     captured_labels: list[tuple[str, str]] = []
@@ -38,7 +48,8 @@ def test_paired_execution_roles_stay_stable_while_labels_are_normalized(monkeypa
         baseline_label: str,
         treatment_label: str,
     ):
-        del baseline_reports, treatment_reports
+        assert tuple(report.seed for report in baseline_reports) == (11, 17)
+        assert tuple(report.seed for report in treatment_reports) == (11, 17)
         captured_labels.append((baseline_label, treatment_label))
         return (baseline_label, treatment_label)
 

@@ -11,6 +11,7 @@ from experiments.paired_benchmark import (
     run_paired_external_benchmarks,
     run_paired_external_benchmarks_with_preflight,
 )
+from remem.benchmark import BenchmarkRunReport
 
 
 def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
@@ -25,6 +26,15 @@ def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
     )
 
 
+def _report(spec: ExternalBenchmarkSpec, seed: int) -> BenchmarkRunReport:
+    return BenchmarkRunReport(
+        benchmark_name=spec.benchmark_name,
+        episodes=(),
+        final_memory_count=0,
+        seed=seed,
+    )
+
+
 def test_run_paired_external_benchmarks_counterbalances_same_seed_execution(monkeypatch) -> None:
     baseline = _spec("tests.test_external_benchmark:make_policy")
     treatment = _spec("tests.test_external_benchmark:make_memory_policy")
@@ -33,19 +43,18 @@ def test_run_paired_external_benchmarks_counterbalances_same_seed_execution(monk
     def fake_validate(spec: ExternalBenchmarkSpec) -> None:
         calls.append((f"validate:{spec.policy_factory}", ()))
 
-    def fake_run(spec: ExternalBenchmarkSpec, seeds: tuple[int, ...]):
+    def fake_run(
+        spec: ExternalBenchmarkSpec,
+        seeds: tuple[int, ...],
+    ) -> tuple[BenchmarkRunReport, ...]:
         calls.append((spec.policy_factory or "", seeds))
-        return ((spec.policy_factory, seeds[0]),)
+        return (_report(spec, seeds[0]),)
 
     def fake_compare(baseline_reports, treatment_reports, *, baseline_label, treatment_label):
-        assert baseline_reports == (
-            ("tests.test_external_benchmark:make_policy", 11),
-            ("tests.test_external_benchmark:make_policy", 17),
-        )
-        assert treatment_reports == (
-            ("tests.test_external_benchmark:make_memory_policy", 11),
-            ("tests.test_external_benchmark:make_memory_policy", 17),
-        )
+        assert tuple(report.seed for report in baseline_reports) == (11, 17)
+        assert tuple(report.seed for report in treatment_reports) == (11, 17)
+        assert {report.benchmark_name for report in baseline_reports} == {"alfworld"}
+        assert {report.benchmark_name for report in treatment_reports} == {"alfworld"}
         return (baseline_label, treatment_label)
 
     monkeypatch.setattr("experiments.paired_benchmark.validate_external_benchmark", fake_validate)
