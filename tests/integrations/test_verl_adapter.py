@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from fractions import Fraction
 
 import pytest
 
@@ -34,6 +35,18 @@ def test_adapt_agent_loop_output_preserves_tokens_and_metadata() -> None:
     assert trajectory.response_mask == (1, 0)
     assert trajectory.reward == 0.75
     assert trajectory.metadata == metadata
+
+
+def test_adapt_agent_loop_output_normalizes_real_reward() -> None:
+    """Compatible real-valued rewards should canonicalize to plain floats."""
+
+    trajectory = adapt_agent_loop_output(
+        {"prompt_ids": (), "response_ids": (1,), "response_mask": (1,)},
+        reward=Fraction(3, 2),
+    )
+
+    assert trajectory.reward == 1.5
+    assert type(trajectory.reward) is float
 
 
 def test_adapt_agent_loop_output_preserves_external_extra_fields() -> None:
@@ -274,6 +287,15 @@ def test_agent_loop_request_freezes_caller_owned_mappings() -> None:
     assert dict(request.sampling_params) == {"temperature": 0.2}
     assert dict(request.metadata) == {"episode_id": "episode-1"}
     assert dict(request.kwargs) == {"raw_prompt": "hello"}
+
+
+def test_agent_loop_request_normalizes_real_reward() -> None:
+    """Queued requests should store compatible real rewards as stable floats."""
+
+    request = AgentLoopRequest(sampling_params={}, reward=Fraction(1, 3))
+
+    assert request.reward == pytest.approx(1 / 3)
+    assert type(request.reward) is float
 
 
 def test_agent_loop_request_rejects_non_finite_reward() -> None:
