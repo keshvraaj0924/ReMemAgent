@@ -39,7 +39,31 @@ def test_webshop_adapter_normalizes_valid_five_value_step() -> None:
 def test_webshop_adapter_rejects_non_text_reset_observation() -> None:
     adapter = WebShopAdapter(FakeWebShop(("next", 0.0, False, False, {}), reset_result=(None, {})))
 
-    with pytest.raises(TypeError, match="environment observation must be a string"):
+    with pytest.raises(TypeError, match="WebShop observation must be a string"):
+        adapter.reset()
+
+
+def test_webshop_adapter_rejects_non_mapping_reset_info() -> None:
+    adapter = WebShopAdapter(
+        FakeWebShop(
+            ("next", 0.0, False, False, {}),
+            reset_result=("initial observation", None),
+        )
+    )
+
+    with pytest.raises(TypeError, match="WebShop info must be a mapping"):
+        adapter.reset()
+
+
+def test_webshop_adapter_rejects_non_string_reset_info_keys() -> None:
+    adapter = WebShopAdapter(
+        FakeWebShop(
+            ("next", 0.0, False, False, {}),
+            reset_result=("initial observation", {1: "bad"}),
+        )
+    )
+
+    with pytest.raises(TypeError, match="WebShop info keys must be strings"):
         adapter.reset()
 
 
