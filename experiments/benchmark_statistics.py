@@ -306,11 +306,16 @@ def _validate_paired_configuration(
 
 
 def _paired_configuration_fingerprint(report: BenchmarkRunReport) -> str:
-    """Return a fingerprint excluding independent seed and policy identity."""
+    """Return a fingerprint excluding independent seed and either policy identity."""
 
     if report.configuration is None:
         raise ValueError("paired benchmark reports must include explicit configuration")
-    configuration = replace(report.configuration, seed=None, policy_factory=None)
+    configuration = replace(
+        report.configuration,
+        seed=None,
+        policy_factory=None,
+        action_policy_factory=None,
+    )
     return benchmark_configuration_fingerprint(configuration)
 
 
