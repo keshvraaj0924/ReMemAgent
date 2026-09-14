@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
 from math import isfinite
 from numbers import Real
@@ -53,10 +54,11 @@ class AsyncVerlAgentLoop(Protocol):
 class AgentLoopRequest:
     """One ordered request for an external async agent loop.
 
-    Caller-owned mappings are copied into immutable mapping proxies at
-    construction time. This prevents a request queued for concurrent execution
-    from changing underneath the batch because another component mutates the
-    original sampling parameters or keyword arguments.
+    Caller-owned mappings are deeply detached and then wrapped in immutable
+    mapping proxies at construction time. This prevents a request queued for
+    concurrent execution from changing underneath the batch because another
+    component mutates the original sampling parameters, metadata, keyword
+    arguments, or any nested containers they own.
     """
 
     sampling_params: Mapping[str, Any]
@@ -65,7 +67,7 @@ class AgentLoopRequest:
     kwargs: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate scalar values and freeze caller-owned request mappings."""
+        """Validate scalar values and detach caller-owned request mappings."""
 
         if not isinstance(self.sampling_params, Mapping):
             raise TypeError("sampling_params must be a mapping")
@@ -76,9 +78,21 @@ class AgentLoopRequest:
             raise TypeError("kwargs must be a mapping")
 
         object.__setattr__(self, "reward", normalized_reward)
-        object.__setattr__(self, "sampling_params", MappingProxyType(dict(self.sampling_params)))
-        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
-        object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
+        object.__setattr__(
+            self,
+            "sampling_params",
+            MappingProxyType(deepcopy(dict(self.sampling_params))),
+        )
+        object.__setattr__(
+            self,
+            "metadata",
+            MappingProxyType(deepcopy(dict(self.metadata))),
+        )
+        object.__setattr__(
+            self,
+            "kwargs",
+            MappingProxyType(deepcopy(dict(self.kwargs))),
+        )
 
 
 def _normalize_finite_reward(reward: object) -> float:
@@ -110,14 +124,14 @@ def _merge_external_extra_fields(
     metadata: Mapping[str, object] | None,
     extra_fields: Mapping[str, object],
 ) -> dict[str, object]:
-    """Merge verl dynamic fields without silently overwriting research metadata."""
+    """Merge detached verl dynamic fields without overwriting research metadata."""
 
-    normalized_metadata = dict(metadata or {})
+    normalized_metadata = deepcopy(dict(metadata or {}))
     if not extra_fields:
         return normalized_metadata
     if "verl_extra_fields" in normalized_metadata:
         raise ValueError("metadata already contains reserved key 'verl_extra_fields'")
-    normalized_metadata["verl_extra_fields"] = dict(extra_fields)
+    normalized_metadata["verl_extra_fields"] = deepcopy(dict(extra_fields))
     return normalized_metadata
 
 
@@ -227,9 +241,9 @@ def dispatch_verl_training_batch(
 
     ReMemAgent owns trajectory/advantage alignment; the injected consumer owns
     framework-specific collation, tensors, device placement, optimization, and
-    distributed execution. The adapter passes fresh serialized rows, so a
-    consumer may mutate its received dictionaries without mutating the source
-    ``VerlTrainingBatch``.
+    distributed execution. The adapter passes detached serialized rows, so a
+    consumer may mutate its received dictionaries or nested metadata without
+    mutating the source ``VerlTrainingBatch``.
     """
 
     if consumer is None:
