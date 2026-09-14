@@ -59,12 +59,16 @@ def run_paired_external_benchmarks(
     first for even canonical seed positions and treatment runs first for odd
     positions. This prevents one condition from always being measured later
     while preserving identical seed ownership for both conditions. The returned
-    result records the exact condition order used for every seed so temporal
-    execution provenance is not left implicit in runner implementation details.
+    result records the exact normalized condition labels and order used for every
+    seed so temporal execution provenance is not left implicit in runner
+    implementation details or disconnected from comparison labels.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
-    _validate_condition_labels(baseline_label, treatment_label)
+    normalized_baseline_label, normalized_treatment_label = _normalize_condition_labels(
+        baseline_label,
+        treatment_label,
+    )
     selected_seeds = _canonicalize_paired_seeds(seeds)
     _validate_paired_repeated_requests(baseline_spec, treatment_spec, selected_seeds)
     validate_external_benchmark(baseline_spec)
@@ -73,12 +77,14 @@ def run_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
         selected_seeds,
+        baseline_label=normalized_baseline_label,
+        treatment_label=normalized_treatment_label,
     )
     comparison = compare_benchmark_reports(
         baseline_reports,
         treatment_reports,
-        baseline_label=baseline_label,
-        treatment_label=treatment_label,
+        baseline_label=normalized_baseline_label,
+        treatment_label=normalized_treatment_label,
     )
     return PairedBenchmarkResult(
         baseline_reports=baseline_reports,
@@ -106,7 +112,7 @@ def run_paired_external_benchmarks_with_preflight(
     collecting a potentially different snapshot after the experiment finishes.
     """
 
-    _validate_condition_labels(baseline_label, treatment_label)
+    _normalize_condition_labels(baseline_label, treatment_label)
     validated_runtime_provenance = preflight_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
@@ -181,19 +187,25 @@ def _canonicalize_paired_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
     return tuple(sorted(validate_seed_sequence(seeds)))
 
 
-def _execution_order_for_seed(seed_index: int, seed: int) -> PairedSeedExecution:
-    """Return the deterministic condition order for one canonical seed position."""
+def _execution_order_for_seed(
+    seed_index: int,
+    seed: int,
+    *,
+    baseline_label: str = "baseline",
+    treatment_label: str = "treatment",
+) -> PairedSeedExecution:
+    """Return deterministic condition order for one canonical seed position."""
 
     if seed_index % 2 == 0:
         return PairedSeedExecution(
             seed=seed,
-            first_condition="baseline",
-            second_condition="treatment",
+            first_condition=baseline_label,
+            second_condition=treatment_label,
         )
     return PairedSeedExecution(
         seed=seed,
-        first_condition="treatment",
-        second_condition="baseline",
+        first_condition=treatment_label,
+        second_condition=baseline_label,
     )
 
 
@@ -228,6 +240,9 @@ def _run_counterbalanced_pairs(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
     seeds: tuple[int, ...],
+    *,
+    baseline_label: str,
+    treatment_label: str,
 ) -> tuple[
     tuple[BenchmarkRunReport, ...],
     tuple[BenchmarkRunReport, ...],
@@ -240,7 +255,7 @@ def _run_counterbalanced_pairs(
     systematic warm-up, throttling, or temporal-drift bias. Because callers are
     canonicalized before this function is invoked, equivalent seed sets always
     produce the same condition-first assignment. The exact assignment is
-    returned as structured provenance alongside the reports.
+    returned using the same normalized labels as the paired comparison.
     """
 
     baseline_reports: list[BenchmarkRunReport] = []
@@ -248,9 +263,14 @@ def _run_counterbalanced_pairs(
     execution_order: list[PairedSeedExecution] = []
 
     for seed_index, seed in enumerate(seeds):
-        seed_execution = _execution_order_for_seed(seed_index, seed)
+        seed_execution = _execution_order_for_seed(
+            seed_index,
+            seed,
+            baseline_label=baseline_label,
+            treatment_label=treatment_label,
+        )
         execution_order.append(seed_execution)
-        if seed_execution.first_condition == "baseline":
+        if seed_execution.first_condition == baseline_label:
             baseline_report = run_repeated_external_benchmarks(baseline_spec, (seed,))[0]
             treatment_report = run_repeated_external_benchmarks(treatment_spec, (seed,))[0]
         else:
@@ -303,20 +323,25 @@ def _validate_paired_specs(
         raise ValueError("paired benchmark specifications must use distinct policy configurations")
 
 
-def _validate_condition_labels(baseline_label: str, treatment_label: str) -> None:
-    """Reject unusable or ambiguous condition labels before expensive execution."""
+def _normalize_condition_labels(baseline_label: str, treatment_label: str) -> tuple[str, str]:
+    """Return stable non-empty labels that identify the two paired conditions."""
 
+    normalized_labels: list[str] = []
     for field_name, value in (
         ("baseline_label", baseline_label),
         ("treatment_label", treatment_label),
     ):
         if not isinstance(value, str):
             raise TypeError(f"{field_name} must be a string")
-        if not value.strip():
+        normalized_value = value.strip()
+        if not normalized_value:
             raise ValueError(f"{field_name} must be a non-empty string")
+        normalized_labels.append(normalized_value)
 
-    if baseline_label.strip().casefold() == treatment_label.strip().casefold():
+    normalized_baseline_label, normalized_treatment_label = normalized_labels
+    if normalized_baseline_label.casefold() == normalized_treatment_label.casefold():
         raise ValueError("baseline_label and treatment_label must identify distinct conditions")
+    return normalized_baseline_label, normalized_treatment_label
 
 
 def _policy_identity(spec: ExternalBenchmarkSpec) -> tuple[str, str]:
