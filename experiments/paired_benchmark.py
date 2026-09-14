@@ -237,14 +237,14 @@ def _run_single_seed_condition(
     *,
     condition_role: str,
 ) -> BenchmarkRunReport:
-    """Run one paired condition and require exactly one correctly identified report.
+    """Run one paired condition and require one correctly identified benchmark report.
 
     Paired analysis assumes a one-to-one mapping between each requested seed and
-    each condition report. Silently accepting zero or multiple reports, or a
-    real benchmark report tagged with a different seed or benchmark identity,
-    would corrupt pair alignment. This boundary therefore fails closed before
-    the opposite condition or statistical comparison can consume mismatched
-    measurements.
+    each condition report. Silently accepting zero or multiple reports, a value
+    outside the ``BenchmarkRunReport`` contract, or a report tagged with a
+    different seed or benchmark identity would corrupt pair alignment. This
+    boundary therefore fails closed before the opposite condition or statistical
+    comparison can consume invalid measurements.
     """
 
     reports = run_repeated_external_benchmarks(spec, (seed,))
@@ -254,19 +254,23 @@ def _run_single_seed_condition(
             f"for {condition_role} seed {seed}; received {len(reports)}"
         )
     report = reports[0]
-    if isinstance(report, BenchmarkRunReport):
-        if report.seed != seed:
-            raise RuntimeError(
-                "paired benchmark single-seed execution returned a report for the wrong seed "
-                f"for {condition_role}: requested {seed}, received {report.seed!r}"
-            )
-        expected_benchmark_name = spec.benchmark_name.strip()
-        if report.benchmark_name != expected_benchmark_name:
-            raise RuntimeError(
-                "paired benchmark single-seed execution returned a report for the wrong "
-                f"benchmark for {condition_role}: expected {expected_benchmark_name!r}, "
-                f"received {report.benchmark_name!r}"
-            )
+    if not isinstance(report, BenchmarkRunReport):
+        raise TypeError(
+            "paired benchmark single-seed execution must return a BenchmarkRunReport "
+            f"for {condition_role} seed {seed}; received {type(report).__name__}"
+        )
+    if report.seed != seed:
+        raise RuntimeError(
+            "paired benchmark single-seed execution returned a report for the wrong seed "
+            f"for {condition_role}: requested {seed}, received {report.seed!r}"
+        )
+    expected_benchmark_name = spec.benchmark_name.strip()
+    if report.benchmark_name != expected_benchmark_name:
+        raise RuntimeError(
+            "paired benchmark single-seed execution returned a report for the wrong "
+            f"benchmark for {condition_role}: expected {expected_benchmark_name!r}, "
+            f"received {report.benchmark_name!r}"
+        )
     return report
 
 
