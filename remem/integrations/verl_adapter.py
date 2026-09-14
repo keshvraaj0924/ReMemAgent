@@ -106,6 +106,16 @@ def _normalize_finite_reward(reward: object) -> float:
     return normalized_reward
 
 
+def _detach_metadata(metadata: Mapping[str, object] | None) -> dict[str, object]:
+    """Validate and snapshot optional research metadata at a dispatch boundary."""
+
+    if metadata is None:
+        return {}
+    if not isinstance(metadata, Mapping):
+        raise TypeError("metadata must be a mapping")
+    return deepcopy(dict(metadata))
+
+
 def _normalize_agent_loop_output(
     output: Mapping[str, object] | AgentLoopOutputLike,
 ) -> Mapping[str, object]:
@@ -126,7 +136,7 @@ def _merge_external_extra_fields(
 ) -> dict[str, object]:
     """Merge detached verl dynamic fields without overwriting research metadata."""
 
-    normalized_metadata = deepcopy(dict(metadata or {}))
+    normalized_metadata = _detach_metadata(metadata)
     if not extra_fields:
         return normalized_metadata
     if "verl_extra_fields" in normalized_metadata:
@@ -184,17 +194,24 @@ async def run_agent_loop(
 
     The bridge mirrors verl's real ``AgentLoopBase.run`` boundary: sampling
     parameters are passed explicitly and dataset-specific fields are forwarded
-    through ``kwargs``. Both mappings are deeply detached before external
-    execution so runner-side mutation cannot rewrite caller-owned request
-    state. ReMemAgent does not construct prompts, tokenize inputs, or assume a
-    particular inference server. It only validates and records the token-level
-    output after the external coroutine completes.
+    through ``kwargs``. Sampling parameters, dataset fields, and research
+    metadata are deeply detached before external execution so concurrent or
+    runner-side mutation cannot rewrite caller-owned request state or the
+    provenance attached to the completed trajectory. ReMemAgent does not
+    construct prompts, tokenize inputs, or assume a particular inference
+    server. It only validates and records the token-level output after the
+    external coroutine completes.
     """
 
     detached_sampling_params = deepcopy(dict(sampling_params))
+    detached_metadata = _detach_metadata(metadata)
     detached_kwargs = deepcopy(kwargs)
     output = await agent_loop(detached_sampling_params, **detached_kwargs)
-    return adapt_agent_loop_output(output, reward=reward, metadata=metadata)
+    return adapt_agent_loop_output(
+        output,
+        reward=reward,
+        metadata=detached_metadata,
+    )
 
 
 async def run_agent_loop_batch(
