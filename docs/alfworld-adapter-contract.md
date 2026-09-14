@@ -6,6 +6,7 @@ The ALFWorld adapter is intentionally strict at the boundary between the upstrea
 
 - A singleton batch dimension is removed from observations, rewards, and terminal flags.
 - Singleton unwrapping accepts ordinary Python sequences and array-like objects that expose `len()` plus integer indexing; the core package does not require NumPy.
+- A tuple returned by `reset()` is treated as a Gymnasium-style `(observation, info)` payload and must contain exactly two items. One-item or overlong tuples fail closed as reset-contract violations.
 - Gymnasium-style `reset()` metadata is validated even though the normalized runner currently returns only the textual reset observation. Reset metadata must be a string-keyed mapping; malformed reset metadata fails closed instead of being silently discarded.
 - Mapping values in step `info` are unwrapped per field while the mapping itself remains metadata.
 - Step metadata must be a string-keyed mapping. Non-mapping `info` values and non-string metadata keys are rejected instead of being silently replaced or coerced.
@@ -15,7 +16,7 @@ The ALFWorld adapter is intentionally strict at the boundary between the upstrea
 - Five-value step results are accepted as `(observation, reward, terminated, truncated, info)`.
 - Invalid reset or step payloads fail before malformed benchmark data can reach episode metrics or training artifacts.
 
-The same fail-closed reset and step metadata rules are applied by the WebShop adapter. This avoids recording a trajectory that appears valid after malformed upstream metadata was discarded or normalized into an incompatible shape.
+The same fail-closed reset tuple, reset metadata, and step metadata rules are applied by the WebShop adapter. This avoids recording a trajectory that appears valid after malformed upstream payloads were discarded or interpreted ambiguously.
 
 This fail-closed behavior is an integration invariant, not a benchmark result. It prevents ambiguous upstream values from changing episode termination, reward, or metadata semantics silently.
 
@@ -27,6 +28,6 @@ The equivalent WebShop factory applies the same callable `reset()` / `step()` ad
 
 ## Verification
 
-The adapter regression suite covers valid five-value normalization, legacy four-value normalization, array-like singleton batches, malformed reset observations, malformed reset metadata mappings and keys, malformed step observations, malformed terminal flags, malformed step metadata mappings and keys, boolean rewards, and non-finite rewards. Official-factory tests additionally cover missing `reset()` / `step()` methods and cleanup on rejected environment admission.
+The adapter regression suite covers valid five-value normalization, legacy four-value normalization, array-like singleton batches, malformed reset observations, invalid reset tuple arity, malformed reset metadata mappings and keys, malformed step observations, malformed terminal flags, malformed step metadata mappings and keys, boolean rewards, and non-finite rewards. Official-factory tests additionally cover missing `reset()` / `step()` methods and cleanup on rejected environment admission.
 
 Real ALFWorld execution still requires the optional upstream installation and a caller-owned environment/model configuration; this repository does not claim that external execution has been run merely because the adapter contract is tested.

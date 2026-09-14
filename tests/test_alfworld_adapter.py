@@ -48,6 +48,22 @@ def test_alfworld_adapter_rejects_non_text_reset_observation() -> None:
         adapter.reset()
 
 
+@pytest.mark.parametrize(
+    "reset_result",
+    [(["initial observation"],), (["initial observation"], {}, "extra")],
+)
+def test_alfworld_adapter_rejects_invalid_reset_tuple_arity(reset_result: tuple) -> None:
+    adapter = AlfWorldAdapter(
+        FakeAlfWorld(
+            (["next"], [0.0], [False], [False], {}),
+            reset_result=reset_result,
+        )
+    )
+
+    with pytest.raises(ValueError, match="reset\(\) tuple must contain observation and info"):
+        adapter.reset()
+
+
 def test_alfworld_adapter_rejects_non_mapping_reset_info() -> None:
     adapter = AlfWorldAdapter(
         FakeAlfWorld(

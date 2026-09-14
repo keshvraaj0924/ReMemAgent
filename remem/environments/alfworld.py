@@ -38,7 +38,9 @@ class AlfWorldAdapter:
         """
 
         result = self._environment.reset(**kwargs)
-        if isinstance(result, tuple) and len(result) == 2:
+        if isinstance(result, tuple):
+            if len(result) != 2:
+                raise ValueError("ALFWorld reset() tuple must contain observation and info")
             observation, info = result
             _normalize_info(info)
         else:
