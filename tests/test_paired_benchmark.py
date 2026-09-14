@@ -11,7 +11,7 @@ from experiments.paired_benchmark import (
     run_paired_external_benchmarks,
     run_paired_external_benchmarks_with_preflight,
 )
-from remem.benchmark import BenchmarkRunReport
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 
 
 def _spec(policy_factory: str) -> ExternalBenchmarkSpec:
@@ -32,6 +32,18 @@ def _report(spec: ExternalBenchmarkSpec, seed: int) -> BenchmarkRunReport:
         episodes=(),
         final_memory_count=0,
         seed=seed,
+        configuration=BenchmarkRunConfiguration(
+            benchmark_name=spec.benchmark_name,
+            episode_count=spec.episode_count,
+            max_steps=spec.max_steps,
+            seed=seed,
+            environment_factory=spec.environment_factory,
+            policy_factory=spec.policy_factory,
+            action_policy_factory=spec.action_policy_factory,
+            success_evaluator=spec.success_evaluator,
+            transfer_success_evaluator=spec.transfer_success_evaluator,
+            minimum_trust=spec.minimum_trust,
+        ),
     )
 
 
