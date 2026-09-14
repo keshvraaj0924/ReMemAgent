@@ -19,7 +19,7 @@ from experiments.external_benchmark import (
 from experiments.external_preflight import validate_repeated_external_benchmark_runtime
 from experiments.runtime_provenance import RuntimeProvenance, collect_runtime_provenance
 from experiments.runtime_requirements import RuntimeRequirements, validate_runtime_requirements
-from remem.benchmark import BenchmarkRunReport
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,20 +231,41 @@ def _run_counterbalanced_preflight_pairs(
         )
 
 
+def _expected_report_configuration(
+    spec: ExternalBenchmarkSpec,
+    seed: int,
+) -> BenchmarkRunConfiguration:
+    """Build the exact immutable provenance expected from one paired execution."""
+
+    return BenchmarkRunConfiguration(
+        benchmark_name=spec.benchmark_name.strip(),
+        episode_count=spec.episode_count,
+        max_steps=spec.max_steps,
+        seed=seed,
+        environment_factory=spec.environment_factory,
+        policy_factory=spec.policy_factory,
+        action_policy_factory=spec.action_policy_factory,
+        success_evaluator=spec.success_evaluator,
+        transfer_success_evaluator=spec.transfer_success_evaluator,
+        minimum_trust=spec.minimum_trust,
+    )
+
+
 def _run_single_seed_condition(
     spec: ExternalBenchmarkSpec,
     seed: int,
     *,
     condition_role: str,
 ) -> BenchmarkRunReport:
-    """Run one paired condition and require one correctly identified benchmark report.
+    """Run one paired condition and require complete, matching report provenance.
 
     Paired analysis assumes a one-to-one mapping between each requested seed and
     each condition report. Silently accepting zero or multiple reports, a value
-    outside the ``BenchmarkRunReport`` contract, or a report tagged with a
-    different seed or benchmark identity would corrupt pair alignment. This
-    boundary therefore fails closed before the opposite condition or statistical
-    comparison can consume invalid measurements.
+    outside the ``BenchmarkRunReport`` contract, or a report whose seed,
+    benchmark identity, or immutable run configuration differs from the
+    requested condition would corrupt pair alignment. This boundary therefore
+    fails closed before the opposite condition or statistical comparison can
+    consume invalid measurements.
     """
 
     reports = run_repeated_external_benchmarks(spec, (seed,))
@@ -270,6 +291,17 @@ def _run_single_seed_condition(
             "paired benchmark single-seed execution returned a report for the wrong "
             f"benchmark for {condition_role}: expected {expected_benchmark_name!r}, "
             f"received {report.benchmark_name!r}"
+        )
+    expected_configuration = _expected_report_configuration(spec, seed)
+    if report.configuration is None:
+        raise RuntimeError(
+            "paired benchmark single-seed execution returned a report without run "
+            f"configuration provenance for {condition_role} seed {seed}"
+        )
+    if report.configuration != expected_configuration:
+        raise RuntimeError(
+            "paired benchmark single-seed execution returned mismatched run configuration "
+            f"provenance for {condition_role} seed {seed}"
         )
     return report
 
