@@ -6,16 +6,18 @@ ReMemAgent keeps the core `remem.integrations.verl` module dependency-free. When
 
 `build_verl_agent_loop_class` lazily imports `AgentLoopBase` and `AgentLoopOutput`, then returns a small subclass whose `run()` delegates model/environment execution to an injected async runner.
 
-The injected runner receives:
+The injected runner receives detached copies of:
 
 - the `sampling_params` mapping passed by verl;
 - the dataset-specific `**kwargs` passed to `AgentLoopBase.run`.
 
-It returns the dependency-free token contract validated by `validate_agent_loop_output`. The adapter then constructs the installed verl `AgentLoopOutput`. ReMemAgent does not own model inference, tokenizer loading, environment lifecycle, batching, reward computation, optimization, or distributed execution.
+Both mappings are deep-copied before runner dispatch. This prevents runner-side mutation of nested sampling parameters, prompts, or dataset metadata from rewriting framework-owned request state while preserving the values presented to the runner.
+
+The runner returns the dependency-free token contract validated by `validate_agent_loop_output`. The adapter then constructs the installed verl `AgentLoopOutput`. ReMemAgent does not own model inference, tokenizer loading, environment lifecycle, batching, reward computation, optimization, or distributed execution.
 
 The optional `output_factory` argument allows a compatible downstream verl fork to supply its concrete output model while keeping the base-class import and execution contract unchanged.
 
-This design follows verl's documented Agent Loop boundary: `AgentLoopBase.run` is the user-defined multi-turn execution point and returns one `AgentLoopOutput` containing prompt tokens, response tokens, and a response mask. The API remains experimental, so the adapter deliberately isolates the import and keeps the runner injectable. citeturn0search0
+This design follows verl's documented Agent Loop boundary: `AgentLoopBase.run` is the user-defined multi-turn execution point and returns one `AgentLoopOutput` containing prompt tokens, response tokens, and a response mask. The API remains experimental, so the adapter deliberately isolates the import and keeps the runner injectable.
 
 ## Token/output contract
 
@@ -29,9 +31,9 @@ The runtime bridge maps the validated fields directly:
 
 No re-tokenization or model-dependent transformation occurs at this boundary. This preserves token-level trajectory fidelity and keeps memory provenance available for research analysis.
 
-`VerlTrajectory` separately provides a typed representation for episodes and GRPO batches. Its top-level metadata mapping is detached when constructed, preventing later replacement of keys in a caller-owned metadata dictionary from changing an already-created trajectory. Nested metadata values remain caller-owned objects and should be treated as immutable after construction.
+`VerlTrajectory` separately provides a typed representation for episodes and GRPO batches. Prompt and response token sequences are normalized into owned immutable tuples. Metadata is required to be a mapping and is deep-copied during construction; `to_dict()` returns another detached copy. Nested metadata mutation by callers or trainer-side collation therefore cannot rewrite the stored trajectory provenance.
 
-The external output validator now also fails closed on malformed containers and metadata keys: the top-level result must be a mapping, `extra_fields` must be a mapping, and every `extra_fields` key must be a string. This catches shape/type errors before they reach the optional external `verl` model rather than relying on downstream validation behavior.
+The external output validator also fails closed on malformed containers and metadata keys: the top-level result must be a mapping, `extra_fields` must be a mapping, and every `extra_fields` key must be a string. Nested `extra_fields` are detached during validation and serialization so external rollout objects cannot mutate validated provenance after the boundary.
 
 ## Failure semantics
 
