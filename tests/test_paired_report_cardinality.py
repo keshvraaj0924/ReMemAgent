@@ -72,3 +72,35 @@ def test_paired_execution_rejects_multiple_single_seed_reports(monkeypatch) -> N
         match=r"exactly one report for baseline seed 11; received 2",
     ):
         run_paired_external_benchmarks(baseline, treatment, (11,))
+
+
+def test_paired_execution_rejects_non_report_single_seed_result(monkeypatch) -> None:
+    baseline = _spec("tests.test_external_benchmark:make_policy")
+    treatment = _spec("tests.test_external_benchmark:make_memory_policy")
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.validate_external_benchmark",
+        lambda spec: None,
+    )
+
+    def fake_run(spec: ExternalBenchmarkSpec, seeds: tuple[int, ...]):
+        calls.append(spec.policy_factory or "")
+        return (object(),)
+
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.run_repeated_external_benchmarks",
+        fake_run,
+    )
+    monkeypatch.setattr(
+        "experiments.paired_benchmark.compare_benchmark_reports",
+        lambda *args, **kwargs: pytest.fail("comparison must not run with invalid report types"),
+    )
+
+    with pytest.raises(
+        TypeError,
+        match=r"must return a BenchmarkRunReport for baseline seed 11; received object",
+    ):
+        run_paired_external_benchmarks(baseline, treatment, (11,))
+
+    assert calls == ["tests.test_external_benchmark:make_policy"]
