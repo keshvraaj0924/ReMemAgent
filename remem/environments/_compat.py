@@ -82,10 +82,18 @@ def normalize_string_keyed_info(
 
 
 def normalize_reset(result: Any) -> str:
-    """Normalize reset output from legacy and Gymnasium-style environments."""
+    """Normalize reset output from legacy and Gymnasium-style environments.
 
-    if isinstance(result, tuple) and len(result) == 2:
-        observation, _info = result
+    Tuple reset results are treated strictly as ``(observation, info)``. The
+    metadata is validated even though this compatibility helper exposes only the
+    textual observation, preventing malformed reset state from being discarded.
+    """
+
+    if isinstance(result, tuple):
+        if len(result) != 2:
+            raise ValueError("environment reset() tuple must contain observation and info")
+        observation, info = result
+        normalize_string_keyed_info(info)
     else:
         observation = result
     return normalize_text_observation(observation)
@@ -94,7 +102,13 @@ def normalize_reset(result: Any) -> str:
 def normalize_step(
     result: Iterable[Any] | StepResult,
 ) -> tuple[str, float, bool, bool, dict[str, Any]]:
-    """Normalize native or four-/five-field step results into one stable representation."""
+    """Normalize one step result without permissive type coercion.
+
+    Both legacy four-field and Gymnasium five-field results pass through the same
+    fail-closed validators used by the official benchmark adapters. Values such
+    as numeric strings, integer terminal flags, and malformed metadata therefore
+    cannot enter measured trajectories through the generic compatibility path.
+    """
 
     if isinstance(result, StepResult):
         return (
@@ -110,14 +124,20 @@ def normalize_step(
         observation, reward, terminated, truncated, info = values
         return (
             normalize_text_observation(observation),
-            float(reward),
-            bool(terminated),
-            bool(truncated),
-            dict(info),
+            normalize_finite_reward(reward),
+            normalize_boolean_flag(terminated, "terminated"),
+            normalize_boolean_flag(truncated, "truncated"),
+            normalize_string_keyed_info(info),
         )
     if len(values) == 4:
         observation, reward, done, info = values
-        return normalize_text_observation(observation), float(reward), bool(done), False, dict(info)
+        return (
+            normalize_text_observation(observation),
+            normalize_finite_reward(reward),
+            normalize_boolean_flag(done, "terminated"),
+            False,
+            normalize_string_keyed_info(info),
+        )
     raise ValueError("environment step() must return four or five values")
 
 
