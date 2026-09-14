@@ -1,8 +1,11 @@
 """Tests for the dependency-free verl training batch boundary."""
 
+from typing import cast
+
 import pytest
 
 from remem.integrations.verl import (
+    VerlTrainingBatch,
     VerlTrajectory,
     build_verl_training_batch,
 )
@@ -16,6 +19,30 @@ def _trajectory(reward: float) -> VerlTrajectory:
         reward=reward,
         metadata={"memory_ids": []},
     )
+
+
+def test_verl_training_batch_detaches_mutable_trajectory_sequence() -> None:
+    first = _trajectory(1.0)
+    second = _trajectory(0.0)
+    trajectories = [first, second]
+
+    batch = VerlTrainingBatch(
+        trajectories=cast(tuple[VerlTrajectory, ...], trajectories),
+        advantages=(0.5, -0.5),
+    )
+
+    trajectories.clear()
+
+    assert batch.trajectories == (first, second)
+    assert type(batch.trajectories) is tuple
+
+
+def test_verl_training_batch_rejects_invalid_trajectory_values() -> None:
+    with pytest.raises(TypeError, match="only VerlTrajectory"):
+        VerlTrainingBatch(
+            trajectories=cast(tuple[VerlTrajectory, ...], (object(),)),
+            advantages=(0.0,),
+        )
 
 
 def test_build_verl_training_batch_preserves_order_and_alignment() -> None:
