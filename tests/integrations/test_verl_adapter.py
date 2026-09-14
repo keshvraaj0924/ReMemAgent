@@ -146,9 +146,10 @@ def test_adapt_agent_loop_output_preserves_response_logprobs() -> None:
 
 
 def test_adapt_agent_loop_output_copies_metadata() -> None:
-    """Mutating caller-owned metadata does not mutate the trajectory record."""
+    """Mutating caller-owned nested metadata does not mutate the trajectory record."""
 
-    metadata = {"memory_ids": ["mem-1"]}
+    memory_ids = ["mem-1"]
+    metadata = {"memory_ids": memory_ids}
     trajectory = adapt_agent_loop_output(
         {"prompt_ids": (), "response_ids": (1,), "response_mask": (1,)},
         reward=1.0,
@@ -156,8 +157,10 @@ def test_adapt_agent_loop_output_copies_metadata() -> None:
     )
 
     metadata["episode_id"] = "episode-8"
+    memory_ids.append("mem-2")
 
     assert "episode_id" not in trajectory.metadata
+    assert trajectory.metadata["memory_ids"] == ["mem-1"]
 
 
 def test_adapt_agent_loop_output_rejects_non_finite_reward() -> None:
@@ -268,11 +271,14 @@ def test_run_agent_loop_batch_rejects_non_positive_concurrency() -> None:
 
 
 def test_agent_loop_request_freezes_caller_owned_mappings() -> None:
-    """Queued requests must remain stable after their input mappings are mutated."""
+    """Queued requests must detach both top-level and nested caller-owned state."""
 
-    sampling_params = {"temperature": 0.2}
-    metadata = {"episode_id": "episode-1"}
-    kwargs = {"raw_prompt": "hello"}
+    stop_sequences = ["</tool>"]
+    prompt_messages = [{"role": "user", "content": "hello"}]
+    memory_ids = ["memory-1"]
+    sampling_params = {"temperature": 0.2, "stop": stop_sequences}
+    metadata = {"episode_id": "episode-1", "memory_ids": memory_ids}
+    kwargs = {"raw_prompt": prompt_messages}
 
     request = AgentLoopRequest(
         sampling_params=sampling_params,
@@ -283,10 +289,21 @@ def test_agent_loop_request_freezes_caller_owned_mappings() -> None:
     sampling_params["temperature"] = 0.9
     metadata["episode_id"] = "episode-2"
     kwargs["raw_prompt"] = "mutated"
+    stop_sequences.append("</final>")
+    memory_ids.append("memory-2")
+    prompt_messages[0]["content"] = "mutated nested prompt"
 
-    assert dict(request.sampling_params) == {"temperature": 0.2}
-    assert dict(request.metadata) == {"episode_id": "episode-1"}
-    assert dict(request.kwargs) == {"raw_prompt": "hello"}
+    assert dict(request.sampling_params) == {
+        "temperature": 0.2,
+        "stop": ["</tool>"],
+    }
+    assert dict(request.metadata) == {
+        "episode_id": "episode-1",
+        "memory_ids": ["memory-1"],
+    }
+    assert dict(request.kwargs) == {
+        "raw_prompt": [{"role": "user", "content": "hello"}],
+    }
 
 
 def test_agent_loop_request_normalizes_real_reward() -> None:
