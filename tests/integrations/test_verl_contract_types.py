@@ -92,7 +92,8 @@ def test_validate_agent_loop_output_detaches_nested_extra_fields() -> None:
     """Validated dynamic metadata must not retain caller-owned nested containers."""
 
     turn_scores = [0.25, 0.75]
-    extra_fields = {"turn_scores": turn_scores, "provenance": {"source": "rollout"}}
+    provenance = {"source": "rollout"}
+    extra_fields = {"turn_scores": turn_scores, "provenance": provenance}
     result = validate_agent_loop_output(
         {
             "prompt_ids": [1],
@@ -103,7 +104,7 @@ def test_validate_agent_loop_output_detaches_nested_extra_fields() -> None:
     )
 
     turn_scores.append(1.0)
-    extra_fields["provenance"]["source"] = "mutated"  # type: ignore[index]
+    provenance["source"] = "mutated"
 
     assert result.extra_fields == {
         "turn_scores": [0.25, 0.75],
@@ -113,7 +114,9 @@ def test_validate_agent_loop_output_detaches_nested_extra_fields() -> None:
     serialized = result.to_dict()
     serialized_extra_fields = serialized["extra_fields"]
     assert isinstance(serialized_extra_fields, dict)
-    serialized_extra_fields["turn_scores"].append(2.0)  # type: ignore[union-attr]
+    serialized_turn_scores = serialized_extra_fields["turn_scores"]
+    assert isinstance(serialized_turn_scores, list)
+    serialized_turn_scores.append(2.0)
     assert result.extra_fields["turn_scores"] == [0.25, 0.75]
 
 
