@@ -11,6 +11,7 @@ import asyncio
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field
 from math import isfinite
+from numbers import Real
 from types import MappingProxyType
 from typing import Any, Protocol, TypeVar, cast
 
@@ -59,7 +60,7 @@ class AgentLoopRequest:
     """
 
     sampling_params: Mapping[str, Any]
-    reward: float
+    reward: Real
     metadata: Mapping[str, object] = field(default_factory=dict)
     kwargs: Mapping[str, Any] = field(default_factory=dict)
 
@@ -68,18 +69,27 @@ class AgentLoopRequest:
 
         if not isinstance(self.sampling_params, Mapping):
             raise TypeError("sampling_params must be a mapping")
-        if isinstance(self.reward, bool) or not isinstance(self.reward, (int, float)):
-            raise TypeError("reward must be a real number")
-        if not isfinite(float(self.reward)):
-            raise ValueError("reward must be finite")
+        normalized_reward = _normalize_finite_reward(self.reward)
         if not isinstance(self.metadata, Mapping):
             raise TypeError("metadata must be a mapping")
         if not isinstance(self.kwargs, Mapping):
             raise TypeError("kwargs must be a mapping")
 
+        object.__setattr__(self, "reward", normalized_reward)
         object.__setattr__(self, "sampling_params", MappingProxyType(dict(self.sampling_params)))
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
         object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
+
+
+def _normalize_finite_reward(reward: object) -> float:
+    """Validate one reward and canonicalize compatible real scalars to ``float``."""
+
+    if isinstance(reward, bool) or not isinstance(reward, Real):
+        raise TypeError("reward must be a real number")
+    normalized_reward = float(reward)
+    if not isfinite(normalized_reward):
+        raise ValueError("reward must be finite")
+    return normalized_reward
 
 
 def _normalize_agent_loop_output(
@@ -114,7 +124,7 @@ def _merge_external_extra_fields(
 def adapt_agent_loop_output(
     output: Mapping[str, object] | AgentLoopOutputLike,
     *,
-    reward: float,
+    reward: Real,
     metadata: Mapping[str, object] | None = None,
 ) -> VerlTrajectory:
     """Convert a validated external agent-loop output into a trajectory.
@@ -129,11 +139,7 @@ def adapt_agent_loop_output(
     rollout likelihoods.
     """
 
-    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
-        raise TypeError("reward must be a real number")
-    if not isfinite(float(reward)):
-        raise ValueError("reward must be finite")
-
+    normalized_reward = _normalize_finite_reward(reward)
     normalized_output = _normalize_agent_loop_output(output)
     validated = validate_agent_loop_output(normalized_output)
     trajectory_metadata = _merge_external_extra_fields(
@@ -144,7 +150,7 @@ def adapt_agent_loop_output(
         prompt_ids=validated.prompt_ids,
         response_ids=validated.response_ids,
         response_mask=validated.response_mask,
-        reward=reward,
+        reward=normalized_reward,
         metadata=trajectory_metadata,
         response_logprobs=validated.response_logprobs,
     )
@@ -154,7 +160,7 @@ async def run_agent_loop(
     agent_loop: AsyncVerlAgentLoop,
     *,
     sampling_params: Mapping[str, Any],
-    reward: float,
+    reward: Real,
     metadata: Mapping[str, object] | None = None,
     **kwargs: Any,
 ) -> VerlTrajectory:
