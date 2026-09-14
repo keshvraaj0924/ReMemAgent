@@ -102,7 +102,9 @@ class VerlTrainingBatch:
         normalized_trajectories = tuple(self.trajectories)
         if not normalized_trajectories:
             raise ValueError("verl training batches must contain at least one trajectory")
-        if any(not isinstance(trajectory, VerlTrajectory) for trajectory in normalized_trajectories):
+        if any(
+            not isinstance(trajectory, VerlTrajectory) for trajectory in normalized_trajectories
+        ):
             raise TypeError("trajectories must contain only VerlTrajectory values")
         if len(normalized_trajectories) != len(self.advantages):
             raise ValueError("trajectories and advantages must have equal lengths")
