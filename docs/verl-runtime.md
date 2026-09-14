@@ -13,7 +13,7 @@ The injected runner receives detached copies of:
 
 Both mappings are deep-copied before runner dispatch. This prevents runner-side mutation of nested sampling parameters, prompts, or dataset metadata from rewriting framework-owned request state while preserving the values presented to the runner.
 
-The dependency-free `remem.integrations.run_agent_loop` helper follows the same ownership rule. Direct callers may supply mutable nested sampling parameters, dataset fields, and research metadata; all are deeply detached before the external async loop is invoked. The metadata snapshot is retained across the await, so concurrent caller mutation cannot rewrite the provenance attached to the returned trajectory. `run_agent_loop_batch` inherits that protection in addition to the construction-time isolation provided by each `AgentLoopRequest`.
+The dependency-free `remem.integrations.run_agent_loop` helper follows the same ownership rule. Direct callers may supply mutable nested sampling parameters, dataset fields, and research metadata; all are deeply detached before the external async loop is invoked. The metadata snapshot is retained across the await, so concurrent caller mutation cannot rewrite the provenance attached to the returned trajectory. The supplied reward is also validated and normalized before dispatch, so malformed or non-finite rewards fail before any external rollout work begins. `run_agent_loop_batch` inherits that protection in addition to the construction-time isolation provided by each `AgentLoopRequest`.
 
 The runner returns the dependency-free token contract validated by `validate_agent_loop_output`. The adapter then constructs the installed verl `AgentLoopOutput`. ReMemAgent does not own model inference, tokenizer loading, environment lifecycle, batching, reward computation, optimization, or distributed execution.
 
@@ -41,7 +41,7 @@ The external output validator also fails closed on malformed containers and meta
 
 The `verl` import is lazy. A genuinely missing `verl` installation is converted into a focused `RuntimeError`. If `verl` is installed but one of its transitive dependencies is broken or incompatible, the original import exception is preserved. This distinction keeps environment diagnostics actionable.
 
-Malformed runner output fails before it reaches `AgentLoopOutput`: token IDs, response masks, optional log probabilities, and dynamic `extra_fields` are validated by `validate_agent_loop_output`.
+Direct `run_agent_loop` calls validate the reward before invoking the external coroutine. Boolean, non-real, NaN, and infinite rewards therefore fail without starting inference or environment-side work. Malformed runner output fails before it reaches `AgentLoopOutput`: token IDs, response masks, optional log probabilities, and dynamic `extra_fields` are validated by `validate_agent_loop_output`.
 
 ## Evidence boundary
 
