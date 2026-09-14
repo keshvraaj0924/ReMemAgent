@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from math import isfinite
 from typing import Any
 
 from remem.environments._compat import (
+    normalize_boolean_flag,
+    normalize_finite_reward,
+    normalize_string_keyed_info,
     normalize_text_observation,
     require_callable,
     unwrap_singleton,
@@ -42,7 +43,11 @@ class AlfWorldAdapter:
             if len(result) != 2:
                 raise ValueError("ALFWorld reset() tuple must contain observation and info")
             observation, info = result
-            _normalize_info(info)
+            normalize_string_keyed_info(
+                info,
+                benchmark_name="ALFWorld",
+                unwrap_values=True,
+            )
         else:
             observation = result
         return normalize_text_observation(
@@ -70,10 +75,28 @@ class AlfWorldAdapter:
                 unwrap_singleton(observation),
                 benchmark_name="ALFWorld",
             ),
-            reward=_normalize_reward(reward),
-            terminated=_normalize_terminal_flag(terminated, "terminated"),
-            truncated=_normalize_terminal_flag(truncated, "truncated"),
-            info=_normalize_info(info),
+            reward=normalize_finite_reward(
+                reward,
+                benchmark_name="ALFWorld",
+                unwrap_singleton_value=True,
+            ),
+            terminated=normalize_boolean_flag(
+                terminated,
+                "terminated",
+                benchmark_name="ALFWorld",
+                unwrap_singleton_value=True,
+            ),
+            truncated=normalize_boolean_flag(
+                truncated,
+                "truncated",
+                benchmark_name="ALFWorld",
+                unwrap_singleton_value=True,
+            ),
+            info=normalize_string_keyed_info(
+                info,
+                benchmark_name="ALFWorld",
+                unwrap_values=True,
+            ),
         )
 
     def close(self) -> None:
@@ -82,38 +105,3 @@ class AlfWorldAdapter:
         close = getattr(self._environment, "close", None)
         if callable(close):
             close()
-
-
-def _normalize_reward(value: Any) -> float:
-    """Normalize an ALFWorld reward while rejecting ambiguous values."""
-
-    unwrapped = unwrap_singleton(value)
-    if isinstance(unwrapped, bool) or not isinstance(unwrapped, (int, float)):
-        raise TypeError("ALFWorld reward must be a finite numeric value")
-    reward = float(unwrapped)
-    if not isfinite(reward):
-        raise ValueError("ALFWorld reward must be finite")
-    return reward
-
-
-def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
-    """Normalize a scalar ALFWorld terminal flag without truthiness coercion."""
-
-    unwrapped = unwrap_singleton(value)
-    if not isinstance(unwrapped, bool):
-        raise TypeError(f"ALFWorld {field_name} flag must be a boolean")
-    return unwrapped
-
-
-def _normalize_info(info: Any) -> dict[str, Any]:
-    """Normalize ALFWorld metadata without hiding malformed benchmark payloads."""
-
-    if not isinstance(info, Mapping):
-        raise TypeError("ALFWorld info must be a mapping")
-
-    normalized_info: dict[str, Any] = {}
-    for key, value in info.items():
-        if not isinstance(key, str):
-            raise TypeError("ALFWorld info keys must be strings")
-        normalized_info[key] = unwrap_singleton(value)
-    return normalized_info

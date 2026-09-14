@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from math import isfinite
 from typing import Any
 
 from remem.environments.base import StepResult
@@ -20,6 +21,57 @@ def normalize_text_observation(value: Any, *, benchmark_name: str = "environment
     if not isinstance(value, str):
         raise TypeError(f"{benchmark_name} observation must be a string")
     return value
+
+
+def normalize_finite_reward(
+    value: Any,
+    *,
+    benchmark_name: str = "environment",
+    unwrap_singleton_value: bool = False,
+) -> float:
+    """Validate a finite numeric reward without accepting boolean coercion."""
+
+    normalized_value = unwrap_singleton(value) if unwrap_singleton_value else value
+    if isinstance(normalized_value, bool) or not isinstance(normalized_value, (int, float)):
+        raise TypeError(f"{benchmark_name} reward must be a finite numeric value")
+    reward = float(normalized_value)
+    if not isfinite(reward):
+        raise ValueError(f"{benchmark_name} reward must be finite")
+    return reward
+
+
+def normalize_boolean_flag(
+    value: Any,
+    field_name: str,
+    *,
+    benchmark_name: str = "environment",
+    unwrap_singleton_value: bool = False,
+) -> bool:
+    """Validate one terminal flag without truthiness coercion."""
+
+    normalized_value = unwrap_singleton(value) if unwrap_singleton_value else value
+    if not isinstance(normalized_value, bool):
+        raise TypeError(f"{benchmark_name} {field_name} flag must be a boolean")
+    return normalized_value
+
+
+def normalize_string_keyed_info(
+    info: Any,
+    *,
+    benchmark_name: str = "environment",
+    unwrap_values: bool = False,
+) -> dict[str, Any]:
+    """Validate benchmark metadata and preserve only its declared mapping shape."""
+
+    if not isinstance(info, Mapping):
+        raise TypeError(f"{benchmark_name} info must be a mapping")
+
+    normalized_info: dict[str, Any] = {}
+    for key, value in info.items():
+        if not isinstance(key, str):
+            raise TypeError(f"{benchmark_name} info keys must be strings")
+        normalized_info[key] = unwrap_singleton(value) if unwrap_values else value
+    return normalized_info
 
 
 def normalize_reset(result: Any) -> str:

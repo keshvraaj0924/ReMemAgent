@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from math import isfinite
 from typing import Any
 
-from remem.environments._compat import normalize_text_observation, require_callable
+from remem.environments._compat import (
+    normalize_boolean_flag,
+    normalize_finite_reward,
+    normalize_string_keyed_info,
+    normalize_text_observation,
+    require_callable,
+)
 from remem.environments.base import StepResult
 
 
 class WebShopAdapter:
-    """Normalize a WebShop-compatible environment for ReMemAgent runners.
-
-    WebShop versions expose Gym-like ``reset`` and ``step`` methods. The adapter
-    deliberately accepts the concrete instance so benchmark setup remains an
-    experiment concern rather than a dependency of the memory engine.
-    """
+    """Normalize a WebShop-compatible environment for ReMemAgent runners."""
 
     def __init__(self, environment: Any) -> None:
         require_callable(environment, "reset")
@@ -24,31 +23,20 @@ class WebShopAdapter:
         self._environment = environment
 
     def reset(self, **kwargs: Any) -> str:
-        """Reset WebShop and return its textual observation.
-
-        Gymnasium-style reset metadata is validated even though the normalized
-        runner contract currently returns only the textual observation. This
-        prevents malformed upstream reset payloads from being silently ignored.
-        """
+        """Reset WebShop and return its textual observation."""
 
         result = self._environment.reset(**kwargs)
         if isinstance(result, tuple):
             if len(result) != 2:
                 raise ValueError("WebShop reset() tuple must contain observation and info")
             observation, info = result
-            _normalize_info(info)
+            normalize_string_keyed_info(info, benchmark_name="WebShop")
         else:
             observation = result
         return normalize_text_observation(observation, benchmark_name="WebShop")
 
     def step(self, action: str) -> StepResult:
-        """Execute one textual WebShop action and normalize its result.
-
-        The adapter intentionally rejects ambiguous reward, terminal,
-        observation, and metadata values instead of silently coercing them.
-        This keeps malformed upstream benchmark output from entering measured
-        trajectories.
-        """
+        """Execute one textual WebShop action and normalize its result."""
 
         if not isinstance(action, str) or not action.strip():
             raise ValueError("action must be a non-empty string")
@@ -63,10 +51,18 @@ class WebShopAdapter:
 
         return StepResult(
             observation=normalize_text_observation(observation, benchmark_name="WebShop"),
-            reward=_normalize_reward(reward),
-            terminated=_normalize_terminal_flag(terminated, "terminated"),
-            truncated=_normalize_terminal_flag(truncated, "truncated"),
-            info=_normalize_info(info),
+            reward=normalize_finite_reward(reward, benchmark_name="WebShop"),
+            terminated=normalize_boolean_flag(
+                terminated,
+                "terminated",
+                benchmark_name="WebShop",
+            ),
+            truncated=normalize_boolean_flag(
+                truncated,
+                "truncated",
+                benchmark_name="WebShop",
+            ),
+            info=normalize_string_keyed_info(info, benchmark_name="WebShop"),
         )
 
     def close(self) -> None:
@@ -75,36 +71,3 @@ class WebShopAdapter:
         close = getattr(self._environment, "close", None)
         if callable(close):
             close()
-
-
-def _normalize_reward(value: Any) -> float:
-    """Normalize a WebShop reward while rejecting ambiguous values."""
-
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise TypeError("WebShop reward must be a finite numeric value")
-    reward = float(value)
-    if not isfinite(reward):
-        raise ValueError("WebShop reward must be finite")
-    return reward
-
-
-def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
-    """Normalize a WebShop terminal flag without truthiness coercion."""
-
-    if not isinstance(value, bool):
-        raise TypeError(f"WebShop {field_name} flag must be a boolean")
-    return value
-
-
-def _normalize_info(info: Any) -> dict[str, Any]:
-    """Normalize WebShop metadata without hiding malformed benchmark payloads."""
-
-    if not isinstance(info, Mapping):
-        raise TypeError("WebShop info must be a mapping")
-
-    normalized_info: dict[str, Any] = {}
-    for key, value in info.items():
-        if not isinstance(key, str):
-            raise TypeError("WebShop info keys must be strings")
-        normalized_info[key] = value
-    return normalized_info
