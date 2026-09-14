@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from remem.integrations.verl import VerlTrajectory
@@ -69,6 +71,51 @@ def test_validate_agent_loop_output_rejects_non_string_extra_field_keys() -> Non
                 "response_ids": [2],
                 "response_mask": [1],
                 "extra_fields": {1: "memory-id"},
+            }
+        )
+
+
+def test_validate_agent_loop_output_normalizes_real_logprobs_to_float() -> None:
+    """Compatible real scalar implementations should match the training boundary."""
+
+    result = validate_agent_loop_output(
+        {
+            "prompt_ids": [1],
+            "response_ids": [2, 3],
+            "response_mask": [1, 1],
+            "response_logprobs": [Fraction(-1, 4), Fraction(-3, 2)],
+        }
+    )
+
+    assert result.response_logprobs == (-0.25, -1.5)
+    assert result.response_logprobs is not None
+    assert all(type(logprob) is float for logprob in result.response_logprobs)
+
+
+def test_validate_agent_loop_output_rejects_boolean_logprob() -> None:
+    """Boolean log probabilities must not pass Python's numeric subtype rules."""
+
+    with pytest.raises(TypeError, match="response_logprobs must contain real numbers"):
+        validate_agent_loop_output(
+            {
+                "prompt_ids": [1],
+                "response_ids": [2],
+                "response_mask": [1],
+                "response_logprobs": [True],
+            }
+        )
+
+
+def test_validate_agent_loop_output_rejects_non_real_logprob() -> None:
+    """String-like numeric values are not accepted at the external boundary."""
+
+    with pytest.raises(TypeError, match="response_logprobs must contain real numbers"):
+        validate_agent_loop_output(
+            {
+                "prompt_ids": [1],
+                "response_ids": [2],
+                "response_mask": [1],
+                "response_logprobs": ["-0.25"],
             }
         )
 
