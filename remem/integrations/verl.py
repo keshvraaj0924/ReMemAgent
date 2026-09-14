@@ -97,16 +97,20 @@ class VerlTrainingBatch:
     advantages: tuple[float, ...]
 
     def __post_init__(self) -> None:
-        """Validate one finite advantage exists for every trajectory."""
+        """Validate and detach ordered trajectories and their finite advantages."""
 
-        if not self.trajectories:
+        normalized_trajectories = tuple(self.trajectories)
+        if not normalized_trajectories:
             raise ValueError("verl training batches must contain at least one trajectory")
-        if len(self.trajectories) != len(self.advantages):
+        if any(not isinstance(trajectory, VerlTrajectory) for trajectory in normalized_trajectories):
+            raise TypeError("trajectories must contain only VerlTrajectory values")
+        if len(normalized_trajectories) != len(self.advantages):
             raise ValueError("trajectories and advantages must have equal lengths")
 
         normalized_advantages = tuple(
             _normalize_finite_real(advantage, "advantages") for advantage in self.advantages
         )
+        object.__setattr__(self, "trajectories", normalized_trajectories)
         object.__setattr__(self, "advantages", normalized_advantages)
 
     def to_dicts(self) -> tuple[dict[str, object], ...]:
