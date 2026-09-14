@@ -54,6 +54,19 @@ def test_validate_agent_loop_output_accepts_integer_mask_and_token_ids() -> None
     assert result.response_mask == (1, 0)
 
 
+def test_validate_agent_loop_output_rejects_fully_masked_response() -> None:
+    """External rollouts must expose at least one trainable response token."""
+
+    with pytest.raises(ValueError, match="at least one active response token"):
+        validate_agent_loop_output(
+            {
+                "prompt_ids": [1],
+                "response_ids": [2, 3],
+                "response_mask": [0, 0],
+            }
+        )
+
+
 def test_validate_agent_loop_output_rejects_non_mapping_output() -> None:
     """Malformed containers fail at the adapter boundary with a stable error."""
 
