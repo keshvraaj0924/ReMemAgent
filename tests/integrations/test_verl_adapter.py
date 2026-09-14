@@ -214,6 +214,58 @@ def test_run_agent_loop_forwards_sampling_params_and_dataset_fields() -> None:
     assert trajectory.reward == 0.5
 
 
+def test_run_agent_loop_detaches_caller_owned_request_state() -> None:
+    """External runner mutation cannot rewrite direct caller-owned request inputs."""
+
+    stop_sequences = ["</s>"]
+    raw_prompt: list[dict[str, object]] = [
+        {"role": "user", "content": {"text": "hello"}},
+    ]
+    sampling_params: dict[str, object] = {
+        "temperature": 0.2,
+        "stop": stop_sequences,
+    }
+
+    async def agent_loop(
+        detached_sampling_params: dict[str, object],
+        **detached_kwargs: object,
+    ) -> dict[str, list[int]]:
+        detached_stop_sequences = detached_sampling_params["stop"]
+        assert isinstance(detached_stop_sequences, list)
+        detached_stop_sequences.append("<tool>")
+
+        detached_prompt = detached_kwargs["raw_prompt"]
+        assert isinstance(detached_prompt, list)
+        first_message = detached_prompt[0]
+        assert isinstance(first_message, dict)
+        content = first_message["content"]
+        assert isinstance(content, dict)
+        content["text"] = "mutated"
+
+        return {
+            "prompt_ids": [1],
+            "response_ids": [2],
+            "response_mask": [1],
+        }
+
+    asyncio.run(
+        run_agent_loop(
+            agent_loop,
+            sampling_params=sampling_params,
+            reward=1.0,
+            raw_prompt=raw_prompt,
+        )
+    )
+
+    assert sampling_params == {
+        "temperature": 0.2,
+        "stop": ["</s>"],
+    }
+    assert raw_prompt == [
+        {"role": "user", "content": {"text": "hello"}},
+    ]
+
+
 def test_run_agent_loop_rejects_invalid_external_output() -> None:
     """Invalid token contracts are rejected after the external loop completes."""
 
