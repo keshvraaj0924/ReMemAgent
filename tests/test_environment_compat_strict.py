@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from remem.environments._compat import (
@@ -33,6 +35,10 @@ def test_normalize_finite_reward_rejects_boolean_and_non_finite_values() -> None
         normalize_finite_reward(True, benchmark_name="Test")
     with pytest.raises(ValueError, match="must be finite"):
         normalize_finite_reward(float("inf"), benchmark_name="Test")
+
+
+def test_normalize_finite_reward_accepts_real_numeric_scalars() -> None:
+    assert normalize_finite_reward(Fraction(3, 4), benchmark_name="Test") == 0.75
 
 
 def test_normalize_finite_reward_can_unwrap_singleton_batches() -> None:
