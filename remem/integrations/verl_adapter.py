@@ -194,8 +194,9 @@ async def run_agent_loop(
 
     The bridge mirrors verl's real ``AgentLoopBase.run`` boundary: sampling
     parameters are passed explicitly and dataset-specific fields are forwarded
-    through ``kwargs``. Sampling parameters, dataset fields, and research
-    metadata are deeply detached before external execution so concurrent or
+    through ``kwargs``. Sampling parameters, dataset fields, research metadata,
+    and reward are validated or deeply detached before external execution so an
+    invalid research record cannot trigger model execution and concurrent or
     runner-side mutation cannot rewrite caller-owned request state or the
     provenance attached to the completed trajectory. ReMemAgent does not
     construct prompts, tokenize inputs, or assume a particular inference
@@ -203,13 +204,14 @@ async def run_agent_loop(
     external coroutine completes.
     """
 
+    normalized_reward = _normalize_finite_reward(reward)
     detached_sampling_params = deepcopy(dict(sampling_params))
     detached_metadata = _detach_metadata(metadata)
     detached_kwargs = deepcopy(kwargs)
     output = await agent_loop(detached_sampling_params, **detached_kwargs)
     return adapt_agent_loop_output(
         output,
-        reward=reward,
+        reward=normalized_reward,
         metadata=detached_metadata,
     )
 
