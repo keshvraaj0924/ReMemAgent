@@ -9,6 +9,7 @@ re-encoding is performed, which preserves token-level trajectory fidelity.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from math import isfinite
 import numbers
@@ -26,13 +27,13 @@ class ValidatedAgentLoopOutput:
     response_logprobs: tuple[float, ...] | None = None
 
     def to_dict(self) -> dict[str, object]:
-        """Return token fields and copied optional fields as a fresh mapping."""
+        """Return token fields and detached optional fields as a fresh mapping."""
 
         output: dict[str, object] = {
             "prompt_ids": list(self.prompt_ids),
             "response_ids": list(self.response_ids),
             "response_mask": list(self.response_mask),
-            "extra_fields": dict(self.extra_fields),
+            "extra_fields": deepcopy(dict(self.extra_fields)),
         }
         if self.response_logprobs is not None:
             output["response_logprobs"] = list(self.response_logprobs)
@@ -79,7 +80,7 @@ def validate_agent_loop_output(
         prompt_ids=prompt_ids,
         response_ids=response_ids,
         response_mask=response_mask,
-        extra_fields=dict(extra_fields),
+        extra_fields=deepcopy(dict(extra_fields)),
         response_logprobs=response_logprobs,
     )
 
