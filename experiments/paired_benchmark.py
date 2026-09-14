@@ -24,7 +24,7 @@ from remem.benchmark import BenchmarkRunReport
 
 @dataclass(frozen=True, slots=True)
 class PairedSeedExecution:
-    """Condition execution order for one paired benchmark seed."""
+    """Condition-role execution order for one paired benchmark seed."""
 
     seed: int
     first_condition: str
@@ -58,10 +58,12 @@ def run_paired_external_benchmarks(
     identical counterbalancing regardless of caller ordering. Baseline runs
     first for even canonical seed positions and treatment runs first for odd
     positions. This prevents one condition from always being measured later
-    while preserving identical seed ownership for both conditions. The returned
-    result records the exact normalized condition labels and order used for every
-    seed so temporal execution provenance is not left implicit in runner
-    implementation details or disconnected from comparison labels.
+    while preserving identical seed ownership for both conditions.
+
+    Display labels are normalized once before comparison construction, while
+    ``execution_order`` deliberately records the stable ``baseline`` and
+    ``treatment`` roles required by persisted provenance verification. This
+    keeps user-facing labels distinct from protocol roles.
     """
 
     _validate_paired_specs(baseline_spec, treatment_spec)
@@ -77,8 +79,6 @@ def run_paired_external_benchmarks(
         baseline_spec,
         treatment_spec,
         selected_seeds,
-        baseline_label=normalized_baseline_label,
-        treatment_label=normalized_treatment_label,
     )
     comparison = compare_benchmark_reports(
         baseline_reports,
@@ -110,6 +110,7 @@ def run_paired_external_benchmarks_with_preflight(
     by that contract is attached to the returned result. Callers can therefore
     persist the state that was actually validated before measurement instead of
     collecting a potentially different snapshot after the experiment finishes.
+    Condition labels are validated before any preflight side effects.
     """
 
     _normalize_condition_labels(baseline_label, treatment_label)
@@ -187,25 +188,19 @@ def _canonicalize_paired_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
     return tuple(sorted(validate_seed_sequence(seeds)))
 
 
-def _execution_order_for_seed(
-    seed_index: int,
-    seed: int,
-    *,
-    baseline_label: str = "baseline",
-    treatment_label: str = "treatment",
-) -> PairedSeedExecution:
-    """Return deterministic condition order for one canonical seed position."""
+def _execution_order_for_seed(seed_index: int, seed: int) -> PairedSeedExecution:
+    """Return the deterministic condition-role order for one canonical seed position."""
 
     if seed_index % 2 == 0:
         return PairedSeedExecution(
             seed=seed,
-            first_condition=baseline_label,
-            second_condition=treatment_label,
+            first_condition="baseline",
+            second_condition="treatment",
         )
     return PairedSeedExecution(
         seed=seed,
-        first_condition=treatment_label,
-        second_condition=baseline_label,
+        first_condition="treatment",
+        second_condition="baseline",
     )
 
 
@@ -240,9 +235,6 @@ def _run_counterbalanced_pairs(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
     seeds: tuple[int, ...],
-    *,
-    baseline_label: str,
-    treatment_label: str,
 ) -> tuple[
     tuple[BenchmarkRunReport, ...],
     tuple[BenchmarkRunReport, ...],
@@ -254,8 +246,8 @@ def _run_counterbalanced_pairs(
     contributes exactly one report to each paired collection while reducing
     systematic warm-up, throttling, or temporal-drift bias. Because callers are
     canonicalized before this function is invoked, equivalent seed sets always
-    produce the same condition-first assignment. The exact assignment is
-    returned using the same normalized labels as the paired comparison.
+    produce the same condition-first assignment. The exact role assignment is
+    returned as structured provenance alongside the reports.
     """
 
     baseline_reports: list[BenchmarkRunReport] = []
@@ -263,14 +255,9 @@ def _run_counterbalanced_pairs(
     execution_order: list[PairedSeedExecution] = []
 
     for seed_index, seed in enumerate(seeds):
-        seed_execution = _execution_order_for_seed(
-            seed_index,
-            seed,
-            baseline_label=baseline_label,
-            treatment_label=treatment_label,
-        )
+        seed_execution = _execution_order_for_seed(seed_index, seed)
         execution_order.append(seed_execution)
-        if seed_execution.first_condition == baseline_label:
+        if seed_execution.first_condition == "baseline":
             baseline_report = run_repeated_external_benchmarks(baseline_spec, (seed,))[0]
             treatment_report = run_repeated_external_benchmarks(treatment_spec, (seed,))[0]
         else:
@@ -324,7 +311,7 @@ def _validate_paired_specs(
 
 
 def _normalize_condition_labels(baseline_label: str, treatment_label: str) -> tuple[str, str]:
-    """Return stable non-empty labels that identify the two paired conditions."""
+    """Return canonical non-empty display labels for the two paired conditions."""
 
     normalized_labels: list[str] = []
     for field_name, value in (
