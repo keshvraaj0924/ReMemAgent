@@ -6,11 +6,7 @@ from collections.abc import Mapping
 from math import isfinite
 from typing import Any
 
-from remem.environments._compat import (
-    normalize_reset,
-    normalize_text_observation,
-    require_callable,
-)
+from remem.environments._compat import normalize_text_observation, require_callable
 from remem.environments.base import StepResult
 
 
@@ -28,9 +24,20 @@ class WebShopAdapter:
         self._environment = environment
 
     def reset(self, **kwargs: Any) -> str:
-        """Reset WebShop and return its textual observation."""
+        """Reset WebShop and return its textual observation.
 
-        return normalize_reset(self._environment.reset(**kwargs))
+        Gymnasium-style reset metadata is validated even though the normalized
+        runner contract currently returns only the textual observation. This
+        prevents malformed upstream reset payloads from being silently ignored.
+        """
+
+        result = self._environment.reset(**kwargs)
+        if isinstance(result, tuple) and len(result) == 2:
+            observation, info = result
+            _normalize_info(info)
+        else:
+            observation = result
+        return normalize_text_observation(observation, benchmark_name="WebShop")
 
     def step(self, action: str) -> StepResult:
         """Execute one textual WebShop action and normalize its result.
@@ -88,7 +95,7 @@ def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
 
 
 def _normalize_info(info: Any) -> dict[str, Any]:
-    """Normalize WebShop metadata without hiding malformed step payloads."""
+    """Normalize WebShop metadata without hiding malformed benchmark payloads."""
 
     if not isinstance(info, Mapping):
         raise TypeError("WebShop info must be a mapping")
