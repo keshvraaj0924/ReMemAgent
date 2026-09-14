@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import isfinite
+import numbers
 from typing import Any
 
 
@@ -118,7 +119,7 @@ def _validate_response_logprobs(
     response_logprobs: object,
     response_length: int,
 ) -> tuple[float, ...] | None:
-    """Validate optional finite log probabilities aligned to response tokens."""
+    """Validate and normalize optional finite log probabilities per response token."""
 
     if response_logprobs is None:
         return None
@@ -127,9 +128,13 @@ def _validate_response_logprobs(
     normalized = tuple(response_logprobs)
     if len(normalized) != response_length:
         raise ValueError("response_logprobs must have one entry per response token")
+
+    normalized_logprobs: list[float] = []
     for logprob in normalized:
-        if isinstance(logprob, bool) or not isinstance(logprob, (int, float)):
+        if isinstance(logprob, bool) or not isinstance(logprob, numbers.Real):
             raise TypeError("response_logprobs must contain real numbers")
-        if not isfinite(float(logprob)):
+        normalized_logprob = float(logprob)
+        if not isfinite(normalized_logprob):
             raise ValueError("response_logprobs must be finite")
-    return tuple(float(logprob) for logprob in normalized)
+        normalized_logprobs.append(normalized_logprob)
+    return tuple(normalized_logprobs)
