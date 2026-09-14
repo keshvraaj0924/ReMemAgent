@@ -62,6 +62,51 @@ def test_encode_episode_serializes_offline_training_metadata() -> None:
     }
 
 
+def test_verl_trajectory_detaches_nested_metadata() -> None:
+    """Caller and serialized-row mutations cannot rewrite trajectory provenance."""
+
+    memory_ids = ["memory-a"]
+    provenance = {"source": "episode-1"}
+    metadata = {"memory_ids": memory_ids, "provenance": provenance}
+    trajectory = VerlTrajectory(
+        prompt_ids=(1,),
+        response_ids=(2,),
+        response_mask=(1,),
+        reward=1.0,
+        metadata=metadata,
+    )
+
+    memory_ids.append("memory-b")
+    provenance["source"] = "mutated"
+
+    assert trajectory.metadata == {
+        "memory_ids": ["memory-a"],
+        "provenance": {"source": "episode-1"},
+    }
+
+    serialized = trajectory.to_dict()
+    serialized_metadata = serialized["metadata"]
+    assert isinstance(serialized_metadata, dict)
+    serialized_memory_ids = serialized_metadata["memory_ids"]
+    assert isinstance(serialized_memory_ids, list)
+    serialized_memory_ids.append("memory-c")
+
+    assert trajectory.metadata["memory_ids"] == ["memory-a"]
+
+
+def test_verl_trajectory_rejects_non_mapping_metadata() -> None:
+    """Direct trajectory construction must not accept iterable-pair metadata by accident."""
+
+    with pytest.raises(TypeError, match="metadata must be a mapping"):
+        VerlTrajectory(
+            prompt_ids=(1,),
+            response_ids=(2,),
+            response_mask=(1,),
+            reward=1.0,
+            metadata=[("memory_ids", [])],  # type: ignore[arg-type]
+        )
+
+
 def test_verl_trajectory_preserves_response_logprobs() -> None:
     trajectory = VerlTrajectory(
         prompt_ids=(1,),
