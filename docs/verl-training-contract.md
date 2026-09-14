@@ -1,6 +1,6 @@
 # verl training value contract
 
-The dependency-free verl integration validates the numeric values that cross the token-level training boundary.
+The dependency-free verl integration validates the numeric values and mutable research state that cross the token-level training boundary.
 
 - `VerlTrajectory.reward` must be a real, finite number and is canonicalized to a plain Python `float`.
 - `VerlTrajectory.response_logprobs`, when present, must align one-to-one with `response_ids`; every value must be real and finite and is canonicalized to `float`.
@@ -15,8 +15,10 @@ The active-token invariant is enforced at both public construction boundaries. E
 
 These checks complement the GRPO layer, which validates and canonicalizes finite rewards and advantages. The duplicated boundary is intentional: `VerlTrajectory`, `VerlTrainingBatch`, `AgentLoopRequest`, `validate_agent_loop_output`, and the agent-loop output adapter are public construction points and must remain safe when callers bypass the GRPO helpers.
 
-`AgentLoopRequest` is also validated at construction time. Sampling parameters, dataset keyword arguments, and research metadata are copied into immutable mapping proxies. This makes queued concurrent requests stable even when the caller later mutates the dictionaries originally supplied to the request. The request reward is required to be a real, finite number and is canonicalized before the external agent loop can be scheduled.
+Mutable provenance is detached at the same boundaries. External verl `extra_fields` are deep-copied during validation and again when serialized, so later mutations to rollout-owned nested lists or dictionaries cannot rewrite an already validated record. `VerlTrajectory` requires metadata to be a mapping, deep-copies nested metadata during construction, and returns detached nested metadata from `to_dict()`. This keeps trainer-side collation or row mutation from altering the stored trajectory that produced the row.
 
-Canonicalizing numeric scalar representations is not reward shaping. ReMemAgent does not clip, rescale, replace, or otherwise change the numeric value of rewards, log probabilities, or advantages at this boundary. Training-policy transformations remain caller-owned and should be recorded as part of experiment provenance.
+`AgentLoopRequest` is also validated at construction time. Sampling parameters, dataset keyword arguments, and research metadata are deep-copied and then placed behind immutable top-level mapping proxies. This makes queued concurrent requests stable even when the caller later mutates the dictionaries or nested lists/dictionaries originally supplied to the request. The request reward is required to be a real, finite number and is canonicalized before the external agent loop can be scheduled.
+
+Canonicalizing numeric scalar representations is not reward shaping. ReMemAgent does not clip, rescale, replace, or otherwise change the numeric value of rewards, log probabilities, or advantages at this boundary. Likewise, deep-copying provenance is an ownership guarantee, not a semantic transformation of the research record. Training-policy transformations remain caller-owned and should be recorded as part of experiment provenance.
 
 No claim is made about training effectiveness until a real model checkpoint, tokenizer, verl runtime, and benchmark workload have been executed under a recorded configuration.
