@@ -231,6 +231,28 @@ def _run_counterbalanced_preflight_pairs(
         )
 
 
+def _run_single_seed_condition(
+    spec: ExternalBenchmarkSpec,
+    seed: int,
+    *,
+    condition_role: str,
+) -> BenchmarkRunReport:
+    """Run one paired condition and require exactly one report for its seed.
+
+    Paired analysis assumes a one-to-one mapping between each requested seed and
+    each condition report. Silently accepting zero or multiple reports would
+    corrupt seed alignment, so this boundary fails closed before comparison.
+    """
+
+    reports = run_repeated_external_benchmarks(spec, (seed,))
+    if len(reports) != 1:
+        raise RuntimeError(
+            "paired benchmark single-seed execution must return exactly one report "
+            f"for {condition_role} seed {seed}; received {len(reports)}"
+        )
+    return reports[0]
+
+
 def _run_counterbalanced_pairs(
     baseline_spec: ExternalBenchmarkSpec,
     treatment_spec: ExternalBenchmarkSpec,
@@ -258,11 +280,27 @@ def _run_counterbalanced_pairs(
         seed_execution = _execution_order_for_seed(seed_index, seed)
         execution_order.append(seed_execution)
         if seed_execution.first_condition == "baseline":
-            baseline_report = run_repeated_external_benchmarks(baseline_spec, (seed,))[0]
-            treatment_report = run_repeated_external_benchmarks(treatment_spec, (seed,))[0]
+            baseline_report = _run_single_seed_condition(
+                baseline_spec,
+                seed,
+                condition_role="baseline",
+            )
+            treatment_report = _run_single_seed_condition(
+                treatment_spec,
+                seed,
+                condition_role="treatment",
+            )
         else:
-            treatment_report = run_repeated_external_benchmarks(treatment_spec, (seed,))[0]
-            baseline_report = run_repeated_external_benchmarks(baseline_spec, (seed,))[0]
+            treatment_report = _run_single_seed_condition(
+                treatment_spec,
+                seed,
+                condition_role="treatment",
+            )
+            baseline_report = _run_single_seed_condition(
+                baseline_spec,
+                seed,
+                condition_role="baseline",
+            )
         baseline_reports.append(baseline_report)
         treatment_reports.append(treatment_report)
 
