@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from experiments.external_benchmark import ExternalBenchmarkSpec
 from experiments import paired_benchmark
-from remem.benchmark import BenchmarkRunReport
+from remem.benchmark import BenchmarkRunConfiguration, BenchmarkRunReport
 
 
 def _spec() -> ExternalBenchmarkSpec:
@@ -19,6 +21,21 @@ def _spec() -> ExternalBenchmarkSpec:
     )
 
 
+def _configuration(spec: ExternalBenchmarkSpec, seed: int) -> BenchmarkRunConfiguration:
+    return BenchmarkRunConfiguration(
+        benchmark_name=spec.benchmark_name,
+        episode_count=spec.episode_count,
+        max_steps=spec.max_steps,
+        seed=seed,
+        environment_factory=spec.environment_factory,
+        policy_factory=spec.policy_factory,
+        action_policy_factory=spec.action_policy_factory,
+        success_evaluator=spec.success_evaluator,
+        transfer_success_evaluator=spec.transfer_success_evaluator,
+        minimum_trust=spec.minimum_trust,
+    )
+
+
 def test_single_seed_condition_rejects_wrong_benchmark_identity(monkeypatch) -> None:
     spec = _spec()
     wrong_report = BenchmarkRunReport(
@@ -26,6 +43,7 @@ def test_single_seed_condition_rejects_wrong_benchmark_identity(monkeypatch) -> 
         episodes=(),
         final_memory_count=0,
         seed=11,
+        configuration=_configuration(spec, 11),
     )
     monkeypatch.setattr(
         paired_benchmark,
@@ -48,6 +66,7 @@ def test_single_seed_condition_accepts_matching_benchmark_identity(monkeypatch) 
         episodes=(),
         final_memory_count=0,
         seed=11,
+        configuration=_configuration(spec, 11),
     )
     monkeypatch.setattr(
         paired_benchmark,
@@ -62,3 +81,49 @@ def test_single_seed_condition_accepts_matching_benchmark_identity(monkeypatch) 
     )
 
     assert report is expected_report
+
+
+def test_single_seed_condition_rejects_missing_configuration_provenance(monkeypatch) -> None:
+    spec = _spec()
+    report_without_configuration = BenchmarkRunReport(
+        benchmark_name="alfworld",
+        episodes=(),
+        final_memory_count=0,
+        seed=11,
+    )
+    monkeypatch.setattr(
+        paired_benchmark,
+        "run_repeated_external_benchmarks",
+        lambda *_args, **_kwargs: (report_without_configuration,),
+    )
+
+    with pytest.raises(RuntimeError, match="without run configuration provenance"):
+        paired_benchmark._run_single_seed_condition(
+            spec,
+            11,
+            condition_role="baseline",
+        )
+
+
+def test_single_seed_condition_rejects_drifted_configuration_provenance(monkeypatch) -> None:
+    spec = _spec()
+    drifted_configuration = replace(_configuration(spec, 11), max_steps=99)
+    drifted_report = BenchmarkRunReport(
+        benchmark_name="alfworld",
+        episodes=(),
+        final_memory_count=0,
+        seed=11,
+        configuration=drifted_configuration,
+    )
+    monkeypatch.setattr(
+        paired_benchmark,
+        "run_repeated_external_benchmarks",
+        lambda *_args, **_kwargs: (drifted_report,),
+    )
+
+    with pytest.raises(RuntimeError, match="mismatched run configuration provenance"):
+        paired_benchmark._run_single_seed_condition(
+            spec,
+            11,
+            condition_role="baseline",
+        )
