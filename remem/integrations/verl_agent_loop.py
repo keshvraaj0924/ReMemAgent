@@ -10,6 +10,7 @@ to a particular inference server or model stack.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
+from copy import deepcopy
 from typing import Any
 
 from remem.integrations.verl_contract import validate_agent_loop_output
@@ -28,10 +29,10 @@ def build_verl_agent_loop_class(
 ) -> type[object]:
     """Build an ``AgentLoopBase`` subclass around an injected async runner.
 
-    The runner receives ``sampling_params`` and the dataset fields supplied to
-    ``AgentLoopBase.run`` as two mappings. It must return the token-level
-    ReMemAgent/verl contract. The generated class validates that contract before
-    returning a concrete ``AgentLoopOutput`` instance.
+    The runner receives detached copies of ``sampling_params`` and the dataset
+    fields supplied to ``AgentLoopBase.run`` as two mappings. It must return the
+    token-level ReMemAgent/verl contract. The generated class validates that
+    contract before returning a concrete ``AgentLoopOutput`` instance.
 
     ``verl`` is imported only when this factory is called. A missing installation
     therefore does not affect normal ReMemAgent imports or dependency-free
@@ -51,9 +52,11 @@ def build_verl_agent_loop_class(
         """verl AgentLoopBase adapter backed by an injected async runner."""
 
         async def run(self, sampling_params: dict[str, Any], **kwargs: Any) -> object:
-            """Run the injected agent and return a validated verl output."""
+            """Run the injected agent without exposing framework-owned request state."""
 
-            output = await runner(sampling_params, kwargs)
+            detached_sampling_params = deepcopy(sampling_params)
+            detached_dataset_fields = deepcopy(kwargs)
+            output = await runner(detached_sampling_params, detached_dataset_fields)
             validated = validate_agent_loop_output(output)
             return resolved_output_factory(**validated.to_dict())
 
