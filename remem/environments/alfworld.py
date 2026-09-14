@@ -30,11 +30,17 @@ class AlfWorldAdapter:
         self._environment = environment
 
     def reset(self, **kwargs: Any) -> str:
-        """Reset ALFWorld and return the first textual observation."""
+        """Reset ALFWorld and return the first textual observation.
+
+        Gymnasium-style reset metadata is validated even though the normalized
+        runner contract currently returns only the textual observation. This
+        prevents malformed upstream reset payloads from being silently ignored.
+        """
 
         result = self._environment.reset(**kwargs)
         if isinstance(result, tuple) and len(result) == 2:
-            observation, _info = result
+            observation, info = result
+            _normalize_info(info)
         else:
             observation = result
         return normalize_text_observation(
@@ -98,7 +104,7 @@ def _normalize_terminal_flag(value: Any, field_name: str) -> bool:
 
 
 def _normalize_info(info: Any) -> dict[str, Any]:
-    """Normalize ALFWorld metadata without hiding malformed step payloads."""
+    """Normalize ALFWorld metadata without hiding malformed benchmark payloads."""
 
     if not isinstance(info, Mapping):
         raise TypeError("ALFWorld info must be a mapping")
