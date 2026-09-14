@@ -129,14 +129,16 @@ def adapt_agent_loop_output(
 ) -> VerlTrajectory:
     """Convert a validated external agent-loop output into a trajectory.
 
-    The token fields are validated exactly once and copied into immutable
-    tuples. Reward and provenance metadata are supplied by the caller because
-    the external loop owns environment execution while ReMemAgent owns the
-    research record that links the outcome to memory and episode context.
-    verl's dynamic ``extra_fields`` are preserved under a reserved metadata key
-    rather than silently discarded. Optional response log probabilities are
-    retained alongside response tokens for loss/replay consumers that need
-    rollout likelihoods.
+    Token fields are validated at the external boundary and copied into
+    immutable tuples. ``VerlTrajectory`` intentionally re-checks its own public
+    invariants so direct construction cannot bypass the training contract.
+    Reward and provenance metadata are supplied by the caller because the
+    external loop owns environment execution while ReMemAgent owns the research
+    record that links the outcome to memory and episode context. verl's dynamic
+    ``extra_fields`` are preserved under a reserved metadata key rather than
+    silently discarded. Optional response log probabilities are retained
+    alongside response tokens for loss/replay consumers that need rollout
+    likelihoods.
     """
 
     normalized_reward = _normalize_finite_reward(reward)
