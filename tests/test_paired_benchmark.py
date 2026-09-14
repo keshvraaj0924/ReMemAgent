@@ -69,8 +69,8 @@ def test_run_paired_external_benchmarks_counterbalances_same_seed_execution(monk
         ("tests.test_external_benchmark:make_policy", (17,)),
     ]
     assert result.execution_order == (
-        PairedSeedExecution(seed=11, first_condition="no-memory", second_condition="memory"),
-        PairedSeedExecution(seed=17, first_condition="memory", second_condition="no-memory"),
+        PairedSeedExecution(seed=11, first_condition="baseline", second_condition="treatment"),
+        PairedSeedExecution(seed=17, first_condition="treatment", second_condition="baseline"),
     )
     assert result.comparison == ("no-memory", "memory")
 
