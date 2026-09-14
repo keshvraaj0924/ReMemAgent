@@ -33,16 +33,18 @@ class VerlTrajectory:
     def __post_init__(self) -> None:
         """Validate and detach the token-level contract for direct construction."""
 
-        _validate_token_ids(self.prompt_ids, "prompt")
-        _validate_token_ids(self.response_ids, "response")
-        if not self.response_ids:
+        normalized_prompt_ids = _validate_token_ids(self.prompt_ids, "prompt")
+        normalized_response_ids = _validate_token_ids(self.response_ids, "response")
+        if not normalized_response_ids:
             raise ValueError("response_ids must contain at least one token")
+        object.__setattr__(self, "prompt_ids", normalized_prompt_ids)
+        object.__setattr__(self, "response_ids", normalized_response_ids)
 
         normalized_reward = _normalize_finite_real(self.reward, "reward")
         object.__setattr__(self, "reward", normalized_reward)
 
         normalized_mask = tuple(self.response_mask)
-        if len(normalized_mask) != len(self.response_ids):
+        if len(normalized_mask) != len(normalized_response_ids):
             raise ValueError("response_mask must have the same length as response_ids")
         if any(isinstance(value, bool) or not isinstance(value, int) for value in normalized_mask):
             raise TypeError("response_mask must contain only integer values")
@@ -57,7 +59,7 @@ class VerlTrajectory:
                 _normalize_finite_real(logprob, "response_logprobs")
                 for logprob in self.response_logprobs
             )
-            if len(normalized_logprobs) != len(self.response_ids):
+            if len(normalized_logprobs) != len(normalized_response_ids):
                 raise ValueError("response_logprobs must have the same length as response_ids")
             object.__setattr__(self, "response_logprobs", normalized_logprobs)
 
