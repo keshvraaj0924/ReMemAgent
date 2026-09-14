@@ -31,7 +31,7 @@ def test_step_result_keeps_nested_info_independent_between_instances() -> None:
 
 
 def test_step_result_normalizes_real_numeric_rewards_to_float() -> None:
-    result = StepResult("observation", Fraction(3, 4), False, False)
+    result = StepResult("observation", Fraction(3, 4), False, False)  # type: ignore[arg-type]
 
     assert result.reward == 0.75
     assert isinstance(result.reward, float)
