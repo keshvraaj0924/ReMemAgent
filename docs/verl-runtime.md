@@ -13,6 +13,8 @@ The injected runner receives detached copies of:
 
 Both mappings are deep-copied before runner dispatch. This prevents runner-side mutation of nested sampling parameters, prompts, or dataset metadata from rewriting framework-owned request state while preserving the values presented to the runner.
 
+The dependency-free `remem.integrations.run_agent_loop` helper follows the same ownership rule. Direct callers may supply mutable nested sampling parameters and dataset fields; those inputs are deeply detached before the external async loop is invoked. `run_agent_loop_batch` inherits that protection in addition to the construction-time isolation provided by each `AgentLoopRequest`.
+
 The runner returns the dependency-free token contract validated by `validate_agent_loop_output`. The adapter then constructs the installed verl `AgentLoopOutput`. ReMemAgent does not own model inference, tokenizer loading, environment lifecycle, batching, reward computation, optimization, or distributed execution.
 
 The optional `output_factory` argument allows a compatible downstream verl fork to supply its concrete output model while keeping the base-class import and execution contract unchanged.
