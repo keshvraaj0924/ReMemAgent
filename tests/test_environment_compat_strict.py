@@ -9,6 +9,8 @@ import pytest
 from remem.environments._compat import (
     normalize_boolean_flag,
     normalize_finite_reward,
+    normalize_reset,
+    normalize_step,
     normalize_string_keyed_info,
 )
 
@@ -74,3 +76,54 @@ def test_normalize_string_keyed_info_can_unwrap_values() -> None:
         benchmark_name="Test",
         unwrap_values=True,
     ) == {"score": 3}
+
+
+def test_normalize_reset_validates_gymnasium_metadata() -> None:
+    assert normalize_reset(("ready", {"episode": 7})) == "ready"
+
+    with pytest.raises(ValueError, match="tuple must contain observation and info"):
+        normalize_reset(("ready",))
+    with pytest.raises(TypeError, match="info must be a mapping"):
+        normalize_reset(("ready", None))
+    with pytest.raises(TypeError, match="info keys must be strings"):
+        normalize_reset(("ready", {1: "bad"}))
+
+
+def test_normalize_step_strictly_normalizes_five_field_results() -> None:
+    assert normalize_step(("next", Fraction(3, 4), False, True, {"score": 1})) == (
+        "next",
+        0.75,
+        False,
+        True,
+        {"score": 1},
+    )
+
+
+def test_normalize_step_strictly_normalizes_legacy_results() -> None:
+    assert normalize_step(("next", 1, True, {"score": 1})) == (
+        "next",
+        1.0,
+        True,
+        False,
+        {"score": 1},
+    )
+
+
+@pytest.mark.parametrize(
+    ("step_result", "error_type", "message"),
+    [
+        (("next", "1.0", False, False, {}), TypeError, "finite numeric value"),
+        (("next", 1.0, 1, False, {}), TypeError, "terminated flag must be a boolean"),
+        (("next", 1.0, False, 0, {}), TypeError, "truncated flag must be a boolean"),
+        (("next", 1.0, False, False, None), TypeError, "info must be a mapping"),
+        (("next", 1.0, False, False, {1: "bad"}), TypeError, "info keys must be strings"),
+        (("next", 1.0, 1, {}), TypeError, "terminated flag must be a boolean"),
+    ],
+)
+def test_normalize_step_rejects_coercible_malformed_values(
+    step_result: tuple[object, ...],
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(error_type, match=message):
+        normalize_step(step_result)
