@@ -73,6 +73,54 @@ def test_build_verl_agent_loop_class_runs_injected_runner(monkeypatch: pytest.Mo
     ]
 
 
+def test_build_verl_agent_loop_class_detaches_runner_request_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Runner mutation cannot rewrite verl-owned sampling or dataset inputs."""
+
+    monkeypatch.setattr(verl_agent_loop, "_load_verl_types", _fake_verl_types)
+    sampling_params: dict[str, object] = {
+        "temperature": 0.2,
+        "stop": ["</s>"],
+    }
+    raw_prompt: list[dict[str, object]] = [
+        {"role": "user", "content": {"text": "hello"}},
+    ]
+
+    async def runner(
+        detached_sampling_params: dict[str, object],
+        detached_kwargs: dict[str, object],
+    ) -> dict[str, object]:
+        stop_sequences = detached_sampling_params["stop"]
+        assert isinstance(stop_sequences, list)
+        stop_sequences.append("<tool>")
+
+        detached_prompt = detached_kwargs["raw_prompt"]
+        assert isinstance(detached_prompt, list)
+        first_message = detached_prompt[0]
+        assert isinstance(first_message, dict)
+        content = first_message["content"]
+        assert isinstance(content, dict)
+        content["text"] = "mutated"
+
+        return {
+            "prompt_ids": [1],
+            "response_ids": [2],
+            "response_mask": [1],
+        }
+
+    loop_class = verl_agent_loop.build_verl_agent_loop_class(runner)
+    asyncio.run(loop_class().run(sampling_params, raw_prompt=raw_prompt))
+
+    assert sampling_params == {
+        "temperature": 0.2,
+        "stop": ["</s>"],
+    }
+    assert raw_prompt == [
+        {"role": "user", "content": {"text": "hello"}},
+    ]
+
+
 def test_build_verl_agent_loop_class_accepts_custom_output_factory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
