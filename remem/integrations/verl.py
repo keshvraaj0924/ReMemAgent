@@ -36,9 +36,9 @@ class VerlTrajectory:
         _validate_token_ids(self.response_ids, "response")
         if not self.response_ids:
             raise ValueError("response_ids must contain at least one token")
-        _validate_real_number(self.reward, "reward")
-        if not isfinite(self.reward):
-            raise ValueError("reward must be finite")
+
+        normalized_reward = _normalize_finite_real(self.reward, "reward")
+        object.__setattr__(self, "reward", normalized_reward)
 
         normalized_mask = tuple(self.response_mask)
         if len(normalized_mask) != len(self.response_ids):
@@ -52,13 +52,12 @@ class VerlTrajectory:
         object.__setattr__(self, "response_mask", normalized_mask)
 
         if self.response_logprobs is not None:
-            normalized_logprobs = tuple(self.response_logprobs)
+            normalized_logprobs = tuple(
+                _normalize_finite_real(logprob, "response_logprobs")
+                for logprob in self.response_logprobs
+            )
             if len(normalized_logprobs) != len(self.response_ids):
                 raise ValueError("response_logprobs must have the same length as response_ids")
-            for logprob in normalized_logprobs:
-                _validate_real_number(logprob, "response_logprobs")
-                if not isfinite(logprob):
-                    raise ValueError("response_logprobs must be finite")
             object.__setattr__(self, "response_logprobs", normalized_logprobs)
 
         object.__setattr__(self, "metadata", dict(self.metadata))
@@ -99,10 +98,11 @@ class VerlTrainingBatch:
             raise ValueError("verl training batches must contain at least one trajectory")
         if len(self.trajectories) != len(self.advantages):
             raise ValueError("trajectories and advantages must have equal lengths")
-        for advantage in self.advantages:
-            _validate_real_number(advantage, "advantages")
-            if not isfinite(advantage):
-                raise ValueError("advantages must be finite")
+
+        normalized_advantages = tuple(
+            _normalize_finite_real(advantage, "advantages") for advantage in self.advantages
+        )
+        object.__setattr__(self, "advantages", normalized_advantages)
 
     def to_dicts(self) -> tuple[dict[str, object], ...]:
         """Return ordered rows for framework-specific collation."""
@@ -248,10 +248,17 @@ def _validate_token_ids(token_ids: Sequence[int], field_name: str) -> tuple[int,
     return normalized
 
 
-def _validate_real_number(value: object, field_name: str) -> None:
-    """Reject booleans and non-real values at numeric training boundaries."""
+def _normalize_finite_real(value: object, field_name: str) -> float:
+    """Normalize one finite real scalar for stable framework serialization."""
 
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         if field_name == "reward":
             raise TypeError("reward must be a real number")
         raise TypeError(f"{field_name} must be real numbers")
+
+    normalized_value = float(value)
+    if not isfinite(normalized_value):
+        if field_name == "reward":
+            raise ValueError("reward must be finite")
+        raise ValueError(f"{field_name} must be finite")
+    return normalized_value
