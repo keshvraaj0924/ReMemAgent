@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from math import isfinite
+from numbers import Real
 from typing import Any
 
 from remem.environments.base import StepResult
@@ -29,10 +30,16 @@ def normalize_finite_reward(
     benchmark_name: str = "environment",
     unwrap_singleton_value: bool = False,
 ) -> float:
-    """Validate a finite numeric reward without accepting boolean coercion."""
+    """Validate a finite real-valued reward without accepting booleans.
+
+    ``numbers.Real`` deliberately admits compatible scalar implementations such
+    as NumPy floating-point values while continuing to reject strings, complex
+    values, and boolean rewards. This keeps benchmark adapters interoperable with
+    numeric wrappers without falling back to permissive ``float(...)`` coercion.
+    """
 
     normalized_value = unwrap_singleton(value) if unwrap_singleton_value else value
-    if isinstance(normalized_value, bool) or not isinstance(normalized_value, (int, float)):
+    if isinstance(normalized_value, bool) or not isinstance(normalized_value, Real):
         raise TypeError(f"{benchmark_name} reward must be a finite numeric value")
     reward = float(normalized_value)
     if not isfinite(reward):
