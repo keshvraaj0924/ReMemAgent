@@ -48,6 +48,30 @@ def test_alfworld_adapter_rejects_non_text_reset_observation() -> None:
         adapter.reset()
 
 
+def test_alfworld_adapter_rejects_non_mapping_reset_info() -> None:
+    adapter = AlfWorldAdapter(
+        FakeAlfWorld(
+            (["next"], [0.0], [False], [False], {}),
+            reset_result=(["initial observation"], None),
+        )
+    )
+
+    with pytest.raises(TypeError, match="ALFWorld info must be a mapping"):
+        adapter.reset()
+
+
+def test_alfworld_adapter_rejects_non_string_reset_info_keys() -> None:
+    adapter = AlfWorldAdapter(
+        FakeAlfWorld(
+            (["next"], [0.0], [False], [False], {}),
+            reset_result=(["initial observation"], {1: ["bad"]}),
+        )
+    )
+
+    with pytest.raises(TypeError, match="ALFWorld info keys must be strings"):
+        adapter.reset()
+
+
 def test_alfworld_adapter_rejects_non_text_step_observation() -> None:
     adapter = AlfWorldAdapter(FakeAlfWorld(([None], [0.0], [False], [False], {})))
 
