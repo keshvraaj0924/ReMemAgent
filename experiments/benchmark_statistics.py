@@ -8,9 +8,10 @@ sample standard deviation, preserving independence across repetitions.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from math import sqrt
-from typing import Any, Sequence
+from typing import Any
 
 from remem.benchmark import BenchmarkRunReport
 
