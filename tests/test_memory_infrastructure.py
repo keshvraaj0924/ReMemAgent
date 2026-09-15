@@ -4,7 +4,9 @@ from remem.memory.store import MemoryStore
 from remem.memory.types import MemoryKind, MemoryRecord
 
 
-def make_memory(memory_id: str, state: str, action: str, outcome: str, *, reward: float = 0.0) -> MemoryRecord:
+def make_memory(
+    memory_id: str, state: str, action: str, outcome: str, *, reward: float = 0.0
+) -> MemoryRecord:
     return MemoryRecord(
         memory_id=memory_id,
         state=state,
