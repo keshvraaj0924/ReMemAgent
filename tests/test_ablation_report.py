@@ -40,9 +40,9 @@ def test_write_results_json_creates_parent_directory_and_stable_json(tmp_path: P
 
     assert output_path.exists()
     assert output_path.read_text(encoding="utf-8") == (
-        '{\n'
+        "{\n"
         '  "results": [\n'
-        '    {\n'
+        "    {\n"
         '      "mean_utility": 0.85,\n'
         '      "negative_transfer_cases": 1,\n'
         '      "negative_transfer_rate": 0.0,\n'
@@ -51,7 +51,7 @@ def test_write_results_json_creates_parent_directory_and_stable_json(tmp_path: P
         '      "selected_negative_transfer_cases": 0,\n'
         '      "strategy": "counterfactual",\n'
         '      "total_cases": 2\n'
-        '    }\n'
-        '  ]\n'
-        '}\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
     )
