@@ -6,16 +6,26 @@ from remem.memory.types import MemoryRecord, MemoryStatus
 
 
 def make_memory(memory_id: str, action: str, outcome: str) -> MemoryRecord:
-    return MemoryRecord(memory_id=memory_id, state="The cabinet is closed.", action=action, outcome=outcome, reward=1.0)
+    return MemoryRecord(
+        memory_id=memory_id,
+        state="The cabinet is closed.",
+        action=action,
+        outcome=outcome,
+        reward=1.0,
+    )
 
 
 def test_pipeline_retrieves_scores_and_reconstructs_active_memory() -> None:
-    store = MemoryStore([
-        make_memory("cabinet-1", "open the cabinet", "the object can then be placed"),
-        make_memory("unrelated-1", "wash the plate", "the plate becomes clean"),
-    ])
+    store = MemoryStore(
+        [
+            make_memory("cabinet-1", "open the cabinet", "the object can then be placed"),
+            make_memory("unrelated-1", "wash the plate", "the plate becomes clean"),
+        ]
+    )
     candidates = MemoryGuidancePipeline().build_candidates(
-        store, query="open cabinet object", current_state="The cabinet is closed in front of the agent."
+        store,
+        query="open cabinet object",
+        current_state="The cabinet is closed in front of the agent.",
     )
     assert [candidate.memory_id for candidate in candidates] == ["cabinet-1"]
     assert candidates[0].trust.confidence > 0.0
