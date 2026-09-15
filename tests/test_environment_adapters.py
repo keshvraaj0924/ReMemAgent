@@ -91,3 +91,24 @@ def test_adapter_rejects_non_finite_rewards(adapter_type, reward: float) -> None
 
     with pytest.raises(ValueError, match="finite"):
         adapter.step("look")
+
+
+class _MutableInfoEnvironment:
+    def __init__(self) -> None:
+        self.info = {"trace": {"actions": ["look"]}}
+
+    def reset(self):
+        return "initial"
+
+    def step(self, action: str):
+        return "next", 0.0, False, self.info
+
+
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_detaches_nested_transition_metadata(adapter_type) -> None:
+    environment = _MutableInfoEnvironment()
+    result = adapter_type(environment).step("look")
+
+    environment.info["trace"]["actions"].append("mutated")
+
+    assert result.info == {"trace": {"actions": ["look"]}}
