@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from typing import Any
 
 from remem.environments.base import StepResult
@@ -22,7 +23,8 @@ def normalize_step_result(result: Any) -> StepResult:
     Rewards cross an untrusted benchmark boundary, so they are normalized to a
     finite Python ``float`` before they can reach experiment metrics or training
     code. NaN and infinity are rejected rather than allowed to silently poison
-    aggregate results.
+    aggregate results. Environment metadata is deeply detached so later mutation
+    by the benchmark cannot rewrite an already-recorded transition.
     """
 
     if not isinstance(result, Sequence) or isinstance(result, (str, bytes)):
@@ -47,7 +49,7 @@ def normalize_step_result(result: Any) -> StepResult:
         reward=normalized_reward,
         terminated=terminated,
         truncated=truncated,
-        info=dict(info),
+        info=deepcopy(dict(info)),
     )
 
 
