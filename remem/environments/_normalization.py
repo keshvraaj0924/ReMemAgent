@@ -13,10 +13,21 @@ LEGACY_TIME_LIMIT_TRUNCATED_KEY = "TimeLimit.truncated"
 
 
 def normalize_reset_result(result: Any) -> str:
-    """Normalize Gym-style reset outputs to a textual observation."""
+    """Normalize Gym-style reset outputs to a textual observation.
 
-    observation = result[0] if isinstance(result, tuple) and len(result) == 2 else result
-    return _as_text(observation)
+    Gymnasium reset results are ``(observation, info)`` pairs. Validate the
+    metadata shape instead of silently accepting malformed two-item tuples at
+    the external benchmark boundary.
+    """
+
+    if isinstance(result, tuple):
+        if len(result) != 2:
+            raise ValueError("environment reset() tuple must contain observation and info")
+        observation, info = result
+        if not isinstance(info, Mapping):
+            raise TypeError("environment reset info must be a mapping")
+        return _as_text(observation)
+    return _as_text(result)
 
 
 def normalize_step_result(result: Any) -> StepResult:
