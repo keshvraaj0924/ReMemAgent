@@ -5,7 +5,14 @@ from remem.routing.adaptive_router import CounterfactualRouter, Route
 
 
 def memory(successes=8, failures=2, confidence=0.8):
-    return MemoryRecord("m1", "Open the container before placing the object.", uses=successes+failures, successes=successes, failures=failures, confidence=confidence)
+    return MemoryRecord(
+        "m1",
+        "Open the container before placing the object.",
+        uses=successes + failures,
+        successes=successes,
+        failures=failures,
+        confidence=confidence,
+    )
 
 
 def test_router_rejects_negative_transfer():
