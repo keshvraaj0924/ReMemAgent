@@ -76,12 +76,17 @@ class RetrievedMemory:
 
 @dataclass(slots=True)
 class MemoryRecord:
-    """An experience stored for possible future transfer."""
+    """An experience stored for possible future transfer.
+
+    ``action`` and ``outcome`` are optional for compatibility with compact
+    rule-like memories whose complete content is represented by ``state``.
+    Structured episodic memories should populate all three fields.
+    """
 
     memory_id: str
     state: str
-    action: str
-    outcome: str
+    action: str = ""
+    outcome: str = ""
     kind: MemoryKind = MemoryKind.EPISODIC
     reward: float = 0.0
     uses: int = 0
