@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from types import TracebackType
 from typing import Any, Mapping
 
 
@@ -34,3 +35,21 @@ class EnvironmentAdapter(ABC):
     @abstractmethod
     def step(self, action: str) -> StepResult:
         """Apply an action and normalize the resulting transition."""
+
+    def close(self) -> None:
+        """Release resources owned by the underlying environment, if any."""
+
+    def __enter__(self) -> EnvironmentAdapter:
+        """Return this adapter for deterministic resource management."""
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Release environment resources when leaving a context manager."""
+
+        self.close()
