@@ -71,3 +71,23 @@ def test_adapter_fails_closed_on_malformed_external_contract() -> None:
         adapter.reset()
     with pytest.raises(TypeError, match="reward"):
         adapter.step("look")
+
+
+class _NonFiniteRewardEnvironment:
+    def __init__(self, reward: float) -> None:
+        self.reward = reward
+
+    def reset(self):
+        return "initial"
+
+    def step(self, action: str):
+        return "next", self.reward, False, {"action": action}
+
+
+@pytest.mark.parametrize("reward", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_rejects_non_finite_rewards(adapter_type, reward: float) -> None:
+    adapter = adapter_type(_NonFiniteRewardEnvironment(reward))
+
+    with pytest.raises(ValueError, match="finite"):
+        adapter.step("look")
