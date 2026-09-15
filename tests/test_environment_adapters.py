@@ -16,6 +16,14 @@ class _LegacyEnvironment:
         return b"next", 0.5, True, {"action": action}
 
 
+class _LegacyTruncatedEnvironment:
+    def reset(self):
+        return "initial"
+
+    def step(self, action: str):
+        return "next", 0.0, True, {"TimeLimit.truncated": True, "action": action}
+
+
 class _GymnasiumEnvironment:
     def reset(self):
         return "initial"
@@ -37,6 +45,15 @@ def test_adapter_normalizes_legacy_gym_contract(adapter_type) -> None:
     assert result.truncated is False
     assert result.done is True
     assert result.info == {"action": "look"}
+
+
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_preserves_legacy_gym_time_limit_truncation(adapter_type) -> None:
+    result = adapter_type(_LegacyTruncatedEnvironment()).step("look")
+
+    assert result.terminated is False
+    assert result.truncated is True
+    assert result.done is True
 
 
 @pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
