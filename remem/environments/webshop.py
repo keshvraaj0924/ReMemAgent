@@ -25,3 +25,10 @@ class WebShopAdapter(EnvironmentAdapter):
         if not isinstance(action, str) or not action.strip():
             raise ValueError("action must be a non-empty string")
         return normalize_step_result(self._environment.step(action))
+
+    def close(self) -> None:
+        """Release resources when the wrapped WebShop environment supports it."""
+
+        close = getattr(self._environment, "close", None)
+        if callable(close):
+            close()
