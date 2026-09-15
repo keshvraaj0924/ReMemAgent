@@ -36,16 +36,12 @@ class MemoryLifecycle:
     def __init__(self, policy: LifecyclePolicy | None = None) -> None:
         self.policy = policy or LifecyclePolicy()
 
-    def health_score(
-        self, memory: MemoryRecord, now: datetime | None = None
-    ) -> float:
+    def health_score(self, memory: MemoryRecord, now: datetime | None = None) -> float:
         """Calculate a bounded health score from evidence and freshness."""
 
         current_time = now or datetime.now(timezone.utc)
         age_days = _elapsed_days(memory.created_at, current_time)
-        freshness = max(
-            0.0, 1.0 - age_days / self.policy.retire_after_days
-        )
+        freshness = max(0.0, 1.0 - age_days / self.policy.retire_after_days)
         score = (
             0.35 * memory.empirical_success_rate
             + 0.30 * memory.transferability
@@ -89,29 +85,34 @@ class MemoryLifecycle:
         memories: list[MemoryRecord],
         memory_id: str,
         state: str,
-        action: str,
-        summary: str,
+        action: str = "",
+        summary: str | None = None,
     ) -> MemoryRecord:
-        """Create semantic memory from compatible episodic evidence."""
+        """Create semantic memory from compatible episodic evidence.
+
+        Compact rule memories may provide only ``state``; in that form the state
+        is also used as the semantic summary. Structured callers can provide a
+        distinct action and summary without changing the lifecycle semantics.
+        """
 
         if not self.should_consolidate(memories):
             raise ValueError("insufficient compatible episodic memories for consolidation")
-        if not memory_id.strip() or not summary.strip():
-            raise ValueError("memory_id and summary must not be empty")
+
+        semantic_summary = state if summary is None else summary
+        if not memory_id.strip() or not state.strip() or not semantic_summary.strip():
+            raise ValueError("memory_id, state, and summary must not be empty")
 
         total_successes = sum(memory.successes for memory in memories)
         total_failures = sum(memory.failures for memory in memories)
         total_uses = sum(memory.uses for memory in memories)
         average_reward = sum(memory.reward for memory in memories) / len(memories)
-        confidence = min(
-            0.99, max(memory.confidence for memory in memories) + 0.05
-        )
+        confidence = min(0.99, max(memory.confidence for memory in memories) + 0.05)
 
         consolidated_memory = MemoryRecord(
             memory_id=memory_id,
             state=state,
             action=action,
-            outcome=summary,
+            outcome=semantic_summary,
             kind=MemoryKind.SEMANTIC,
             reward=average_reward,
             uses=total_uses,
