@@ -1,6 +1,6 @@
 """Tests for deterministic memory lifecycle policy."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -22,7 +22,7 @@ def make_memory(**kwargs: object) -> MemoryRecord:
 def test_health_score_is_bounded() -> None:
     memory = make_memory(confidence=1.0, uses=4, successes=4)
     lifecycle = MemoryLifecycle()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     score = lifecycle.health_score(memory, now=now)
 
