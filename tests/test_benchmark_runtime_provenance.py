@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from tests.test_benchmark_report import _build_report
 
 from experiments.benchmark_report import save_benchmark_report
 from experiments.runtime_provenance import (
@@ -10,7 +11,6 @@ from experiments.runtime_provenance import (
     RUNTIME_PROVENANCE_SCHEMA_VERSION,
     RuntimeProvenance,
 )
-from tests.test_benchmark_report import _build_report
 
 
 VALID_DEPENDENCY_FINGERPRINT = "a" * 64
