@@ -90,6 +90,30 @@ def test_adapter_fails_closed_on_malformed_external_contract() -> None:
         adapter.step("look")
 
 
+class _MalformedResetEnvironment(_LegacyEnvironment):
+    def __init__(self, reset_result) -> None:
+        self.reset_result = reset_result
+
+    def reset(self):
+        return self.reset_result
+
+
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_rejects_reset_tuple_without_metadata_mapping(adapter_type) -> None:
+    adapter = adapter_type(_MalformedResetEnvironment(("initial", "not-info")))
+
+    with pytest.raises(TypeError, match="reset info"):
+        adapter.reset()
+
+
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_rejects_reset_tuple_with_invalid_arity(adapter_type) -> None:
+    adapter = adapter_type(_MalformedResetEnvironment(("initial", {}, "extra")))
+
+    with pytest.raises(ValueError, match="observation and info"):
+        adapter.reset()
+
+
 class _NonFiniteRewardEnvironment:
     def __init__(self, reward: float) -> None:
         self.reward = reward
