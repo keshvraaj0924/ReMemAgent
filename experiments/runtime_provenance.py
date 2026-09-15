@@ -27,9 +27,7 @@ class RuntimeProvenance:
 
     def __post_init__(self) -> None:
         if self.schema_version != RUNTIME_PROVENANCE_SCHEMA_VERSION:
-            raise ValueError(
-                f"schema_version must be {RUNTIME_PROVENANCE_SCHEMA_VERSION}"
-            )
+            raise ValueError(f"schema_version must be {RUNTIME_PROVENANCE_SCHEMA_VERSION}")
         for field_name in (
             "code_revision",
             "python_version",
@@ -41,8 +39,7 @@ class RuntimeProvenance:
         if self.working_tree_state not in _VALID_WORKING_TREE_STATES:
             raise ValueError("working_tree_state must be 'clean' or 'dirty'")
         if len(self.dependency_fingerprint) != 64 or any(
-            character not in "0123456789abcdef"
-            for character in self.dependency_fingerprint.lower()
+            character not in "0123456789abcdef" for character in self.dependency_fingerprint.lower()
         ):
             raise ValueError("dependency_fingerprint must be a 64-character hex digest")
 
