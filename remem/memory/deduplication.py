@@ -20,10 +20,22 @@ class DeduplicationPolicy:
 
 
 class MemoryDeduplicator:
-    """Remove redundant memories while preserving the strongest evidence."""
+    """Detect and remove redundant memories while preserving strong evidence."""
 
-    def __init__(self, policy: DeduplicationPolicy | None = None) -> None:
-        self.policy = policy or DeduplicationPolicy()
+    def __init__(self, policy: DeduplicationPolicy | float | None = None) -> None:
+        if isinstance(policy, (int, float)):
+            self.policy = DeduplicationPolicy(float(policy))
+        else:
+            self.policy = policy or DeduplicationPolicy()
+
+    def is_duplicate(
+        self,
+        candidate: MemoryRecord,
+        existing: list[MemoryRecord],
+    ) -> bool:
+        """Return whether ``candidate`` overlaps any existing memory."""
+
+        return self._find_duplicate_index(candidate, existing) is not None
 
     def deduplicate(self, memories: list[MemoryRecord]) -> list[MemoryRecord]:
         """Return memories with near-duplicate records removed.
