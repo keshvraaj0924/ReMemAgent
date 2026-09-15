@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from remem.environments.alfworld import AlfWorldAdapter
@@ -132,6 +134,22 @@ def test_adapter_rejects_non_finite_rewards(adapter_type, reward: float) -> None
 
     with pytest.raises(ValueError, match="finite"):
         adapter.step("look")
+
+
+class _RealRewardEnvironment:
+    def reset(self):
+        return "initial"
+
+    def step(self, action: str):
+        return "next", Fraction(1, 4), False, {"action": action}
+
+
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_accepts_standard_real_reward_implementations(adapter_type) -> None:
+    result = adapter_type(_RealRewardEnvironment()).step("look")
+
+    assert result.reward == 0.25
+    assert isinstance(result.reward, float)
 
 
 class _MutableInfoEnvironment:
