@@ -78,16 +78,17 @@ def _evaluate_strategy(
             selected_negative_transfer_cases += 1
             routing_regret += case.utility_without_memory - case.utility_with_memory
 
+    mean_utility = round(sum(utilities) / len(utilities), 12) if utilities else 0.0
     return AblationResult(
         strategy=strategy,
         total_cases=len(cases),
         selected_memory=selected_memory,
-        mean_utility=sum(utilities) / len(utilities) if utilities else 0.0,
+        mean_utility=mean_utility,
         negative_transfer_cases=sum(
             case.utility_with_memory < case.utility_without_memory for case in cases
         ),
         selected_negative_transfer_cases=selected_negative_transfer_cases,
-        routing_regret=routing_regret,
+        routing_regret=round(routing_regret, 12),
     )
 
 
