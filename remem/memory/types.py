@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from math import isfinite
+from typing import Any, Literal
 
 
 class MemoryKind(str, Enum):
@@ -23,6 +24,42 @@ class MemoryStatus(str, Enum):
     ACTIVE = "active"
     STALE = "stale"
     RETIRED = "retired"
+
+
+@dataclass(frozen=True, slots=True)
+class CounterfactualScore:
+    """Utilities estimated for memory-guided and memory-free reasoning paths."""
+
+    with_memory: float
+    without_memory: float
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.with_memory) or not isfinite(self.without_memory):
+            raise ValueError("counterfactual utilities must be finite")
+
+    @property
+    def delta(self) -> float:
+        """Return the estimated utility gained by using memory."""
+
+        return self.with_memory - self.without_memory
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryDecision:
+    """A counterfactual routing decision and its supporting evidence."""
+
+    route: Literal["memory", "self_reasoning"]
+    confidence: float
+    expected_delta: float
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be between 0 and 1")
+        if not isfinite(self.expected_delta):
+            raise ValueError("expected_delta must be finite")
+        if not self.reason.strip():
+            raise ValueError("reason must not be empty")
 
 
 @dataclass(frozen=True, slots=True)
