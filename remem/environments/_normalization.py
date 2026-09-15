@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -16,7 +17,13 @@ def normalize_reset_result(result: Any) -> str:
 
 
 def normalize_step_result(result: Any) -> StepResult:
-    """Normalize legacy Gym and Gymnasium step tuples."""
+    """Normalize legacy Gym and Gymnasium step tuples.
+
+    Rewards cross an untrusted benchmark boundary, so they are normalized to a
+    finite Python ``float`` before they can reach experiment metrics or training
+    code. NaN and infinity are rejected rather than allowed to silently poison
+    aggregate results.
+    """
 
     if not isinstance(result, Sequence) or isinstance(result, (str, bytes)):
         raise TypeError("environment step() must return a 4- or 5-item sequence")
@@ -29,8 +36,7 @@ def normalize_step_result(result: Any) -> StepResult:
     else:
         raise ValueError("environment step() must return exactly 4 or 5 items")
 
-    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
-        raise TypeError("environment reward must be numeric")
+    normalized_reward = _normalize_reward(reward)
     if not isinstance(terminated, bool) or not isinstance(truncated, bool):
         raise TypeError("environment termination flags must be bool")
     if not isinstance(info, Mapping):
@@ -38,11 +44,23 @@ def normalize_step_result(result: Any) -> StepResult:
 
     return StepResult(
         observation=_as_text(observation),
-        reward=float(reward),
+        reward=normalized_reward,
         terminated=terminated,
         truncated=truncated,
         info=dict(info),
     )
+
+
+def _normalize_reward(reward: Any) -> float:
+    """Return a finite numeric reward as a Python float."""
+
+    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
+        raise TypeError("environment reward must be numeric")
+
+    normalized_reward = float(reward)
+    if not math.isfinite(normalized_reward):
+        raise ValueError("environment reward must be finite")
+    return normalized_reward
 
 
 def _as_text(observation: Any) -> str:
