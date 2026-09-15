@@ -66,8 +66,9 @@ class MemoryTrustScorer:
             transferability_score,
             freshness_score,
         )
-        confidence = sum(
-            weight * value for weight, value in zip(self._weights, component_scores)
+        confidence = round(
+            sum(weight * value for weight, value in zip(self._weights, component_scores)),
+            12,
         )
         return TrustScore(
             similarity=similarity_score,
