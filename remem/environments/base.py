@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import TracebackType
-from typing import Any, Mapping
+from typing import Any, Self
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +40,7 @@ class EnvironmentAdapter(ABC):
     def close(self) -> None:
         """Release resources owned by the underlying environment, if any."""
 
-    def __enter__(self) -> EnvironmentAdapter:
+    def __enter__(self) -> Self:
         """Return this adapter for deterministic resource management."""
 
         return self
