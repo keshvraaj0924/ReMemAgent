@@ -10,9 +10,7 @@ from experiments.runtime_provenance import (
     RUNTIME_PROVENANCE_SCHEMA_VERSION,
     RuntimeProvenance,
 )
-
 from tests.test_benchmark_report import _build_report
-
 
 VALID_DEPENDENCY_FINGERPRINT = "a" * 64
 
