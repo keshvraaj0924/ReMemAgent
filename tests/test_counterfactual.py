@@ -1,3 +1,5 @@
+import pytest
+
 from remem.routing.counterfactual import CounterfactualRouter
 
 
@@ -29,3 +31,12 @@ def test_router_supports_explicit_margin() -> None:
     )
 
     assert decision.route == "self_reasoning"
+
+
+@pytest.mark.parametrize("invalid_utility", [float("nan"), float("inf"), float("-inf")])
+def test_router_rejects_non_finite_counterfactual_utilities(invalid_utility: float) -> None:
+    with pytest.raises(ValueError, match="counterfactual utilities must be finite"):
+        CounterfactualRouter().route(
+            evaluate_with_memory=lambda: invalid_utility,
+            evaluate_without_memory=lambda: 0.5,
+        )
