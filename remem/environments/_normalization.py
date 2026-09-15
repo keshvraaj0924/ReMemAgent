@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
+from numbers import Real
 from typing import Any
 
 from remem.environments.base import StepResult
@@ -87,11 +88,17 @@ def _normalize_legacy_done(done: Any, info: Mapping[str, Any]) -> tuple[bool, bo
     return terminated, truncated
 
 
-def _normalize_reward(reward: Any) -> float:
-    """Return a finite numeric reward as a Python float."""
+def _normalize_reward(reward: object) -> float:
+    """Return a finite real-valued reward as a Python float.
 
-    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
-        raise TypeError("environment reward must be numeric")
+    Gym-compatible environments may return scalar implementations beyond the
+    built-in ``int`` and ``float`` types. Accept the standard ``Real`` numeric
+    contract while explicitly excluding booleans, which are ``int`` subclasses
+    but are not meaningful benchmark rewards.
+    """
+
+    if isinstance(reward, bool) or not isinstance(reward, Real):
+        raise TypeError("environment reward must be a real number")
 
     normalized_reward = float(reward)
     if not math.isfinite(normalized_reward):
