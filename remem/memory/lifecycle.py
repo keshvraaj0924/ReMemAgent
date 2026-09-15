@@ -50,9 +50,7 @@ class MemoryLifecycle:
         )
         return max(0.0, min(1.0, score))
 
-    def refresh_status(
-        self, memory: MemoryRecord, now: datetime | None = None
-    ) -> MemoryStatus:
+    def refresh_status(self, memory: MemoryRecord, now: datetime | None = None) -> MemoryStatus:
         """Update and return lifecycle status based on usage and transfer evidence."""
 
         current_time = now or datetime.now(timezone.utc)
