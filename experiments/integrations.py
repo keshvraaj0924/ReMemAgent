@@ -15,6 +15,7 @@ from remem.environments.base import EnvironmentAdapter
 from remem.environments.webshop import WebShopAdapter
 
 EnvironmentFactory = Callable[[int], Any]
+AdapterFactory = Callable[[Any], EnvironmentAdapter]
 
 
 def build_environment_factory(
@@ -28,17 +29,17 @@ def build_environment_factory(
     controls construction of the real benchmark environment.
     """
 
-    adapter_type = _adapter_type_for(benchmark)
+    adapter_factory = _adapter_factory_for(benchmark)
 
     def create_environment(seed: int) -> EnvironmentAdapter:
         environment = factory(seed)
-        return adapter_type(environment)
+        return adapter_factory(environment)
 
     return create_environment
 
 
-def _adapter_type_for(benchmark: str) -> type[EnvironmentAdapter]:
-    """Return the adapter class for a supported external benchmark."""
+def _adapter_factory_for(benchmark: str) -> AdapterFactory:
+    """Return the adapter constructor for a supported external benchmark."""
 
     normalized_name = benchmark.strip().lower()
     if normalized_name == "alfworld":
