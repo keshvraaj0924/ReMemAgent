@@ -112,3 +112,27 @@ def test_adapter_detaches_nested_transition_metadata(adapter_type) -> None:
     environment.info["trace"]["actions"].append("mutated")
 
     assert result.info == {"trace": {"actions": ["look"]}}
+
+
+class _ClosableEnvironment(_LegacyEnvironment):
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_context_manager_closes_wrapped_environment(adapter_type) -> None:
+    environment = _ClosableEnvironment()
+
+    with adapter_type(environment) as adapter:
+        assert adapter.reset() == "initial"
+        assert environment.close_calls == 0
+
+    assert environment.close_calls == 1
+
+
+@pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
+def test_adapter_close_is_safe_when_environment_has_no_close(adapter_type) -> None:
+    adapter_type(_LegacyEnvironment()).close()
