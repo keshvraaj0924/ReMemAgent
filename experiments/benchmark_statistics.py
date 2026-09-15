@@ -70,12 +70,8 @@ def summarize_benchmark_reports(
     return BenchmarkSeedStatistics(
         benchmark_name=selected_reports[0].benchmark_name,
         seeds=seeds,
-        success_rate=_summarize(
-            tuple(report.success_rate for report in selected_reports)
-        ),
-        mean_reward=_summarize(
-            tuple(report.mean_reward for report in selected_reports)
-        ),
+        success_rate=_summarize(tuple(report.success_rate for report in selected_reports)),
+        mean_reward=_summarize(tuple(report.mean_reward for report in selected_reports)),
         transfer_success_rate=_summarize(
             tuple(report.transfer_success_rate for report in selected_reports)
         ),
