@@ -9,6 +9,8 @@ from typing import Any
 
 from remem.environments.base import StepResult
 
+LEGACY_TIME_LIMIT_TRUNCATED_KEY = "TimeLimit.truncated"
+
 
 def normalize_reset_result(result: Any) -> str:
     """Normalize Gym-style reset outputs to a textual observation."""
@@ -25,24 +27,30 @@ def normalize_step_result(result: Any) -> StepResult:
     code. NaN and infinity are rejected rather than allowed to silently poison
     aggregate results. Environment metadata is deeply detached so later mutation
     by the benchmark cannot rewrite an already-recorded transition.
+
+    Legacy Gym exposes a single ``done`` flag. When ``TimeLimit.truncated`` is
+    present in ``info``, preserve the distinction between a true terminal state
+    and a time-limit truncation instead of treating every ``done`` as terminal.
     """
 
     if not isinstance(result, Sequence) or isinstance(result, (str, bytes)):
         raise TypeError("environment step() must return a 4- or 5-item sequence")
 
     if len(result) == 4:
-        observation, reward, terminated, info = result
-        truncated = False
+        observation, reward, done, info = result
+        if not isinstance(info, Mapping):
+            raise TypeError("environment info must be a mapping")
+        terminated, truncated = _normalize_legacy_done(done, info)
     elif len(result) == 5:
         observation, reward, terminated, truncated, info = result
+        if not isinstance(terminated, bool) or not isinstance(truncated, bool):
+            raise TypeError("environment termination flags must be bool")
+        if not isinstance(info, Mapping):
+            raise TypeError("environment info must be a mapping")
     else:
         raise ValueError("environment step() must return exactly 4 or 5 items")
 
     normalized_reward = _normalize_reward(reward)
-    if not isinstance(terminated, bool) or not isinstance(truncated, bool):
-        raise TypeError("environment termination flags must be bool")
-    if not isinstance(info, Mapping):
-        raise TypeError("environment info must be a mapping")
 
     return StepResult(
         observation=_as_text(observation),
@@ -51,6 +59,21 @@ def normalize_step_result(result: Any) -> StepResult:
         truncated=truncated,
         info=deepcopy(dict(info)),
     )
+
+
+def _normalize_legacy_done(done: Any, info: Mapping[str, Any]) -> tuple[bool, bool]:
+    """Split legacy Gym ``done`` into termination and truncation flags."""
+
+    if not isinstance(done, bool):
+        raise TypeError("environment termination flags must be bool")
+
+    time_limit_truncated = info.get(LEGACY_TIME_LIMIT_TRUNCATED_KEY, False)
+    if not isinstance(time_limit_truncated, bool):
+        raise TypeError("TimeLimit.truncated must be bool when present")
+
+    truncated = done and time_limit_truncated
+    terminated = done and not truncated
+    return terminated, truncated
 
 
 def _normalize_reward(reward: Any) -> float:
