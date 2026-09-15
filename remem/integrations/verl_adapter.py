@@ -148,7 +148,7 @@ def _merge_external_extra_fields(
 def adapt_agent_loop_output(
     output: Mapping[str, object] | AgentLoopOutputLike,
     *,
-    reward: Real,
+    reward: object,
     metadata: Mapping[str, object] | None = None,
 ) -> VerlTrajectory:
     """Convert a validated external agent-loop output into a trajectory.
@@ -162,7 +162,9 @@ def adapt_agent_loop_output(
     ``extra_fields`` are preserved under a reserved metadata key rather than
     silently discarded. Optional response log probabilities are retained
     alongside response tokens for loss/replay consumers that need rollout
-    likelihoods.
+    likelihoods. The reward boundary is intentionally typed as ``object`` and
+    narrowed at runtime because static type checkers do not model
+    ``numbers.Real`` consistently across compatible scalar implementations.
     """
 
     normalized_reward = _normalize_finite_reward(reward)
