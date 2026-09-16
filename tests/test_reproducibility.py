@@ -1,5 +1,7 @@
 """Tests for deterministic experiment seed derivation."""
 
+import json
+
 import pytest
 
 from remem.reproducibility import ReproducibilityConfig
@@ -34,6 +36,39 @@ def test_derive_seed_changes_with_base_seed() -> None:
     assert first != second
 
 
+def test_manifest_is_order_independent_and_serializable() -> None:
+    config = ReproducibilityConfig(base_seed=42)
+
+    first = config.create_manifest([("policy", 1), ("environment", 0)])
+    second = config.create_manifest([("environment", 0), ("policy", 1)])
+
+    assert first == second
+    payload = json.loads(first.to_json())
+    assert payload["base_seed"] == 42
+    assert payload["derivation_version"] == 1
+    assert [item["namespace"] for item in payload["assignments"]] == [
+        "environment",
+        "policy",
+    ]
+    assert payload["assignments"][0]["seed"] == config.derive_seed("environment")
+
+
+def test_manifest_normalizes_component_names() -> None:
+    config = ReproducibilityConfig(base_seed=42)
+
+    manifest = config.create_manifest([(" benchmark ", 0)])
+
+    assert manifest.assignments[0].namespace == "benchmark"
+    assert manifest.assignments[0].seed == config.derive_seed("benchmark")
+
+
+def test_manifest_rejects_duplicate_component_identity() -> None:
+    config = ReproducibilityConfig(base_seed=42)
+
+    with pytest.raises(ValueError, match="duplicate namespace/index pairs"):
+        config.create_manifest([("policy", 0), (" policy ", 0)])
+
+
 @pytest.mark.parametrize("base_seed", [-1, 2**32])
 def test_config_rejects_out_of_range_base_seed(base_seed: int) -> None:
     with pytest.raises(ValueError, match="base_seed must be between"):
@@ -51,6 +86,13 @@ def test_derive_seed_rejects_empty_namespace(namespace: str) -> None:
 
     with pytest.raises(ValueError, match="namespace must not be empty"):
         config.derive_seed(namespace)
+
+
+def test_derive_seed_rejects_non_string_namespace() -> None:
+    config = ReproducibilityConfig(base_seed=42)
+
+    with pytest.raises(TypeError, match="namespace must be a string"):
+        config.derive_seed(42)  # type: ignore[arg-type]
 
 
 def test_derive_seed_rejects_invalid_replica_index() -> None:
