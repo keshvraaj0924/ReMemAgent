@@ -15,10 +15,27 @@ from remem.training.grpo import GrpoRewardConfig, GrpoTrajectory, compute_grpo_r
 
 
 @dataclass(frozen=True, slots=True)
+class VerlRewardFields:
+    """Trainer metadata keys used to construct a measured GRPO trajectory."""
+
+    task_reward: str = "task_reward"
+    memory_used: str = "memory_used"
+    counterfactual_delta: str = "counterfactual_delta"
+
+    def __post_init__(self) -> None:
+        values = (self.task_reward, self.memory_used, self.counterfactual_delta)
+        if any(not value.strip() for value in values):
+            raise ValueError("verl reward field names must be non-empty")
+        if len(set(values)) != len(values):
+            raise ValueError("verl reward field names must be unique")
+
+
+@dataclass(frozen=True, slots=True)
 class VerlRewardAdapter:
     """Convert trainer sample metadata into the framework-neutral GRPO reward."""
 
     config: GrpoRewardConfig = GrpoRewardConfig()
+    fields: VerlRewardFields = VerlRewardFields()
 
     def __call__(
         self,
@@ -56,25 +73,24 @@ class VerlRewardAdapter:
             merged[key] = value
         return merged
 
-    @staticmethod
-    def to_trajectory(sample: Mapping[str, Any]) -> GrpoTrajectory:
+    def to_trajectory(self, sample: Mapping[str, Any]) -> GrpoTrajectory:
         """Validate and convert a trainer sample into a typed trajectory."""
         try:
-            task_reward = sample["task_reward"]
-            memory_used = sample["memory_used"]
+            task_reward = sample[self.fields.task_reward]
+            memory_used = sample[self.fields.memory_used]
         except KeyError as exc:
             raise ValueError(f"missing required reward field: {exc.args[0]}") from exc
 
         if isinstance(task_reward, bool) or not isinstance(task_reward, (int, float)):
-            raise TypeError("task_reward must be a real number")
+            raise TypeError(f"{self.fields.task_reward} must be a real number")
         if not isinstance(memory_used, bool):
-            raise TypeError("memory_used must be a boolean")
+            raise TypeError(f"{self.fields.memory_used} must be a boolean")
 
-        counterfactual_delta = sample.get("counterfactual_delta", 0.0)
+        counterfactual_delta = sample.get(self.fields.counterfactual_delta, 0.0)
         if isinstance(counterfactual_delta, bool) or not isinstance(
             counterfactual_delta, (int, float)
         ):
-            raise TypeError("counterfactual_delta must be a real number")
+            raise TypeError(f"{self.fields.counterfactual_delta} must be a real number")
 
         return GrpoTrajectory(
             task_reward=float(task_reward),
@@ -83,4 +99,4 @@ class VerlRewardAdapter:
         )
 
 
-__all__ = ["VerlRewardAdapter"]
+__all__ = ["VerlRewardAdapter", "VerlRewardFields"]
