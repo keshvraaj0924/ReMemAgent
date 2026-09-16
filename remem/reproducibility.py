@@ -37,6 +37,42 @@ class ReproducibilityManifest:
         """Serialize the manifest using stable ordering for artifact comparison."""
         return json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
 
+    def verify(self) -> None:
+        """Verify that every recorded seed matches the declared derivation inputs.
+
+        Raises:
+            ValueError: If the derivation version is unsupported, an assignment is
+                duplicated, or a recorded seed does not match deterministic
+                derivation from ``base_seed``.
+        """
+        if self.derivation_version != _SEED_DERIVATION_VERSION:
+            raise ValueError(
+                f"unsupported seed derivation version: {self.derivation_version}"
+            )
+
+        config = ReproducibilityConfig(base_seed=self.base_seed)
+        seen_components: set[tuple[str, int]] = set()
+        for assignment in self.assignments:
+            normalized_namespace = config._validate_component(
+                assignment.namespace, assignment.index
+            )
+            identity = (normalized_namespace, assignment.index)
+            if identity in seen_components:
+                raise ValueError(
+                    "manifest contains duplicate namespace/index assignments"
+                )
+            seen_components.add(identity)
+
+            expected_seed = config.derive_seed(
+                normalized_namespace, index=assignment.index
+            )
+            if assignment.seed != expected_seed:
+                raise ValueError(
+                    "manifest seed mismatch for "
+                    f"{normalized_namespace}[{assignment.index}]: "
+                    f"expected {expected_seed}, got {assignment.seed}"
+                )
+
 
 @dataclass(frozen=True, slots=True)
 class ReproducibilityConfig:
@@ -88,11 +124,13 @@ class ReproducibilityConfig:
             )
 
         assignments.sort(key=lambda assignment: (assignment.namespace, assignment.index))
-        return ReproducibilityManifest(
+        manifest = ReproducibilityManifest(
             base_seed=self.base_seed,
             derivation_version=_SEED_DERIVATION_VERSION,
             assignments=tuple(assignments),
         )
+        manifest.verify()
+        return manifest
 
     @staticmethod
     def _validate_component(namespace: str, index: int) -> str:
