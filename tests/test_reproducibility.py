@@ -1,6 +1,7 @@
 """Tests for deterministic experiment seed derivation."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -66,6 +67,46 @@ def test_manifest_json_round_trip_verifies_artifact() -> None:
     loaded = ReproducibilityManifest.from_json(manifest.to_json())
 
     assert loaded == manifest
+
+
+def test_manifest_save_and_load_round_trip(tmp_path: Path) -> None:
+    manifest = ReproducibilityConfig(base_seed=42).create_manifest(
+        [("environment", 0), ("policy", 2)]
+    )
+    destination = tmp_path / "run" / "reproducibility.json"
+    destination.parent.mkdir()
+
+    saved_path = manifest.save(destination)
+
+    assert saved_path == destination
+    assert destination.read_text(encoding="utf-8") == f"{manifest.to_json()}\n"
+    assert ReproducibilityManifest.load(destination) == manifest
+    assert not list(destination.parent.glob("*.tmp"))
+
+
+def test_manifest_save_verifies_before_replacing_existing_file(tmp_path: Path) -> None:
+    destination = tmp_path / "reproducibility.json"
+    destination.write_text("existing artifact\n", encoding="utf-8")
+    invalid_manifest = ReproducibilityManifest(
+        base_seed=42,
+        derivation_version=1,
+        assignments=(SeedAssignment(namespace="policy", index=0, seed=123),),
+    )
+
+    with pytest.raises(ValueError, match="manifest seed mismatch"):
+        invalid_manifest.save(destination)
+
+    assert destination.read_text(encoding="utf-8") == "existing artifact\n"
+
+
+def test_manifest_save_requires_existing_parent_directory(tmp_path: Path) -> None:
+    manifest = ReproducibilityConfig(base_seed=42).create_manifest([])
+    destination = tmp_path / "missing" / "reproducibility.json"
+
+    with pytest.raises(FileNotFoundError, match="parent directory does not exist"):
+        manifest.save(destination)
+
+    assert not destination.exists()
 
 
 @pytest.mark.parametrize(
