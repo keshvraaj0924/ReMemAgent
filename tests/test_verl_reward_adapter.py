@@ -15,6 +15,29 @@ def test_adapter_converts_sample_and_computes_reward() -> None:
     assert reward == pytest.approx(1.19)
 
 
+def test_adapter_accepts_reward_manager_extra_info() -> None:
+    adapter = VerlRewardAdapter()
+
+    reward = adapter(
+        {"task_reward": 1.0},
+        solution_str="ignored generated answer",
+        ground_truth="ignored reference answer",
+        extra_info={"memory_used": True, "counterfactual_delta": 0.4},
+    )
+
+    assert reward == pytest.approx(1.19)
+
+
+def test_adapter_rejects_conflicting_extra_info() -> None:
+    adapter = VerlRewardAdapter()
+
+    with pytest.raises(ValueError, match="conflicting reward field: memory_used"):
+        adapter(
+            {"task_reward": 1.0, "memory_used": False},
+            extra_info={"memory_used": True},
+        )
+
+
 def test_adapter_computes_ordered_batch_rewards() -> None:
     adapter = VerlRewardAdapter()
     samples = [
