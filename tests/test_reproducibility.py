@@ -4,7 +4,11 @@ import json
 
 import pytest
 
-from remem.reproducibility import ReproducibilityConfig
+from remem.reproducibility import (
+    ReproducibilityConfig,
+    ReproducibilityManifest,
+    SeedAssignment,
+)
 
 
 def test_derive_seed_is_stable_for_same_component() -> None:
@@ -43,6 +47,7 @@ def test_manifest_is_order_independent_and_serializable() -> None:
     second = config.create_manifest([("environment", 0), ("policy", 1)])
 
     assert first == second
+    first.verify()
     payload = json.loads(first.to_json())
     assert payload["base_seed"] == 42
     assert payload["derivation_version"] == 1
@@ -67,6 +72,44 @@ def test_manifest_rejects_duplicate_component_identity() -> None:
 
     with pytest.raises(ValueError, match="duplicate namespace/index pairs"):
         config.create_manifest([("policy", 0), (" policy ", 0)])
+
+
+def test_manifest_verification_rejects_tampered_seed() -> None:
+    manifest = ReproducibilityManifest(
+        base_seed=42,
+        derivation_version=1,
+        assignments=(SeedAssignment(namespace="policy", index=0, seed=123),),
+    )
+
+    with pytest.raises(ValueError, match="manifest seed mismatch"):
+        manifest.verify()
+
+
+def test_manifest_verification_rejects_unsupported_derivation_version() -> None:
+    manifest = ReproducibilityManifest(
+        base_seed=42,
+        derivation_version=999,
+        assignments=(),
+    )
+
+    with pytest.raises(ValueError, match="unsupported seed derivation version"):
+        manifest.verify()
+
+
+def test_manifest_verification_rejects_duplicate_assignments() -> None:
+    config = ReproducibilityConfig(base_seed=42)
+    seed = config.derive_seed("policy")
+    manifest = ReproducibilityManifest(
+        base_seed=42,
+        derivation_version=1,
+        assignments=(
+            SeedAssignment(namespace="policy", index=0, seed=seed),
+            SeedAssignment(namespace=" policy ", index=0, seed=seed),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="duplicate namespace/index assignments"):
+        manifest.verify()
 
 
 @pytest.mark.parametrize("base_seed", [-1, 2**32])
