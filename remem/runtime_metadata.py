@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 import platform
-import sys
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
