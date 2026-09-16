@@ -7,7 +7,7 @@ boundary for trainer integrations.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +23,10 @@ class VerlRewardAdapter:
     def __call__(self, sample: Mapping[str, Any]) -> float:
         """Compute reward from a trainer sample containing measured trajectory fields."""
         return compute_grpo_reward(self.to_trajectory(sample), self.config)
+
+    def compute_batch(self, samples: Sequence[Mapping[str, Any]]) -> list[float]:
+        """Compute rewards for an ordered trainer batch without mutating its samples."""
+        return [self(sample) for sample in samples]
 
     @staticmethod
     def to_trajectory(sample: Mapping[str, Any]) -> GrpoTrajectory:
