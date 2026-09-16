@@ -89,16 +89,17 @@ def test_adapter_supports_configurable_trainer_field_names() -> None:
 
 
 @pytest.mark.parametrize(
-    "fields",
+    ("field_kwargs", "message"),
     [
-        VerlRewardFields(task_reward="", memory_used="memory_used"),
-        VerlRewardFields(task_reward="same", memory_used="same"),
+        ({"task_reward": ""}, "non-empty"),
+        ({"task_reward": "same", "memory_used": "same"}, "unique"),
     ],
 )
-def test_reward_fields_reject_invalid_names(fields: VerlRewardFields) -> None:
-    # Construction is evaluated by pytest parameterization, so this test body is
-    # intentionally unreachable for invalid configurations.
-    del fields
+def test_reward_fields_reject_invalid_names(
+    field_kwargs: dict[str, str], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        VerlRewardFields(**field_kwargs)
 
 
 def test_adapter_rejects_missing_required_field() -> None:
