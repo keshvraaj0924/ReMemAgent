@@ -8,9 +8,7 @@ from remem.training.verl_adapter import VerlRewardAdapter, VerlRewardFields
 def test_adapter_converts_sample_and_computes_reward() -> None:
     adapter = VerlRewardAdapter()
 
-    reward = adapter(
-        {"task_reward": 1.0, "memory_used": True, "counterfactual_delta": 0.4}
-    )
+    reward = adapter({"task_reward": 1.0, "memory_used": True, "counterfactual_delta": 0.4})
 
     assert reward == pytest.approx(1.19)
 
@@ -91,9 +89,7 @@ def test_adapter_batch_rejects_invalid_sample() -> None:
 
 
 def test_adapter_defaults_missing_counterfactual_delta() -> None:
-    trajectory = VerlRewardAdapter().to_trajectory(
-        {"task_reward": 0.5, "memory_used": False}
-    )
+    trajectory = VerlRewardAdapter().to_trajectory({"task_reward": 0.5, "memory_used": False})
 
     assert trajectory.counterfactual_delta == 0.0
 
@@ -122,9 +118,7 @@ def test_adapter_supports_configurable_trainer_field_names() -> None:
         ({"task_reward": "same", "memory_used": "same"}, "unique"),
     ],
 )
-def test_reward_fields_reject_invalid_names(
-    field_kwargs: dict[str, str], message: str
-) -> None:
+def test_reward_fields_reject_invalid_names(field_kwargs: dict[str, str], message: str) -> None:
     with pytest.raises(ValueError, match=message):
         VerlRewardFields(**field_kwargs)
 
@@ -146,8 +140,6 @@ def test_adapter_rejects_missing_required_field() -> None:
         ),
     ],
 )
-def test_adapter_rejects_invalid_field_types(
-    sample: dict[str, object], message: str
-) -> None:
+def test_adapter_rejects_invalid_field_types(sample: dict[str, object], message: str) -> None:
     with pytest.raises(TypeError, match=message):
         VerlRewardAdapter().to_trajectory(sample)
