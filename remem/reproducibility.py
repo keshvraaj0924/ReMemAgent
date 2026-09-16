@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
 
 _MAX_SEED = 2**32 - 1
@@ -37,6 +40,47 @@ class ReproducibilityManifest:
     def to_json(self) -> str:
         """Serialize the manifest using stable ordering for artifact comparison."""
         return json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
+
+    def save(self, path: str | Path) -> Path:
+        """Atomically persist a verified manifest as UTF-8 JSON.
+
+        The destination parent must already exist. Writing through a temporary file
+        in the same directory prevents interrupted runs from leaving a partially
+        written manifest that could later be mistaken for valid experiment metadata.
+        """
+        self.verify()
+        destination = Path(path)
+        if not destination.parent.is_dir():
+            raise FileNotFoundError(
+                f"manifest parent directory does not exist: {destination.parent}"
+            )
+
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_file.write(self.to_json())
+                temporary_file.write("\n")
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+                temporary_path = Path(temporary_file.name)
+            os.replace(temporary_path, destination)
+        except Exception:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+            raise
+        return destination
+
+    @classmethod
+    def load(cls, path: str | Path) -> ReproducibilityManifest:
+        """Load and verify a persisted UTF-8 manifest artifact."""
+        return cls.from_json(Path(path).read_text(encoding="utf-8"))
 
     @classmethod
     def from_json(cls, payload: str) -> ReproducibilityManifest:
