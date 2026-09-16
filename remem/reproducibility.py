@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 import tempfile
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
@@ -119,13 +120,7 @@ class ReproducibilityManifest:
         return manifest
 
     def verify(self) -> None:
-        """Verify that every recorded seed matches the declared derivation inputs.
-
-        Raises:
-            ValueError: If the derivation version is unsupported, an assignment is
-                duplicated, or a recorded seed does not match deterministic
-                derivation from ``base_seed``.
-        """
+        """Verify that every recorded seed matches the declared derivation inputs."""
         if isinstance(self.derivation_version, bool) or not isinstance(
             self.derivation_version, int
         ):
@@ -200,6 +195,15 @@ class ReproducibilityConfig:
         ).encode()
         digest = hashlib.blake2s(seed_material, digest_size=4).digest()
         return int.from_bytes(digest, byteorder="big", signed=False)
+
+    def create_random(self, namespace: str, *, index: int = 0) -> random.Random:
+        """Create an isolated deterministic standard-library RNG stream.
+
+        Returning a dedicated ``random.Random`` instance avoids mutating Python's
+        process-global RNG state, so unrelated experiment components cannot change
+        each other's random sequences through execution order.
+        """
+        return random.Random(self.derive_seed(namespace, index=index))
 
     def create_manifest(self, components: Iterable[tuple[str, int]]) -> ReproducibilityManifest:
         """Build a deterministic manifest for experiment RNG components.
