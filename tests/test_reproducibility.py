@@ -58,6 +58,50 @@ def test_manifest_is_order_independent_and_serializable() -> None:
     assert payload["assignments"][0]["seed"] == config.derive_seed("environment")
 
 
+def test_manifest_json_round_trip_verifies_artifact() -> None:
+    manifest = ReproducibilityConfig(base_seed=42).create_manifest(
+        [("environment", 0), ("policy", 2)]
+    )
+
+    loaded = ReproducibilityManifest.from_json(manifest.to_json())
+
+    assert loaded == manifest
+
+
+@pytest.mark.parametrize(
+    ("payload", "error_type", "message"),
+    [
+        ("not-json", ValueError, "valid JSON"),
+        ("[]", TypeError, "root must be an object"),
+        ('{"base_seed":42}', ValueError, "missing fields"),
+        (
+            '{"base_seed":42,"derivation_version":1,"assignments":[],"extra":1}',
+            ValueError,
+            "unknown fields",
+        ),
+        (
+            '{"base_seed":42,"derivation_version":1,"assignments":{}}',
+            TypeError,
+            "assignments must be a list",
+        ),
+    ],
+)
+def test_manifest_loading_rejects_invalid_schema(
+    payload: str, error_type: type[Exception], message: str
+) -> None:
+    with pytest.raises(error_type, match=message):
+        ReproducibilityManifest.from_json(payload)
+
+
+def test_manifest_loading_rejects_tampered_artifact() -> None:
+    manifest = ReproducibilityConfig(base_seed=42).create_manifest([("policy", 0)])
+    payload = json.loads(manifest.to_json())
+    payload["assignments"][0]["seed"] = 123
+
+    with pytest.raises(ValueError, match="manifest seed mismatch"):
+        ReproducibilityManifest.from_json(json.dumps(payload))
+
+
 def test_manifest_normalizes_component_names() -> None:
     config = ReproducibilityConfig(base_seed=42)
 
