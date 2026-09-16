@@ -20,13 +20,41 @@ class VerlRewardAdapter:
 
     config: GrpoRewardConfig = GrpoRewardConfig()
 
-    def __call__(self, sample: Mapping[str, Any]) -> float:
-        """Compute reward from a trainer sample containing measured trajectory fields."""
-        return compute_grpo_reward(self.to_trajectory(sample), self.config)
+    def __call__(
+        self,
+        sample: Mapping[str, Any],
+        solution_str: str | None = None,
+        ground_truth: str | None = None,
+        extra_info: Mapping[str, Any] | None = None,
+    ) -> float:
+        """Compute reward from either direct metadata or a verl reward-manager call.
+
+        ``solution_str`` and ``ground_truth`` are accepted for compatibility with
+        reward-manager call sites but are intentionally not used to infer memory
+        transfer. Transfer must come from measured trajectory metadata.
+        """
+        del solution_str, ground_truth
+        reward_sample = self._merge_extra_info(sample, extra_info)
+        return compute_grpo_reward(self.to_trajectory(reward_sample), self.config)
 
     def compute_batch(self, samples: Sequence[Mapping[str, Any]]) -> list[float]:
         """Compute rewards for an ordered trainer batch without mutating its samples."""
         return [self(sample) for sample in samples]
+
+    @staticmethod
+    def _merge_extra_info(
+        sample: Mapping[str, Any], extra_info: Mapping[str, Any] | None
+    ) -> dict[str, Any]:
+        """Merge trainer metadata while rejecting ambiguous duplicate measurements."""
+        merged = dict(sample)
+        if extra_info is None:
+            return merged
+
+        for key, value in extra_info.items():
+            if key in merged and merged[key] != value:
+                raise ValueError(f"conflicting reward field: {key}")
+            merged[key] = value
+        return merged
 
     @staticmethod
     def to_trajectory(sample: Mapping[str, Any]) -> GrpoTrajectory:
