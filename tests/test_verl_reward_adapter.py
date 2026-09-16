@@ -15,6 +15,31 @@ def test_adapter_converts_sample_and_computes_reward() -> None:
     assert reward == pytest.approx(1.19)
 
 
+def test_adapter_computes_ordered_batch_rewards() -> None:
+    adapter = VerlRewardAdapter()
+    samples = [
+        {"task_reward": 1.0, "memory_used": True, "counterfactual_delta": 0.4},
+        {"task_reward": 0.5, "memory_used": False},
+        {"task_reward": 0.8, "memory_used": True, "counterfactual_delta": -0.2},
+    ]
+
+    rewards = adapter.compute_batch(samples)
+
+    assert rewards == pytest.approx([1.19, 0.5, 0.59])
+
+
+def test_adapter_batch_rejects_invalid_sample() -> None:
+    adapter = VerlRewardAdapter()
+
+    with pytest.raises(ValueError, match="memory_used"):
+        adapter.compute_batch(
+            [
+                {"task_reward": 1.0, "memory_used": False},
+                {"task_reward": 0.5},
+            ]
+        )
+
+
 def test_adapter_defaults_missing_counterfactual_delta() -> None:
     trajectory = VerlRewardAdapter.to_trajectory({"task_reward": 0.5, "memory_used": False})
 
