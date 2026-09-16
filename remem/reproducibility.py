@@ -11,6 +11,7 @@ import hashlib
 import json
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
+from typing import Any
 
 _MAX_SEED = 2**32 - 1
 _SEED_DERIVATION_VERSION = 1
@@ -37,6 +38,42 @@ class ReproducibilityManifest:
         """Serialize the manifest using stable ordering for artifact comparison."""
         return json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
 
+    @classmethod
+    def from_json(cls, payload: str) -> ReproducibilityManifest:
+        """Deserialize and verify a reproducibility manifest artifact.
+
+        Raises:
+            TypeError: If the JSON document does not use the expected field types.
+            ValueError: If JSON is invalid, required fields are missing, unknown
+                fields are present, or deterministic seed verification fails.
+        """
+        if not isinstance(payload, str):
+            raise TypeError("manifest payload must be a string")
+        try:
+            raw_manifest = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise ValueError("manifest payload must contain valid JSON") from error
+        if not isinstance(raw_manifest, dict):
+            raise TypeError("manifest JSON root must be an object")
+
+        required_fields = {"base_seed", "derivation_version", "assignments"}
+        cls._validate_fields(raw_manifest, required_fields, context="manifest")
+        raw_assignments = raw_manifest["assignments"]
+        if not isinstance(raw_assignments, list):
+            raise TypeError("manifest assignments must be a list")
+
+        assignments = tuple(
+            cls._parse_assignment(raw_assignment, position)
+            for position, raw_assignment in enumerate(raw_assignments)
+        )
+        manifest = cls(
+            base_seed=raw_manifest["base_seed"],
+            derivation_version=raw_manifest["derivation_version"],
+            assignments=assignments,
+        )
+        manifest.verify()
+        return manifest
+
     def verify(self) -> None:
         """Verify that every recorded seed matches the declared derivation inputs.
 
@@ -45,6 +82,10 @@ class ReproducibilityManifest:
                 duplicated, or a recorded seed does not match deterministic
                 derivation from ``base_seed``.
         """
+        if isinstance(self.derivation_version, bool) or not isinstance(
+            self.derivation_version, int
+        ):
+            raise TypeError("derivation_version must be an integer")
         if self.derivation_version != _SEED_DERIVATION_VERSION:
             raise ValueError(f"unsupported seed derivation version: {self.derivation_version}")
 
@@ -59,6 +100,10 @@ class ReproducibilityManifest:
                 raise ValueError("manifest contains duplicate namespace/index assignments")
             seen_components.add(identity)
 
+            if isinstance(assignment.seed, bool) or not isinstance(assignment.seed, int):
+                raise TypeError("assignment seed must be an integer")
+            if not 0 <= assignment.seed <= _MAX_SEED:
+                raise ValueError(f"assignment seed must be between 0 and {_MAX_SEED}")
             expected_seed = config.derive_seed(normalized_namespace, index=assignment.index)
             if assignment.seed != expected_seed:
                 raise ValueError(
@@ -66,6 +111,29 @@ class ReproducibilityManifest:
                     f"{normalized_namespace}[{assignment.index}]: "
                     f"expected {expected_seed}, got {assignment.seed}"
                 )
+
+    @staticmethod
+    def _validate_fields(
+        payload: dict[str, Any], expected_fields: set[str], *, context: str
+    ) -> None:
+        actual_fields = set(payload)
+        missing_fields = expected_fields - actual_fields
+        unknown_fields = actual_fields - expected_fields
+        if missing_fields:
+            raise ValueError(f"{context} is missing fields: {sorted(missing_fields)}")
+        if unknown_fields:
+            raise ValueError(f"{context} contains unknown fields: {sorted(unknown_fields)}")
+
+    @classmethod
+    def _parse_assignment(cls, payload: Any, position: int) -> SeedAssignment:
+        if not isinstance(payload, dict):
+            raise TypeError(f"assignment {position} must be an object")
+        cls._validate_fields(payload, {"namespace", "index", "seed"}, context="assignment")
+        return SeedAssignment(
+            namespace=payload["namespace"],
+            index=payload["index"],
+            seed=payload["seed"],
+        )
 
 
 @dataclass(frozen=True, slots=True)
