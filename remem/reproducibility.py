@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from typing import Iterable
 
 _MAX_SEED = 2**32 - 1
 _SEED_DERIVATION_VERSION = 1
