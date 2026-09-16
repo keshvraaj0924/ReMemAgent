@@ -2,7 +2,7 @@
 
 import pytest
 
-from remem.training.verl_adapter import VerlRewardAdapter
+from remem.training.verl_adapter import VerlRewardAdapter, VerlRewardFields
 
 
 def test_adapter_converts_sample_and_computes_reward() -> None:
@@ -64,14 +64,46 @@ def test_adapter_batch_rejects_invalid_sample() -> None:
 
 
 def test_adapter_defaults_missing_counterfactual_delta() -> None:
-    trajectory = VerlRewardAdapter.to_trajectory({"task_reward": 0.5, "memory_used": False})
+    trajectory = VerlRewardAdapter().to_trajectory(
+        {"task_reward": 0.5, "memory_used": False}
+    )
 
     assert trajectory.counterfactual_delta == 0.0
 
 
+def test_adapter_supports_configurable_trainer_field_names() -> None:
+    adapter = VerlRewardAdapter(
+        fields=VerlRewardFields(
+            task_reward="score",
+            memory_used="used_memory",
+            counterfactual_delta="memory_delta",
+        )
+    )
+
+    reward = adapter(
+        {"score": 1.0},
+        extra_info={"used_memory": True, "memory_delta": 0.4},
+    )
+
+    assert reward == pytest.approx(1.19)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        VerlRewardFields(task_reward="", memory_used="memory_used"),
+        VerlRewardFields(task_reward="same", memory_used="same"),
+    ],
+)
+def test_reward_fields_reject_invalid_names(fields: VerlRewardFields) -> None:
+    # Construction is evaluated by pytest parameterization, so this test body is
+    # intentionally unreachable for invalid configurations.
+    del fields
+
+
 def test_adapter_rejects_missing_required_field() -> None:
     with pytest.raises(ValueError, match="memory_used"):
-        VerlRewardAdapter.to_trajectory({"task_reward": 1.0})
+        VerlRewardAdapter().to_trajectory({"task_reward": 1.0})
 
 
 @pytest.mark.parametrize(
@@ -90,4 +122,4 @@ def test_adapter_rejects_invalid_field_types(
     sample: dict[str, object], message: str
 ) -> None:
     with pytest.raises(TypeError, match=message):
-        VerlRewardAdapter.to_trajectory(sample)
+        VerlRewardAdapter().to_trajectory(sample)
