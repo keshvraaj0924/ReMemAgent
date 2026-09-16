@@ -8,7 +8,7 @@ boundary for trainer integrations.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from remem.training.grpo import GrpoRewardConfig, GrpoTrajectory, compute_grpo_reward
@@ -34,8 +34,8 @@ class VerlRewardFields:
 class VerlRewardAdapter:
     """Convert trainer sample metadata into the framework-neutral GRPO reward."""
 
-    config: GrpoRewardConfig = GrpoRewardConfig()
-    fields: VerlRewardFields = VerlRewardFields()
+    config: GrpoRewardConfig = field(default_factory=GrpoRewardConfig)
+    fields: VerlRewardFields = field(default_factory=VerlRewardFields)
 
     def __call__(
         self,
