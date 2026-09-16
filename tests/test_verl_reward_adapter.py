@@ -28,6 +28,33 @@ def test_adapter_accepts_reward_manager_extra_info() -> None:
     assert reward == pytest.approx(1.19)
 
 
+def test_adapter_supports_metadata_only_reward_manager_call() -> None:
+    adapter = VerlRewardAdapter()
+
+    reward = adapter.from_extra_info(
+        solution_str="ignored generated answer",
+        ground_truth="ignored reference answer",
+        extra_info={
+            "task_reward": 1.0,
+            "memory_used": True,
+            "counterfactual_delta": 0.4,
+        },
+    )
+
+    assert reward == pytest.approx(1.19)
+
+
+def test_metadata_only_call_requires_measured_reward_fields() -> None:
+    adapter = VerlRewardAdapter()
+
+    with pytest.raises(ValueError, match="task_reward"):
+        adapter.from_extra_info(
+            solution_str="generated answer",
+            ground_truth="reference answer",
+            extra_info={"memory_used": False},
+        )
+
+
 def test_adapter_rejects_conflicting_extra_info() -> None:
     adapter = VerlRewardAdapter()
 
