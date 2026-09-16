@@ -66,7 +66,7 @@ def _build_adapter(reward_kwargs: Mapping[str, Any]) -> VerlRewardAdapter:
         raise ValueError(f"unsupported ReMemAgent reward option(s): {unknown}")
 
     config = GrpoRewardConfig(
-        task_weight=_real_option(reward_kwargs, "task_weight", 1.0),
+        task_reward_weight=_real_option(reward_kwargs, "task_weight", 1.0),
         positive_transfer_weight=_real_option(
             reward_kwargs, "positive_transfer_weight", 0.5
         ),
@@ -86,7 +86,7 @@ def _build_adapter(reward_kwargs: Mapping[str, Any]) -> VerlRewardAdapter:
 
 
 def _real_option(options: Mapping[str, Any], name: str, default: float) -> float:
-    """Read a finite numeric reward option without accepting booleans."""
+    """Read a numeric reward option without accepting booleans."""
     value = options.get(name, default)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a real number")
