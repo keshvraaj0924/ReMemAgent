@@ -46,9 +46,7 @@ class ReproducibilityManifest:
                 derivation from ``base_seed``.
         """
         if self.derivation_version != _SEED_DERIVATION_VERSION:
-            raise ValueError(
-                f"unsupported seed derivation version: {self.derivation_version}"
-            )
+            raise ValueError(f"unsupported seed derivation version: {self.derivation_version}")
 
         config = ReproducibilityConfig(base_seed=self.base_seed)
         seen_components: set[tuple[str, int]] = set()
@@ -58,14 +56,10 @@ class ReproducibilityManifest:
             )
             identity = (normalized_namespace, assignment.index)
             if identity in seen_components:
-                raise ValueError(
-                    "manifest contains duplicate namespace/index assignments"
-                )
+                raise ValueError("manifest contains duplicate namespace/index assignments")
             seen_components.add(identity)
 
-            expected_seed = config.derive_seed(
-                normalized_namespace, index=assignment.index
-            )
+            expected_seed = config.derive_seed(normalized_namespace, index=assignment.index)
             if assignment.seed != expected_seed:
                 raise ValueError(
                     "manifest seed mismatch for "
@@ -90,15 +84,12 @@ class ReproducibilityConfig:
         """Derive a stable 32-bit seed for one experiment component."""
         normalized_namespace = self._validate_component(namespace, index)
         seed_material = (
-            f"remem:v{_SEED_DERIVATION_VERSION}:"
-            f"{self.base_seed}:{normalized_namespace}:{index}"
+            f"remem:v{_SEED_DERIVATION_VERSION}:{self.base_seed}:{normalized_namespace}:{index}"
         ).encode()
         digest = hashlib.blake2s(seed_material, digest_size=4).digest()
         return int.from_bytes(digest, byteorder="big", signed=False)
 
-    def create_manifest(
-        self, components: Iterable[tuple[str, int]]
-    ) -> ReproducibilityManifest:
+    def create_manifest(self, components: Iterable[tuple[str, int]]) -> ReproducibilityManifest:
         """Build a deterministic manifest for experiment RNG components.
 
         Duplicate component identities are rejected because silently recording the
@@ -111,9 +102,7 @@ class ReproducibilityConfig:
             normalized_namespace = self._validate_component(namespace, index)
             identity = (normalized_namespace, index)
             if identity in seen_components:
-                raise ValueError(
-                    "components must not contain duplicate namespace/index pairs"
-                )
+                raise ValueError("components must not contain duplicate namespace/index pairs")
             seen_components.add(identity)
             assignments.append(
                 SeedAssignment(
