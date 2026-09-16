@@ -23,7 +23,7 @@ class ExperimentRunIdentity:
         if not isinstance(manifest, ReproducibilityManifest):
             raise TypeError("manifest must be a ReproducibilityManifest")
         manifest.verify()
-        material = f"remem-run:v{_RUN_ID_VERSION}:{manifest.to_json()}".encode("utf-8")
+        material = f"remem-run:v{_RUN_ID_VERSION}:{manifest.to_json()}".encode()
         digest = hashlib.sha256(material).hexdigest()
         return cls(version=_RUN_ID_VERSION, digest=digest)
 
