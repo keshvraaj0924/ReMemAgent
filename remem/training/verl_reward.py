@@ -67,12 +67,8 @@ def _build_adapter(reward_kwargs: Mapping[str, Any]) -> VerlRewardAdapter:
 
     config = GrpoRewardConfig(
         task_reward_weight=_real_option(reward_kwargs, "task_weight", 1.0),
-        positive_transfer_weight=_real_option(
-            reward_kwargs, "positive_transfer_weight", 0.5
-        ),
-        negative_transfer_weight=_real_option(
-            reward_kwargs, "negative_transfer_weight", 1.0
-        ),
+        positive_transfer_weight=_real_option(reward_kwargs, "positive_transfer_weight", 0.5),
+        negative_transfer_weight=_real_option(reward_kwargs, "negative_transfer_weight", 1.0),
         memory_use_cost=_real_option(reward_kwargs, "memory_use_cost", 0.01),
     )
     fields = VerlRewardFields(
