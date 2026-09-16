@@ -54,6 +54,25 @@ class VerlRewardAdapter:
         reward_sample = self._merge_extra_info(sample, extra_info)
         return compute_grpo_reward(self.to_trajectory(reward_sample), self.config)
 
+    def from_extra_info(
+        self,
+        solution_str: str,
+        ground_truth: str,
+        extra_info: Mapping[str, Any],
+    ) -> float:
+        """Compute reward for verl call sites that carry measurements in ``extra_info``.
+
+        Generated and reference text are deliberately ignored. The method exists so a
+        trainer can pass the common ``(solution_str, ground_truth, extra_info)`` shape
+        without manufacturing an otherwise-empty sample mapping.
+        """
+        return self(
+            {},
+            solution_str=solution_str,
+            ground_truth=ground_truth,
+            extra_info=extra_info,
+        )
+
     def compute_batch(self, samples: Sequence[Mapping[str, Any]]) -> list[float]:
         """Compute rewards for an ordered trainer batch without mutating its samples."""
         return [self(sample) for sample in samples]
