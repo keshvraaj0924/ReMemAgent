@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Self
 
 _RUNTIME_METADATA_VERSION = 1
 
@@ -23,7 +27,7 @@ class RuntimeMetadata:
     machine: str
 
     @classmethod
-    def capture(cls) -> RuntimeMetadata:
+    def capture(cls) -> Self:
         """Capture deterministic runtime fields without host-specific identifiers."""
         return cls(
             schema_version=_RUNTIME_METADATA_VERSION,
@@ -60,7 +64,7 @@ class RuntimeMetadata:
         return json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
 
     @classmethod
-    def from_json(cls, payload: str) -> RuntimeMetadata:
+    def from_json(cls, payload: str) -> Self:
         """Deserialize and strictly validate a runtime metadata artifact."""
         if not isinstance(payload, str):
             raise TypeError("runtime metadata payload must be a string")
@@ -90,6 +94,38 @@ class RuntimeMetadata:
         metadata = cls(**raw_metadata)
         metadata.verify()
         return metadata
+
+    def save(self, path: str | Path) -> None:
+        """Atomically persist verified metadata without leaving partial artifacts."""
+        destination = Path(path)
+        if not destination.parent.exists():
+            raise FileNotFoundError(f"runtime metadata parent does not exist: {destination.parent}")
+
+        payload = self.to_json()
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+                temporary_file.write(payload)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.replace(temporary_path, destination)
+            temporary_path = None
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
+    @classmethod
+    def load(cls, path: str | Path) -> Self:
+        """Load and verify a runtime metadata artifact from disk."""
+        return cls.from_json(Path(path).read_text(encoding="utf-8"))
 
     def fingerprint(self) -> str:
         """Return a stable SHA-256 fingerprint for runtime compatibility checks."""
