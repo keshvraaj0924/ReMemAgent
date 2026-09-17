@@ -174,6 +174,11 @@ class RuntimeProvenance:
             "dependency_versions": dict(self.dependency_versions),
         }
 
+    def fingerprint(self) -> str:
+        """Return a stable SHA-256 identity for the complete provenance artifact."""
+        payload = json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode()).hexdigest()
+
 
 __all__ = [
     "CLEAN_STATE",
