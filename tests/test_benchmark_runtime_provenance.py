@@ -5,25 +5,17 @@ import json
 import pytest
 
 from experiments.benchmark_report import save_benchmark_report
-from experiments.runtime_provenance import (
-    CLEAN_STATE,
-    RUNTIME_PROVENANCE_SCHEMA_VERSION,
-    RuntimeProvenance,
-)
+from experiments.runtime_provenance import CLEAN_STATE, RuntimeProvenance, dependency_fingerprint
 from tests.test_benchmark_report import _build_report
-
-VALID_DEPENDENCY_FINGERPRINT = "a" * 64
 
 
 def _provenance() -> RuntimeProvenance:
-    return RuntimeProvenance(
-        schema_version=RUNTIME_PROVENANCE_SCHEMA_VERSION,
+    return RuntimeProvenance.create(
         code_revision="abc123",
         working_tree_state=CLEAN_STATE,
         python_version="3.12.0",
         platform="test-platform",
         package_version="0.1.0",
-        dependency_fingerprint=VALID_DEPENDENCY_FINGERPRINT,
         dependency_versions={"zeta": "2.0", "alpha": "1.0"},
     )
 
@@ -37,7 +29,7 @@ def test_save_benchmark_report_preserves_structured_runtime_provenance(tmp_path)
 
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
     provenance = persisted["runtime_provenance"]
-    assert provenance["schema_version"] == RUNTIME_PROVENANCE_SCHEMA_VERSION
+    assert provenance["schema_version"] == 1
     assert provenance["dependency_versions"] == {"alpha": "1.0", "zeta": "2.0"}
 
 
@@ -47,4 +39,28 @@ def test_save_benchmark_report_rejects_invalid_structured_provenance(tmp_path) -
             _build_report(seed=7),
             tmp_path / "report.json",
             runtime_provenance={"schema_version": 1, "python_version": 3.12},
+        )
+
+
+def test_dependency_fingerprint_is_order_independent() -> None:
+    first = dependency_fingerprint({"alpha": "1.0", "zeta": "2.0"})
+    second = dependency_fingerprint({"zeta": "2.0", "alpha": "1.0"})
+
+    assert first == second
+    assert len(first) == 64
+
+
+def test_runtime_provenance_rejects_tampered_dependency_versions() -> None:
+    provenance = _provenance()
+
+    with pytest.raises(ValueError, match="does not match dependency_versions"):
+        RuntimeProvenance(
+            schema_version=provenance.schema_version,
+            code_revision=provenance.code_revision,
+            working_tree_state=provenance.working_tree_state,
+            python_version=provenance.python_version,
+            platform=provenance.platform,
+            package_version=provenance.package_version,
+            dependency_fingerprint=provenance.dependency_fingerprint,
+            dependency_versions={"alpha": "1.1", "zeta": "2.0"},
         )
