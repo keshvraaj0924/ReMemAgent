@@ -31,6 +31,44 @@ def test_json_round_trip_is_stable() -> None:
     assert restored.to_json() == provenance.to_json()
 
 
+def test_save_and_load_round_trip(tmp_path) -> None:
+    provenance = _provenance()
+    path = tmp_path / "provenance.json"
+    provenance.save(path)
+    assert path.read_text(encoding="utf-8") == provenance.to_json()
+    assert ExperimentProvenance.load(path) == provenance
+
+
+def test_save_leaves_no_temporary_artifacts(tmp_path) -> None:
+    path = tmp_path / "provenance.json"
+    _provenance().save(path)
+    assert sorted(item.name for item in tmp_path.iterdir()) == ["provenance.json"]
+
+
+def test_save_requires_existing_parent(tmp_path) -> None:
+    path = tmp_path / "missing" / "provenance.json"
+    with pytest.raises(FileNotFoundError, match="provenance parent does not exist"):
+        _provenance().save(path)
+
+
+def test_invalid_provenance_cannot_overwrite_existing_artifact(tmp_path) -> None:
+    path = tmp_path / "provenance.json"
+    provenance = _provenance()
+    provenance.save(path)
+    original_payload = path.read_text(encoding="utf-8")
+
+    invalid = ExperimentProvenance(
+        schema_version=provenance.schema_version,
+        run_id="v1-" + "0" * 64,
+        runtime_fingerprint=provenance.runtime_fingerprint,
+        manifest=provenance.manifest,
+        runtime=provenance.runtime,
+    )
+    with pytest.raises(ValueError, match="run_id does not match"):
+        invalid.save(path)
+    assert path.read_text(encoding="utf-8") == original_payload
+
+
 def test_replay_compatible_for_current_runtime() -> None:
     _provenance().assert_replay_compatible()
 
