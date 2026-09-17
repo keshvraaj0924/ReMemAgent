@@ -46,7 +46,7 @@ class MetricsRecorder:
         self._timing_seconds[metric_name] = self._timing_seconds.get(metric_name, 0.0) + duration
         self._timing_counts[metric_name] += 1
 
-    def timer(self, name: str) -> "MetricTimer":
+    def timer(self, name: str) -> MetricTimer:
         """Return a context manager that records elapsed wall-clock duration."""
 
         return MetricTimer(recorder=self, name=_validate_metric_name(name))
