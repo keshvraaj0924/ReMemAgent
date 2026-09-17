@@ -24,7 +24,7 @@ def test_save_benchmark_report_preserves_structured_runtime_provenance(tmp_path)
     output_path = save_benchmark_report(
         _build_report(seed=7),
         tmp_path / "report.json",
-        runtime_provenance=_provenance().to_dict(),
+        runtime_provenance=_provenance(),
     )
 
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
@@ -33,12 +33,12 @@ def test_save_benchmark_report_preserves_structured_runtime_provenance(tmp_path)
     assert provenance["dependency_versions"] == {"alpha": "1.0", "zeta": "2.0"}
 
 
-def test_save_benchmark_report_rejects_invalid_structured_provenance(tmp_path) -> None:
-    with pytest.raises(TypeError, match="values must be strings"):
+def test_save_benchmark_report_rejects_incomplete_structured_provenance(tmp_path) -> None:
+    with pytest.raises(ValueError, match="missing runtime provenance fields"):
         save_benchmark_report(
             _build_report(seed=7),
             tmp_path / "report.json",
-            runtime_provenance={"schema_version": 1, "python_version": 3.12},
+            runtime_provenance={"schema_version": 1, "python_version": "3.12"},
         )
 
 
@@ -64,3 +64,31 @@ def test_runtime_provenance_rejects_tampered_dependency_versions() -> None:
             dependency_fingerprint=provenance.dependency_fingerprint,
             dependency_versions={"alpha": "1.1", "zeta": "2.0"},
         )
+
+
+def test_runtime_provenance_from_dict_round_trips_verified_payload() -> None:
+    provenance = _provenance()
+
+    restored = RuntimeProvenance.from_dict(provenance.to_dict())
+
+    assert restored.to_dict() == provenance.to_dict()
+
+
+def test_save_benchmark_report_rejects_tampered_provenance_mapping(tmp_path) -> None:
+    provenance = _provenance().to_dict()
+    provenance["dependency_versions"] = {"alpha": "9.9", "zeta": "2.0"}
+
+    with pytest.raises(ValueError, match="does not match dependency_versions"):
+        save_benchmark_report(
+            _build_report(seed=7),
+            tmp_path / "report.json",
+            runtime_provenance=provenance,
+        )
+
+
+def test_runtime_provenance_rejects_unknown_fields() -> None:
+    payload = _provenance().to_dict()
+    payload["unexpected"] = "value"
+
+    with pytest.raises(ValueError, match="unknown runtime provenance fields"):
+        RuntimeProvenance.from_dict(payload)
