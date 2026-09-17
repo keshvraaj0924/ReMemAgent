@@ -80,13 +80,17 @@ class RuntimeProvenance:
             _require_non_empty_string(getattr(self, field_name), field_name)
         if self.working_tree_state not in _VALID_WORKING_TREE_STATES:
             raise ValueError("working_tree_state must be 'clean' or 'dirty'")
-        _require_non_empty_string(self.dependency_fingerprint, "dependency_fingerprint")
-        if len(self.dependency_fingerprint) != 64:
-            raise ValueError("dependency_fingerprint must be a 64-character hex digest")
-        if any(
-            character not in "0123456789abcdef" for character in self.dependency_fingerprint.lower()
+
+        raw_dependency_fingerprint = _require_non_empty_string(
+            self.dependency_fingerprint, "dependency_fingerprint"
+        )
+        canonical_dependency_fingerprint = raw_dependency_fingerprint.lower()
+        if len(canonical_dependency_fingerprint) != 64 or any(
+            character not in "0123456789abcdef" for character in canonical_dependency_fingerprint
         ):
             raise ValueError("dependency_fingerprint must be a 64-character hex digest")
+        object.__setattr__(self, "dependency_fingerprint", canonical_dependency_fingerprint)
+
         if not isinstance(self.dependency_versions, Mapping):
             raise TypeError("dependency_versions must be a mapping")
 
@@ -100,7 +104,7 @@ class RuntimeProvenance:
         )
 
         expected_fingerprint = dependency_fingerprint(dependencies)
-        if self.dependency_fingerprint.lower() != expected_fingerprint:
+        if canonical_dependency_fingerprint != expected_fingerprint:
             raise ValueError("dependency_fingerprint does not match dependency_versions")
 
     @classmethod
