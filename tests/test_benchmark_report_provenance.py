@@ -57,7 +57,7 @@ def test_save_benchmark_report_rejects_non_string_dependency_version(tmp_path) -
     provenance = _runtime_provenance().to_dict()
     provenance["dependency_versions"] = {"numpy": 2}
 
-    with pytest.raises(ValueError, match="dependency versions must be non-empty strings"):
+    with pytest.raises(TypeError, match="dependency versions must be a string"):
         save_benchmark_report(
             _build_report(),
             tmp_path / "report.json",
