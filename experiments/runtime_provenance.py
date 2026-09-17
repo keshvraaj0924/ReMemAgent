@@ -82,7 +82,7 @@ class RuntimeProvenance:
         ):
             raise ValueError("dependency_fingerprint must be a 64-character hex digest")
         if not isinstance(self.dependency_versions, Mapping):
-            raise ValueError("dependency_versions must be a mapping")
+            raise TypeError("dependency_versions must be a mapping")
 
         dependencies: dict[str, str] = {}
         for name, version in self.dependency_versions.items():
@@ -137,10 +137,10 @@ class RuntimeProvenance:
 
         schema_version = payload["schema_version"]
         if not isinstance(schema_version, int) or isinstance(schema_version, bool):
-            raise ValueError("schema_version must be an integer")
+            raise TypeError("schema_version must be an integer")
         dependency_versions = payload["dependency_versions"]
         if not isinstance(dependency_versions, Mapping):
-            raise ValueError("dependency_versions must be a mapping")
+            raise TypeError("dependency_versions must be a mapping")
 
         string_fields = {
             field_name: payload[field_name]
@@ -148,7 +148,7 @@ class RuntimeProvenance:
         }
         for field_name, value in string_fields.items():
             if not isinstance(value, str):
-                raise ValueError(f"{field_name} must be a string")
+                raise TypeError(f"{field_name} must be a string")
 
         return cls(
             schema_version=schema_version,
