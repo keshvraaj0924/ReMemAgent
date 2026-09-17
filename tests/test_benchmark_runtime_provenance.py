@@ -111,6 +111,18 @@ def test_runtime_provenance_from_dict_round_trips_verified_payload() -> None:
     assert restored.to_dict() == provenance.to_dict()
 
 
+def test_runtime_provenance_canonicalizes_uppercase_dependency_fingerprint() -> None:
+    provenance = _provenance()
+    payload = provenance.to_dict()
+    payload["dependency_fingerprint"] = provenance.dependency_fingerprint.upper()
+
+    restored = RuntimeProvenance.from_dict(payload)
+
+    assert restored.dependency_fingerprint == provenance.dependency_fingerprint
+    assert restored.to_dict() == provenance.to_dict()
+    assert restored.fingerprint() == provenance.fingerprint()
+
+
 def test_runtime_provenance_fingerprint_is_stable_across_dependency_order() -> None:
     first = _provenance()
     second = RuntimeProvenance.create(
