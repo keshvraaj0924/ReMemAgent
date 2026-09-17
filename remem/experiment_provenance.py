@@ -92,7 +92,9 @@ class ExperimentProvenance:
         if missing_fields:
             raise ValueError(f"experiment provenance is missing fields: {sorted(missing_fields)}")
         if unknown_fields:
-            raise ValueError(f"experiment provenance contains unknown fields: {sorted(unknown_fields)}")
+            raise ValueError(
+                f"experiment provenance contains unknown fields: {sorted(unknown_fields)}"
+            )
         if not isinstance(raw["manifest"], dict):
             raise TypeError("manifest must be an object")
         if not isinstance(raw["runtime"], dict):
