@@ -91,7 +91,9 @@ class RuntimeProvenance:
             if not isinstance(version, str) or not version.strip():
                 raise ValueError("dependency versions must be non-empty strings")
             dependencies[name] = version
-        object.__setattr__(self, "dependency_versions", MappingProxyType(dict(sorted(dependencies.items()))))
+        object.__setattr__(
+            self, "dependency_versions", MappingProxyType(dict(sorted(dependencies.items())))
+        )
 
         expected_fingerprint = dependency_fingerprint(dependencies)
         if self.dependency_fingerprint.lower() != expected_fingerprint:
