@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -10,6 +12,24 @@ RUNTIME_PROVENANCE_SCHEMA_VERSION = 1
 CLEAN_STATE = "clean"
 DIRTY_STATE = "dirty"
 _VALID_WORKING_TREE_STATES = frozenset({CLEAN_STATE, DIRTY_STATE})
+
+
+def dependency_fingerprint(dependency_versions: Mapping[str, str]) -> str:
+    """Return a deterministic SHA-256 fingerprint for dependency versions."""
+    normalized_dependencies: dict[str, str] = {}
+    for name, version in dependency_versions.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("dependency names must be non-empty strings")
+        if not isinstance(version, str) or not version.strip():
+            raise ValueError("dependency versions must be non-empty strings")
+        normalized_dependencies[name] = version
+
+    payload = json.dumps(
+        dict(sorted(normalized_dependencies.items())),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,9 +76,35 @@ class RuntimeProvenance:
             MappingProxyType(dict(sorted(dependencies.items()))),
         )
 
+        expected_fingerprint = dependency_fingerprint(dependencies)
+        if self.dependency_fingerprint.lower() != expected_fingerprint:
+            raise ValueError("dependency_fingerprint does not match dependency_versions")
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        code_revision: str,
+        working_tree_state: str,
+        python_version: str,
+        platform: str,
+        package_version: str,
+        dependency_versions: Mapping[str, str],
+    ) -> RuntimeProvenance:
+        """Create provenance with a fingerprint derived from dependency versions."""
+        return cls(
+            schema_version=RUNTIME_PROVENANCE_SCHEMA_VERSION,
+            code_revision=code_revision,
+            working_tree_state=working_tree_state,
+            python_version=python_version,
+            platform=platform,
+            package_version=package_version,
+            dependency_fingerprint=dependency_fingerprint(dependency_versions),
+            dependency_versions=dependency_versions,
+        )
+
     def to_dict(self) -> dict[str, object]:
         """Return a deterministic JSON-compatible representation."""
-
         return {
             "schema_version": self.schema_version,
             "code_revision": self.code_revision,
@@ -76,4 +122,5 @@ __all__ = [
     "DIRTY_STATE",
     "RUNTIME_PROVENANCE_SCHEMA_VERSION",
     "RuntimeProvenance",
+    "dependency_fingerprint",
 ]
