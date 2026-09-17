@@ -32,10 +32,11 @@ source = ["remem", "experiments"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-# Quality #1654 measured 93.54% line coverage with branch coverage enabled.
-# Keep the gate below the observed baseline so small reporting differences do not
-# create noise while still preventing meaningful coverage regressions.
-fail_under = 93
+# Quality #1654 measured 1361/1455 lines and 316/402 branches. Coverage.py's
+# fail_under uses the combined branch-aware total (90.31%), not line coverage
+# alone (93.54%). Keep a small margin below that measured baseline while still
+# preventing meaningful coverage regressions.
+fail_under = 90
 
 [tool.ruff]
 line-length = 100
