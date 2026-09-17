@@ -2,7 +2,7 @@ name: Quality
 
 on:
   push:
-    branches: [main, feat/core-memory-engine]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -17,6 +17,7 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -39,10 +40,14 @@ jobs:
       - name: Verify installed package imports
         run: python -c "import remem, experiments; print(remem.__name__, experiments.__name__)"
 
-      - name: Run tests
+      - name: Run tests with branch coverage
         run: |
-          mkdir -p test-results
-          python -m pytest -ra --strict-config --strict-markers --tb=short --import-mode=importlib --junitxml=test-results/pytest-${{ matrix.python-version }}.xml
+          mkdir -p test-results coverage-results
+          python -m pytest -ra --strict-config --strict-markers --tb=short --import-mode=importlib \
+            --cov=remem --cov=experiments --cov-branch \
+            --cov-report=term-missing:skip-covered \
+            --cov-report=xml:coverage-results/coverage-${{ matrix.python-version }}.xml \
+            --junitxml=test-results/pytest-${{ matrix.python-version }}.xml
 
       - name: Upload pytest report
         if: ${{ always() }}
@@ -50,6 +55,14 @@ jobs:
         with:
           name: pytest-report-${{ matrix.python-version }}
           path: test-results/pytest-${{ matrix.python-version }}.xml
+          if-no-files-found: error
+
+      - name: Upload coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.python-version }}
+          path: coverage-results/coverage-${{ matrix.python-version }}.xml
           if-no-files-found: error
 
       - name: Check formatting
