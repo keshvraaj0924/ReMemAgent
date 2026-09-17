@@ -7,11 +7,24 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import Any
 
 RUNTIME_PROVENANCE_SCHEMA_VERSION = 1
 CLEAN_STATE = "clean"
 DIRTY_STATE = "dirty"
 _VALID_WORKING_TREE_STATES = frozenset({CLEAN_STATE, DIRTY_STATE})
+_PROVENANCE_FIELDS = frozenset(
+    {
+        "schema_version",
+        "code_revision",
+        "working_tree_state",
+        "python_version",
+        "platform",
+        "package_version",
+        "dependency_fingerprint",
+        "dependency_versions",
+    }
+)
 
 
 def dependency_fingerprint(dependency_versions: Mapping[str, str]) -> str:
@@ -54,14 +67,20 @@ class RuntimeProvenance:
             "platform",
             "package_version",
         ):
-            if not getattr(self, field_name).strip():
-                raise ValueError(f"{field_name} must be non-empty")
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field_name} must be a non-empty string")
         if self.working_tree_state not in _VALID_WORKING_TREE_STATES:
             raise ValueError("working_tree_state must be 'clean' or 'dirty'")
-        if len(self.dependency_fingerprint) != 64 or any(
-            character not in "0123456789abcdef" for character in self.dependency_fingerprint.lower()
+        if not isinstance(self.dependency_fingerprint, str) or len(self.dependency_fingerprint) != 64:
+            raise ValueError("dependency_fingerprint must be a 64-character hex digest")
+        if any(
+            character not in "0123456789abcdef"
+            for character in self.dependency_fingerprint.lower()
         ):
             raise ValueError("dependency_fingerprint must be a 64-character hex digest")
+        if not isinstance(self.dependency_versions, Mapping):
+            raise ValueError("dependency_versions must be a mapping")
 
         dependencies: dict[str, str] = {}
         for name, version in self.dependency_versions.items():
@@ -100,6 +119,45 @@ class RuntimeProvenance:
             platform=platform,
             package_version=package_version,
             dependency_fingerprint=dependency_fingerprint(dependency_versions),
+            dependency_versions=dependency_versions,
+        )
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> RuntimeProvenance:
+        """Deserialize and fully verify an untrusted provenance mapping."""
+        if not isinstance(payload, Mapping):
+            raise TypeError("runtime provenance must be a mapping")
+        payload_fields = set(payload)
+        unknown_fields = payload_fields - _PROVENANCE_FIELDS
+        missing_fields = _PROVENANCE_FIELDS - payload_fields
+        if unknown_fields:
+            raise ValueError(f"unknown runtime provenance fields: {sorted(unknown_fields)}")
+        if missing_fields:
+            raise ValueError(f"missing runtime provenance fields: {sorted(missing_fields)}")
+
+        schema_version = payload["schema_version"]
+        if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+            raise ValueError("schema_version must be an integer")
+        dependency_versions = payload["dependency_versions"]
+        if not isinstance(dependency_versions, Mapping):
+            raise ValueError("dependency_versions must be a mapping")
+
+        string_fields = {
+            field_name: payload[field_name]
+            for field_name in _PROVENANCE_FIELDS - {"schema_version", "dependency_versions"}
+        }
+        for field_name, value in string_fields.items():
+            if not isinstance(value, str):
+                raise ValueError(f"{field_name} must be a string")
+
+        return cls(
+            schema_version=schema_version,
+            code_revision=string_fields["code_revision"],
+            working_tree_state=string_fields["working_tree_state"],
+            python_version=string_fields["python_version"],
+            platform=string_fields["platform"],
+            package_version=string_fields["package_version"],
+            dependency_fingerprint=string_fields["dependency_fingerprint"],
             dependency_versions=dependency_versions,
         )
 
