@@ -32,6 +32,10 @@ source = ["remem", "experiments"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+# Quality #1654 measured 93.54% line coverage with branch coverage enabled.
+# Keep the gate below the observed baseline so small reporting differences do not
+# create noise while still preventing meaningful coverage regressions.
+fail_under = 93
 
 [tool.ruff]
 line-length = 100
