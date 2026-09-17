@@ -79,6 +79,42 @@ def test_runtime_metadata_fingerprint_is_stable_and_sensitive() -> None:
     assert not changed.matches_current_runtime()
 
 
+def test_runtime_metadata_reports_field_level_differences() -> None:
+    current = RuntimeMetadata.capture()
+    recorded = RuntimeMetadata(
+        schema_version=current.schema_version,
+        python_version="0.0.0",
+        python_implementation=current.python_implementation,
+        operating_system=current.operating_system,
+        operating_system_release="different-release",
+        machine=current.machine,
+    )
+
+    assert recorded.differences(current) == {
+        "python_version": ("0.0.0", current.python_version),
+        "operating_system_release": ("different-release", current.operating_system_release),
+    }
+
+
+def test_assert_current_runtime_is_silent_for_matching_runtime() -> None:
+    RuntimeMetadata.capture().assert_current_runtime()
+
+
+def test_assert_current_runtime_describes_mismatch() -> None:
+    current = RuntimeMetadata.capture()
+    recorded = RuntimeMetadata(
+        schema_version=current.schema_version,
+        python_version="0.0.0",
+        python_implementation=current.python_implementation,
+        operating_system=current.operating_system,
+        operating_system_release=current.operating_system_release,
+        machine=current.machine,
+    )
+
+    with pytest.raises(RuntimeError, match=r"python_version: recorded='0\.0\.0', current="):
+        recorded.assert_current_runtime()
+
+
 @pytest.mark.parametrize(
     ("payload", "error_type", "message"),
     [
