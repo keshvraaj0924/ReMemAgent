@@ -50,6 +50,11 @@ def test_dependency_fingerprint_is_order_independent() -> None:
     assert len(first) == 64
 
 
+def test_dependency_fingerprint_rejects_non_string_values() -> None:
+    with pytest.raises(TypeError, match="dependency versions must be a string"):
+        dependency_fingerprint({"alpha": 1})  # type: ignore[dict-item]
+
+
 def test_runtime_provenance_rejects_tampered_dependency_versions() -> None:
     provenance = _provenance()
 
@@ -63,6 +68,38 @@ def test_runtime_provenance_rejects_tampered_dependency_versions() -> None:
             package_version=provenance.package_version,
             dependency_fingerprint=provenance.dependency_fingerprint,
             dependency_versions={"alpha": "1.1", "zeta": "2.0"},
+        )
+
+
+def test_runtime_provenance_rejects_non_integer_schema_version_directly() -> None:
+    provenance = _provenance()
+
+    with pytest.raises(TypeError, match="schema_version must be an integer"):
+        RuntimeProvenance(
+            schema_version="1",  # type: ignore[arg-type]
+            code_revision=provenance.code_revision,
+            working_tree_state=provenance.working_tree_state,
+            python_version=provenance.python_version,
+            platform=provenance.platform,
+            package_version=provenance.package_version,
+            dependency_fingerprint=provenance.dependency_fingerprint,
+            dependency_versions=provenance.dependency_versions,
+        )
+
+
+def test_runtime_provenance_rejects_non_string_fields_directly() -> None:
+    provenance = _provenance()
+
+    with pytest.raises(TypeError, match="code_revision must be a string"):
+        RuntimeProvenance(
+            schema_version=provenance.schema_version,
+            code_revision=123,  # type: ignore[arg-type]
+            working_tree_state=provenance.working_tree_state,
+            python_version=provenance.python_version,
+            platform=provenance.platform,
+            package_version=provenance.package_version,
+            dependency_fingerprint=provenance.dependency_fingerprint,
+            dependency_versions=provenance.dependency_versions,
         )
 
 
