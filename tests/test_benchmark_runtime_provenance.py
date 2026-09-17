@@ -74,6 +74,35 @@ def test_runtime_provenance_from_dict_round_trips_verified_payload() -> None:
     assert restored.to_dict() == provenance.to_dict()
 
 
+def test_runtime_provenance_fingerprint_is_stable_across_dependency_order() -> None:
+    first = _provenance()
+    second = RuntimeProvenance.create(
+        code_revision="abc123",
+        working_tree_state=CLEAN_STATE,
+        python_version="3.12.0",
+        platform="test-platform",
+        package_version="0.1.0",
+        dependency_versions={"alpha": "1.0", "zeta": "2.0"},
+    )
+
+    assert first.fingerprint() == second.fingerprint()
+    assert len(first.fingerprint()) == 64
+
+
+def test_runtime_provenance_fingerprint_changes_with_code_revision() -> None:
+    provenance = _provenance()
+    changed = RuntimeProvenance.create(
+        code_revision="def456",
+        working_tree_state=CLEAN_STATE,
+        python_version=provenance.python_version,
+        platform=provenance.platform,
+        package_version=provenance.package_version,
+        dependency_versions=provenance.dependency_versions,
+    )
+
+    assert changed.fingerprint() != provenance.fingerprint()
+
+
 def test_save_benchmark_report_rejects_tampered_provenance_mapping(tmp_path) -> None:
     provenance = _provenance().to_dict()
     provenance["dependency_versions"] = {"alpha": "9.9", "zeta": "2.0"}
