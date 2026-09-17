@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from math import isfinite
 from time import perf_counter
-from typing import Mapping
 
 
 @dataclass(frozen=True, slots=True)
