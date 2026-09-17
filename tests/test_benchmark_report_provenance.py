@@ -24,12 +24,12 @@ def _runtime_provenance() -> RuntimeProvenance:
 
 
 def test_save_benchmark_report_accepts_runtime_provenance_schema(tmp_path) -> None:
-    provenance = _runtime_provenance().to_dict()
+    provenance = _runtime_provenance()
 
     output_path = save_benchmark_report(
         _build_report(),
         tmp_path / "report.json",
-        runtime_provenance=provenance,
+        runtime_provenance=provenance.to_dict(),
     )
 
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
@@ -38,6 +38,7 @@ def test_save_benchmark_report_accepts_runtime_provenance_schema(tmp_path) -> No
         "alpha": "1.0",
         "Zeta": "2.0",
     }
+    assert persisted["runtime_provenance_fingerprint"] == provenance.fingerprint()
 
 
 def test_save_benchmark_report_accepts_runtime_provenance_model(tmp_path) -> None:
@@ -51,6 +52,24 @@ def test_save_benchmark_report_accepts_runtime_provenance_model(tmp_path) -> Non
 
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
     assert persisted["runtime_provenance"] == provenance.to_dict()
+    assert persisted["runtime_provenance_fingerprint"] == provenance.fingerprint()
+
+
+def test_persisted_provenance_identity_is_stable_for_equivalent_mappings(tmp_path) -> None:
+    provenance = _runtime_provenance()
+    payload = provenance.to_dict()
+    payload["dependency_versions"] = {"alpha": "1.0", "Zeta": "2.0"}
+    payload["dependency_fingerprint"] = provenance.dependency_fingerprint.upper()
+
+    output_path = save_benchmark_report(
+        _build_report(),
+        tmp_path / "report.json",
+        runtime_provenance=payload,
+    )
+
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["runtime_provenance"] == provenance.to_dict()
+    assert persisted["runtime_provenance_fingerprint"] == provenance.fingerprint()
 
 
 def test_save_benchmark_report_rejects_non_string_dependency_version(tmp_path) -> None:
