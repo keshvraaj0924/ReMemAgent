@@ -31,7 +31,9 @@ def save_benchmark_report(
         }
     )
     if runtime_provenance is not None:
-        payload["runtime_provenance"] = _verified_runtime_provenance(runtime_provenance)
+        verified_provenance = _verified_runtime_provenance(runtime_provenance)
+        payload["runtime_provenance"] = verified_provenance.to_dict()
+        payload["runtime_provenance_fingerprint"] = verified_provenance.fingerprint()
     destination.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -41,11 +43,11 @@ def save_benchmark_report(
 
 def _verified_runtime_provenance(
     provenance: RuntimeProvenance | Mapping[str, Any],
-) -> dict[str, object]:
-    """Return deterministic provenance only after full integrity validation."""
+) -> RuntimeProvenance:
+    """Return runtime provenance only after full integrity validation."""
     if isinstance(provenance, RuntimeProvenance):
-        return provenance.to_dict()
-    return RuntimeProvenance.from_dict(provenance).to_dict()
+        return provenance
+    return RuntimeProvenance.from_dict(provenance)
 
 
 __all__ = ["save_benchmark_report"]
