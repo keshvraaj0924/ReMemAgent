@@ -27,15 +27,22 @@ _PROVENANCE_FIELDS = frozenset(
 )
 
 
+def _require_non_empty_string(value: object, field_name: str) -> str:
+    """Validate and return a non-empty string field."""
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    if not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    return value
+
+
 def dependency_fingerprint(dependency_versions: Mapping[str, str]) -> str:
     """Return a deterministic SHA-256 fingerprint for dependency versions."""
     normalized_dependencies: dict[str, str] = {}
     for name, version in dependency_versions.items():
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError("dependency names must be non-empty strings")
-        if not isinstance(version, str) or not version.strip():
-            raise ValueError("dependency versions must be non-empty strings")
-        normalized_dependencies[name] = version
+        normalized_name = _require_non_empty_string(name, "dependency names")
+        normalized_version = _require_non_empty_string(version, "dependency versions")
+        normalized_dependencies[normalized_name] = normalized_version
 
     payload = json.dumps(
         dict(sorted(normalized_dependencies.items())),
@@ -59,23 +66,22 @@ class RuntimeProvenance:
     dependency_versions: Mapping[str, str]
 
     def __post_init__(self) -> None:
+        if not isinstance(self.schema_version, int) or isinstance(self.schema_version, bool):
+            raise TypeError("schema_version must be an integer")
         if self.schema_version != RUNTIME_PROVENANCE_SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {RUNTIME_PROVENANCE_SCHEMA_VERSION}")
         for field_name in (
             "code_revision",
+            "working_tree_state",
             "python_version",
             "platform",
             "package_version",
         ):
-            value = getattr(self, field_name)
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"{field_name} must be a non-empty string")
+            _require_non_empty_string(getattr(self, field_name), field_name)
         if self.working_tree_state not in _VALID_WORKING_TREE_STATES:
             raise ValueError("working_tree_state must be 'clean' or 'dirty'")
-        if (
-            not isinstance(self.dependency_fingerprint, str)
-            or len(self.dependency_fingerprint) != 64
-        ):
+        _require_non_empty_string(self.dependency_fingerprint, "dependency_fingerprint")
+        if len(self.dependency_fingerprint) != 64:
             raise ValueError("dependency_fingerprint must be a 64-character hex digest")
         if any(
             character not in "0123456789abcdef" for character in self.dependency_fingerprint.lower()
@@ -86,11 +92,9 @@ class RuntimeProvenance:
 
         dependencies: dict[str, str] = {}
         for name, version in self.dependency_versions.items():
-            if not isinstance(name, str) or not name.strip():
-                raise ValueError("dependency names must be non-empty strings")
-            if not isinstance(version, str) or not version.strip():
-                raise ValueError("dependency versions must be non-empty strings")
-            dependencies[name] = version
+            normalized_name = _require_non_empty_string(name, "dependency names")
+            normalized_version = _require_non_empty_string(version, "dependency versions")
+            dependencies[normalized_name] = normalized_version
         object.__setattr__(
             self, "dependency_versions", MappingProxyType(dict(sorted(dependencies.items())))
         )
