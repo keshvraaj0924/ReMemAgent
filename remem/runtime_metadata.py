@@ -12,6 +12,13 @@ from pathlib import Path
 from typing import Self
 
 _RUNTIME_METADATA_VERSION = 1
+_RUNTIME_FIELDS = (
+    "python_version",
+    "python_implementation",
+    "operating_system",
+    "operating_system_release",
+    "machine",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,13 +51,7 @@ class RuntimeMetadata:
         if self.schema_version != _RUNTIME_METADATA_VERSION:
             raise ValueError(f"unsupported runtime metadata version: {self.schema_version}")
 
-        for field_name in (
-            "python_version",
-            "python_implementation",
-            "operating_system",
-            "operating_system_release",
-            "machine",
-        ):
+        for field_name in _RUNTIME_FIELDS:
             value = getattr(self, field_name)
             if not isinstance(value, str):
                 raise TypeError(f"{field_name} must be a string")
@@ -74,14 +75,7 @@ class RuntimeMetadata:
         if not isinstance(raw_metadata, dict):
             raise TypeError("runtime metadata JSON root must be an object")
 
-        expected_fields = {
-            "schema_version",
-            "python_version",
-            "python_implementation",
-            "operating_system",
-            "operating_system_release",
-            "machine",
-        }
+        expected_fields = {"schema_version", *_RUNTIME_FIELDS}
         actual_fields = set(raw_metadata)
         missing_fields = expected_fields - actual_fields
         unknown_fields = actual_fields - expected_fields
@@ -130,9 +124,34 @@ class RuntimeMetadata:
         """Return a stable SHA-256 fingerprint for runtime compatibility checks."""
         return hashlib.sha256(self.to_json().encode()).hexdigest()
 
+    def differences(self, other: RuntimeMetadata) -> dict[str, tuple[str, str]]:
+        """Return reproducibility-relevant field differences against another runtime."""
+        self.verify()
+        other.verify()
+        return {
+            field_name: (getattr(self, field_name), getattr(other, field_name))
+            for field_name in _RUNTIME_FIELDS
+            if getattr(self, field_name) != getattr(other, field_name)
+        }
+
+    def current_runtime_differences(self) -> dict[str, tuple[str, str]]:
+        """Return differences as ``recorded -> current`` runtime values."""
+        return self.differences(self.capture())
+
+    def assert_current_runtime(self) -> None:
+        """Raise with actionable details when the current runtime differs from this artifact."""
+        differences = self.current_runtime_differences()
+        if not differences:
+            return
+        details = ", ".join(
+            f"{field_name}: recorded={recorded!r}, current={current!r}"
+            for field_name, (recorded, current) in sorted(differences.items())
+        )
+        raise RuntimeError(f"runtime metadata mismatch: {details}")
+
     def matches_current_runtime(self) -> bool:
         """Return whether this artifact describes the currently executing runtime."""
-        return self == self.capture()
+        return not self.current_runtime_differences()
 
 
 __all__ = ["RuntimeMetadata"]
