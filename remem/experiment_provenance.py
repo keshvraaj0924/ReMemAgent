@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Self
 
 from remem.reproducibility import ReproducibilityManifest
@@ -108,6 +111,38 @@ class ExperimentProvenance:
         )
         provenance.verify()
         return provenance
+
+    def save(self, path: str | Path) -> None:
+        """Atomically persist verified provenance without partial artifacts."""
+        destination = Path(path)
+        if not destination.parent.exists():
+            raise FileNotFoundError(f"provenance parent does not exist: {destination.parent}")
+
+        payload = self.to_json()
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+                temporary_file.write(payload)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.replace(temporary_path, destination)
+            temporary_path = None
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
+    @classmethod
+    def load(cls, path: str | Path) -> Self:
+        """Load and verify an experiment provenance artifact from disk."""
+        return cls.from_json(Path(path).read_text(encoding="utf-8"))
 
     def assert_replay_compatible(self) -> None:
         """Validate provenance integrity and require the recorded runtime for replay."""
