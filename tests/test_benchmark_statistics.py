@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.benchmark_statistics import MetricSummary, _summarize, summarize_benchmark_reports
+from experiments.benchmark_statistics import (
+    MetricSummary,
+    _summarize,
+    summarize_benchmark_reports,
+)
 from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunReport
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
@@ -145,12 +149,23 @@ def test_metric_summary_rejects_non_finite_observations(invalid_reward: float) -
         ({"mean": float("nan")}, "metric summary values must be finite"),
         ({"sample_stddev": -0.1}, "sample_stddev must be non-negative"),
         ({"standard_error": -0.1}, "standard_error must be non-negative"),
-        ({"confidence_interval_95": (float("-inf"), 1.0)}, "confidence interval bounds must be finite"),
-        ({"confidence_interval_95": (2.0, 1.0)}, "lower bound must not exceed upper bound"),
-        ({"confidence_interval_95": (0.0, 0.5)}, "confidence interval must contain the metric mean"),
+        (
+            {"confidence_interval_95": (float("-inf"), 1.0)},
+            "confidence interval bounds must be finite",
+        ),
+        (
+            {"confidence_interval_95": (2.0, 1.0)},
+            "lower bound must not exceed upper bound",
+        ),
+        (
+            {"confidence_interval_95": (0.0, 0.5)},
+            "confidence interval must contain the metric mean",
+        ),
     ],
 )
-def test_metric_summary_rejects_malformed_state(kwargs: dict[str, object], message: str) -> None:
+def test_metric_summary_rejects_malformed_state(
+    kwargs: dict[str, object], message: str
+) -> None:
     values: dict[str, object] = {
         "sample_size": 2,
         "mean": 1.0,
