@@ -8,7 +8,13 @@ from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
 
 
-def _build_report(seed: int, reward: float, success: bool) -> BenchmarkRunReport:
+def _build_report(
+    seed: int,
+    reward: float,
+    success: bool,
+    *,
+    episode_count: int = 1,
+) -> BenchmarkRunReport:
     episode = EpisodeResult(
         initial_observation="start",
         steps=(
@@ -30,13 +36,14 @@ def _build_report(seed: int, reward: float, success: bool) -> BenchmarkRunReport
     )
     return BenchmarkRunReport(
         benchmark_name="alfworld-test",
-        episodes=(
+        episodes=tuple(
             BenchmarkEpisodeReport(
-                episode_id=f"alfworld-test:{seed}",
+                episode_id=f"alfworld-test:{seed}:{episode_index}",
                 episode=episode,
                 episode_success=success,
                 retained_memory_count=1,
-            ),
+            )
+            for episode_index in range(episode_count)
         ),
         final_memory_count=1,
         seed=seed,
@@ -93,6 +100,14 @@ def test_summarize_benchmark_reports_rejects_mixed_benchmarks() -> None:
 
     with pytest.raises(ValueError, match="one benchmark name"):
         summarize_benchmark_reports((first, second))
+
+
+def test_summarize_benchmark_reports_rejects_different_episode_counts() -> None:
+    complete_report = _build_report(1, 1.0, True, episode_count=2)
+    partial_report = _build_report(2, 1.0, True, episode_count=1)
+
+    with pytest.raises(ValueError, match="same number of episodes"):
+        summarize_benchmark_reports((complete_report, partial_report))
 
 
 @pytest.mark.parametrize("invalid_reward", [float("nan"), float("inf"), float("-inf")])

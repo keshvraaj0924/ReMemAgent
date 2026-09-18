@@ -47,13 +47,18 @@ class BenchmarkSeedStatistics:
 def summarize_benchmark_reports(
     reports: Sequence[BenchmarkRunReport],
 ) -> BenchmarkSeedStatistics:
-    """Summarize independent benchmark reports without pooling their episodes.
+    """Summarize independent, comparable benchmark seed reports.
 
-    The function requires a non-empty collection with unique seeds and one
-    benchmark name. Seed-level metrics are summarized using the arithmetic
-    mean, sample standard deviation, and a normal-approximation 95% confidence
-    interval. With one seed, the interval collapses to the observed value and
-    the sample standard deviation and standard error are zero.
+    The function requires a non-empty collection with unique seeds, one
+    benchmark name, and the same number of episodes in every repetition.
+    Seed-level metrics are summarized using the arithmetic mean, sample
+    standard deviation, and a normal-approximation 95% confidence interval.
+    With one seed, the interval collapses to the observed value and the sample
+    standard deviation and standard error are zero.
+
+    Requiring equal episode counts prevents a partially completed run from
+    being silently treated as a full benchmark repetition. The statistics
+    remain seed-level rather than pooling episodes across repetitions.
     """
 
     selected_reports = tuple(reports)
@@ -67,6 +72,10 @@ def summarize_benchmark_reports(
     benchmark_names = {report.benchmark_name for report in selected_reports}
     if len(benchmark_names) != 1:
         raise ValueError("benchmark reports must use one benchmark name")
+
+    episode_counts = {len(report.episodes) for report in selected_reports}
+    if len(episode_counts) != 1:
+        raise ValueError("benchmark reports must contain the same number of episodes")
 
     return BenchmarkSeedStatistics(
         benchmark_name=selected_reports[0].benchmark_name,
