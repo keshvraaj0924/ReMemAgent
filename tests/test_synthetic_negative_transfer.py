@@ -1,3 +1,7 @@
+import math
+
+import pytest
+
 from experiments.synthetic_negative_transfer import BenchmarkCase, run_benchmark
 from remem.routing.counterfactual import CounterfactualRouter
 
@@ -38,9 +42,19 @@ def test_benchmark_reports_regret_when_router_selects_harmful_memory() -> None:
 def test_benchmark_rejects_duplicate_case_ids() -> None:
     cases = [BenchmarkCase("duplicate", 0.8, 0.7), BenchmarkCase("duplicate", 0.7, 0.8)]
 
-    try:
+    with pytest.raises(ValueError, match="benchmark case_id values must be unique"):
         run_benchmark(cases, CounterfactualRouter())
-    except ValueError as error:
-        assert str(error) == "benchmark case_id values must be unique"
-    else:
-        raise AssertionError("Expected duplicate case identifiers to be rejected")
+
+
+@pytest.mark.parametrize("invalid_utility", [math.nan, math.inf, -math.inf])
+def test_benchmark_case_rejects_non_finite_memory_utility(invalid_utility: float) -> None:
+    with pytest.raises(ValueError, match="utility_with_memory must be finite"):
+        BenchmarkCase("invalid-memory", invalid_utility, 0.5)
+
+
+@pytest.mark.parametrize("invalid_utility", [math.nan, math.inf, -math.inf])
+def test_benchmark_case_rejects_non_finite_self_reasoning_utility(
+    invalid_utility: float,
+) -> None:
+    with pytest.raises(ValueError, match="utility_without_memory must be finite"):
+        BenchmarkCase("invalid-self-reasoning", 0.5, invalid_utility)
