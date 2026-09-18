@@ -81,6 +81,19 @@ def test_summarize_benchmark_reports_rejects_empty_input() -> None:
         summarize_benchmark_reports(())
 
 
+def test_summarize_benchmark_reports_rejects_unseeded_report() -> None:
+    seeded_report = _build_report(1, 1.0, True)
+    unseeded_report = BenchmarkRunReport(
+        benchmark_name=seeded_report.benchmark_name,
+        episodes=seeded_report.episodes,
+        final_memory_count=seeded_report.final_memory_count,
+        seed=None,
+    )
+
+    with pytest.raises(ValueError, match="seeds must be explicit"):
+        summarize_benchmark_reports((unseeded_report,))
+
+
 def test_summarize_benchmark_reports_rejects_duplicate_seeds() -> None:
     reports = (_build_report(1, 1.0, True), _build_report(1, 2.0, True))
 
