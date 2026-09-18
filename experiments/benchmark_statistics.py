@@ -28,6 +28,26 @@ class MetricSummary:
     standard_error: float
     confidence_interval_95: tuple[float, float]
 
+    def __post_init__(self) -> None:
+        """Reject malformed summaries before they can enter research reports."""
+
+        if self.sample_size < 1:
+            raise ValueError("sample_size must be at least one")
+        scalar_values = (self.mean, self.sample_stddev, self.standard_error)
+        if any(not isfinite(value) for value in scalar_values):
+            raise ValueError("metric summary values must be finite")
+        if self.sample_stddev < 0.0:
+            raise ValueError("sample_stddev must be non-negative")
+        if self.standard_error < 0.0:
+            raise ValueError("standard_error must be non-negative")
+        lower_bound, upper_bound = self.confidence_interval_95
+        if not isfinite(lower_bound) or not isfinite(upper_bound):
+            raise ValueError("confidence interval bounds must be finite")
+        if lower_bound > upper_bound:
+            raise ValueError("confidence interval lower bound must not exceed upper bound")
+        if not lower_bound <= self.mean <= upper_bound:
+            raise ValueError("confidence interval must contain the metric mean")
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkSeedStatistics:
