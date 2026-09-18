@@ -68,6 +68,5 @@ def test_metric_timer_rejects_reentry() -> None:
     recorder = MetricsRecorder()
     timer = recorder.timer("episode")
 
-    with timer:
-        with pytest.raises(RuntimeError, match="entered more than once"):
-            timer.__enter__()
+    with timer, pytest.raises(RuntimeError, match="entered more than once"):
+        timer.__enter__()
