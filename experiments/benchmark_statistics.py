@@ -16,6 +16,38 @@ from typing import Any
 from remem.benchmark import BenchmarkRunReport
 
 Z_95 = 1.96
+T_95_TWO_SIDED = (
+    12.706,
+    4.303,
+    3.182,
+    2.776,
+    2.571,
+    2.447,
+    2.365,
+    2.306,
+    2.262,
+    2.228,
+    2.201,
+    2.179,
+    2.160,
+    2.145,
+    2.131,
+    2.120,
+    2.110,
+    2.101,
+    2.093,
+    2.086,
+    2.080,
+    2.074,
+    2.069,
+    2.064,
+    2.060,
+    2.056,
+    2.052,
+    2.048,
+    2.045,
+    2.042,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,11 +105,15 @@ def summarize_benchmark_reports(
     The function requires a non-empty collection with explicit unique seeds,
     one benchmark name, and the same number of episodes in every repetition.
     Seed-level metrics are summarized using the arithmetic mean, sample
-    standard deviation, and a normal-approximation 95% confidence interval.
-    Each metric summary records its seed-level sample size explicitly so a
-    serialized report cannot hide how many independent repetitions support an
-    uncertainty estimate. With one seed, the interval collapses to the observed
-    value and the sample standard deviation and standard error are zero.
+    standard deviation, and a two-sided 95% Student t confidence interval.
+    Student t intervals are used because research experiments commonly have a
+    small number of independent seeds and the population variance is unknown.
+    For more than 31 seed runs the critical value falls back to the asymptotic
+    normal value. Each metric summary records its seed-level sample size
+    explicitly so a serialized report cannot hide how many independent
+    repetitions support an uncertainty estimate. With one seed, the interval
+    collapses to the observed value and the sample standard deviation and
+    standard error are zero.
 
     Requiring explicit seeds prevents unseeded runs from being presented as
     reproducible independent repetitions. Requiring equal episode counts
@@ -123,6 +159,17 @@ def summarize_benchmark_reports(
     )
 
 
+def _critical_value_95(sample_size: int) -> float:
+    """Return a two-sided 95% critical value for a seed-level mean."""
+
+    if sample_size < 2:
+        raise ValueError("sample_size must be at least two for a critical value")
+    degrees_of_freedom = sample_size - 1
+    if degrees_of_freedom <= len(T_95_TWO_SIDED):
+        return T_95_TWO_SIDED[degrees_of_freedom - 1]
+    return Z_95
+
+
 def _summarize(values: tuple[float, ...], *, metric_name: str) -> MetricSummary:
     """Compute descriptive seed-level statistics for one finite metric."""
 
@@ -135,17 +182,20 @@ def _summarize(values: tuple[float, ...], *, metric_name: str) -> MetricSummary:
     mean = sum(values) / sample_size
     if sample_size == 1:
         sample_stddev = 0.0
+        standard_error = 0.0
+        confidence_interval_95 = (mean, mean)
     else:
         squared_deviations = sum((value - mean) ** 2 for value in values)
         sample_stddev = sqrt(squared_deviations / (sample_size - 1))
-    standard_error = sample_stddev / sqrt(sample_size)
-    margin = Z_95 * standard_error
+        standard_error = sample_stddev / sqrt(sample_size)
+        margin = _critical_value_95(sample_size) * standard_error
+        confidence_interval_95 = (mean - margin, mean + margin)
     return MetricSummary(
         sample_size=sample_size,
         mean=mean,
         sample_stddev=sample_stddev,
         standard_error=standard_error,
-        confidence_interval_95=(mean - margin, mean + margin),
+        confidence_interval_95=confidence_interval_95,
     )
 
 
