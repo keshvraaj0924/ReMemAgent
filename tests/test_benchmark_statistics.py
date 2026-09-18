@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.benchmark_statistics import summarize_benchmark_reports
+from experiments.benchmark_statistics import _summarize, summarize_benchmark_reports
 from remem.benchmark import BenchmarkEpisodeReport, BenchmarkRunReport
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
@@ -93,3 +93,9 @@ def test_summarize_benchmark_reports_rejects_mixed_benchmarks() -> None:
 
     with pytest.raises(ValueError, match="one benchmark name"):
         summarize_benchmark_reports((first, second))
+
+
+@pytest.mark.parametrize("invalid_reward", [float("nan"), float("inf"), float("-inf")])
+def test_metric_summary_rejects_non_finite_observations(invalid_reward: float) -> None:
+    with pytest.raises(ValueError, match="mean_reward observations must be finite"):
+        _summarize((1.0, invalid_reward), metric_name="mean_reward")
