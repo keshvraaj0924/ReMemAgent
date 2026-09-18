@@ -23,6 +23,18 @@ def test_metrics_recorder_returns_deterministic_snapshot() -> None:
     assert snapshot.timing_counts == {"reconstruction": 2}
 
 
+def test_metric_snapshot_is_read_only_and_detached_from_recorder() -> None:
+    recorder = MetricsRecorder()
+    recorder.increment("events")
+    snapshot = recorder.snapshot()
+
+    recorder.increment("events")
+
+    assert snapshot.counters == {"events": 1}
+    with pytest.raises(TypeError):
+        snapshot.counters["events"] = 99  # type: ignore[index]
+
+
 def test_metrics_recorder_rejects_invalid_counter_updates() -> None:
     recorder = MetricsRecorder()
 
