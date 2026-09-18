@@ -54,54 +54,51 @@ act → evaluate → consolidate / retire
 ## Architecture
 
 ```text
-                         ┌─────────────────────┐
-                         │     Observation      │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │   Memory Retrieval  │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                    ┌──────────────────────────────┐
-                    │ Trust / Transferability      │
-                    └──────────────┬───────────────┘
-                                   │
-                                   ▼
-                    ┌──────────────────────────────┐
-                    │ Memory Reconstruction        │
-                    └──────────────┬───────────────┘
-                                   │
-                                   ▼
-                    ┌──────────────────────────────┐
-                    │ Counterfactual Memory Router │
-                    └──────────────┬───────────────┘
-                                   │
-                         ┌─────────┴─────────┐
-                         ▼                   ▼
-                  Memory / Hybrid     Self-reasoning
-                         └─────────┬─────────┘
-                                   ▼
-                                Action
-                                   │
-                                   ▼
-                           Outcome Attribution
-                                   │
-                         ┌─────────┴─────────┐
-                         ▼                   ▼
-                    Consolidate          Retire
+Observation
+    │
+    ▼
+Memory Retrieval
+    │
+    ▼
+Trust / Transferability
+    │
+    ▼
+Memory Reconstruction
+    │
+    ▼
+Counterfactual Memory Router
+    ├── memory-guided
+    ├── hybrid
+    └── self-reasoning
+    │
+    ▼
+Action → Outcome Attribution → Consolidate / Retire
 ```
+
+## Implemented framework
+
+The repository currently contains deterministic, testable foundations for:
+
+- memory domain modeling, storage, retrieval, and deduplication;
+- memory reconstruction and trust/transferability policies;
+- counterfactual routing and failure-memory handling;
+- consolidation and memory lifecycle management;
+- synthetic negative-transfer evaluation, ablations, and metrics;
+- ALFWorld/WebShop adapter boundaries;
+- GRPO/verl-agent integration boundaries;
+- experiment reproducibility and runtime provenance;
+- CI/quality tooling and lightweight in-process observability.
+
+These are engineering capabilities and experiment boundaries—not evidence of benchmark superiority. See [`docs/research-status.md`](docs/research-status.md) for the explicit evidence and claims policy.
 
 ## Repository
 
 ```text
 ReMemAgent/
-├── remem/
-│   ├── memory/          # Domain model, storage, retrieval, reconstruction
-│   └── routing/         # Trust and counterfactual routing policies
+├── remem/               # Memory, routing, integrations, metrics, observability
 ├── experiments/         # Controlled research experiments and evaluation
 ├── tests/               # Unit and integration tests
+├── docs/                # Architecture, contracts, reproducibility, research status
 ├── README.md
 └── pyproject.toml
 ```
@@ -110,9 +107,21 @@ ReMemAgent/
 
 **Active research prototype.**
 
-The project is deliberately building a deterministic, testable research baseline before introducing model-dependent training and external agent benchmarks.
+The deterministic engineering foundation is implemented and quality-gated. The next research milestone is empirical: execute controlled synthetic and external-environment evaluations under the repository's reproducibility contract, preserve raw outputs and provenance, and only then make quantitative conclusions.
 
-The repository does **not** claim benchmark improvements or production readiness until the corresponding implementations, tests, and experiments have actually been executed and reproduced.
+The repository does **not** currently claim state-of-the-art results, statistically significant task-success improvements, successful GRPO policy improvement, superior ALFWorld/WebShop performance, or production readiness.
+
+## Evidence discipline
+
+ReMemAgent distinguishes software verification from research evidence:
+
+1. **Unit-tested behavior** verifies a software contract.
+2. **Synthetic results** apply only to the recorded controlled benchmark.
+3. **Environment results** require actual ALFWorld/WebShop executions with preserved configuration.
+4. **Training results** require completed training plus reproducible provenance and evaluation.
+5. **Research claims** require repeated runs, suitable baselines, uncertainty reporting, and reproducibility.
+
+No benchmark number should be added to this README unless its generating revision, configuration, seeds, and raw outputs are preserved.
 
 ## Engineering principles
 
@@ -122,6 +131,10 @@ The repository does **not** claim benchmark improvements or production readiness
 - **Tests before claims** — behavior is covered before experimental conclusions are reported.
 - **Failure is evidence** — unsuccessful experiences remain useful when they encode transferable avoidance knowledge.
 - **Controlled complexity** — new components must justify their effect on latency, tokens, and memory growth.
+
+## Research documentation
+
+Start with [`docs/research-status.md`](docs/research-status.md) for current evidence boundaries. Reproducibility, runtime provenance, policy contracts, and architecture are documented in `docs/reproducibility.md`, `docs/runtime-provenance.md`, `docs/policy-contract.md`, and `docs/ARCHITECTURE.md`.
 
 ## Research lineage
 
