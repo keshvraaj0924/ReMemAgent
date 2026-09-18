@@ -22,6 +22,7 @@ Z_95 = 1.96
 class MetricSummary:
     """Descriptive summary of one metric across independent seed runs."""
 
+    sample_size: int
     mean: float
     sample_stddev: float
     standard_error: float
@@ -53,8 +54,10 @@ def summarize_benchmark_reports(
     one benchmark name, and the same number of episodes in every repetition.
     Seed-level metrics are summarized using the arithmetic mean, sample
     standard deviation, and a normal-approximation 95% confidence interval.
-    With one seed, the interval collapses to the observed value and the sample
-    standard deviation and standard error are zero.
+    Each metric summary records its seed-level sample size explicitly so a
+    serialized report cannot hide how many independent repetitions support an
+    uncertainty estimate. With one seed, the interval collapses to the observed
+    value and the sample standard deviation and standard error are zero.
 
     Requiring explicit seeds prevents unseeded runs from being presented as
     reproducible independent repetitions. Requiring equal episode counts
@@ -103,18 +106,22 @@ def summarize_benchmark_reports(
 def _summarize(values: tuple[float, ...], *, metric_name: str) -> MetricSummary:
     """Compute descriptive seed-level statistics for one finite metric."""
 
+    if not values:
+        raise ValueError(f"{metric_name} observations must not be empty")
     if any(not isfinite(value) for value in values):
         raise ValueError(f"{metric_name} observations must be finite")
 
-    mean = sum(values) / len(values)
-    if len(values) == 1:
+    sample_size = len(values)
+    mean = sum(values) / sample_size
+    if sample_size == 1:
         sample_stddev = 0.0
     else:
         squared_deviations = sum((value - mean) ** 2 for value in values)
-        sample_stddev = sqrt(squared_deviations / (len(values) - 1))
-    standard_error = sample_stddev / sqrt(len(values))
+        sample_stddev = sqrt(squared_deviations / (sample_size - 1))
+    standard_error = sample_stddev / sqrt(sample_size)
     margin = Z_95 * standard_error
     return MetricSummary(
+        sample_size=sample_size,
         mean=mean,
         sample_stddev=sample_stddev,
         standard_error=standard_error,
