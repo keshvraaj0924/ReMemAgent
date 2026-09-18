@@ -61,6 +61,9 @@ def test_summarize_benchmark_reports_uses_seed_level_observations() -> None:
 
     assert statistics.benchmark_name == "alfworld-test"
     assert statistics.seeds == (1, 2, 3)
+    assert statistics.success_rate.sample_size == 3
+    assert statistics.mean_reward.sample_size == 3
+    assert statistics.transfer_success_rate.sample_size == 3
     assert statistics.success_rate.mean == pytest.approx(2.0 / 3.0)
     assert statistics.mean_reward.mean == pytest.approx(3.0)
     assert statistics.mean_reward.sample_stddev == pytest.approx(2.0)
@@ -71,6 +74,7 @@ def test_summarize_benchmark_reports_uses_seed_level_observations() -> None:
 def test_single_seed_summary_has_zero_uncertainty() -> None:
     statistics = summarize_benchmark_reports((_build_report(7, 4.0, True),))
 
+    assert statistics.mean_reward.sample_size == 1
     assert statistics.mean_reward.sample_stddev == 0.0
     assert statistics.mean_reward.standard_error == 0.0
     assert statistics.mean_reward.confidence_interval_95 == (4.0, 4.0)
@@ -79,6 +83,11 @@ def test_single_seed_summary_has_zero_uncertainty() -> None:
 def test_summarize_benchmark_reports_rejects_empty_input() -> None:
     with pytest.raises(ValueError, match="at least one"):
         summarize_benchmark_reports(())
+
+
+def test_metric_summary_rejects_empty_observations() -> None:
+    with pytest.raises(ValueError, match="observations must not be empty"):
+        _summarize((), metric_name="mean_reward")
 
 
 def test_summarize_benchmark_reports_rejects_unseeded_report() -> None:
