@@ -164,7 +164,8 @@ def test_metric_summary_rejects_non_finite_observations(invalid_reward: float) -
     ],
 )
 def test_metric_summary_rejects_malformed_state(
-    kwargs: dict[str, object], message: str
+    kwargs: dict[str, object],
+    message: str,
 ) -> None:
     values: dict[str, object] = {
         "sample_size": 2,
