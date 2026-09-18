@@ -33,7 +33,7 @@ class BenchmarkSeedStatistics:
     """Measured seed-level metrics and descriptive aggregate statistics."""
 
     benchmark_name: str
-    seeds: tuple[int | None, ...]
+    seeds: tuple[int, ...]
     success_rate: MetricSummary
     mean_reward: MetricSummary
     transfer_success_rate: MetricSummary
@@ -49,23 +49,28 @@ def summarize_benchmark_reports(
 ) -> BenchmarkSeedStatistics:
     """Summarize independent, comparable benchmark seed reports.
 
-    The function requires a non-empty collection with unique seeds, one
-    benchmark name, and the same number of episodes in every repetition.
+    The function requires a non-empty collection with explicit unique seeds,
+    one benchmark name, and the same number of episodes in every repetition.
     Seed-level metrics are summarized using the arithmetic mean, sample
     standard deviation, and a normal-approximation 95% confidence interval.
     With one seed, the interval collapses to the observed value and the sample
     standard deviation and standard error are zero.
 
-    Requiring equal episode counts prevents a partially completed run from
-    being silently treated as a full benchmark repetition. The statistics
-    remain seed-level rather than pooling episodes across repetitions.
+    Requiring explicit seeds prevents unseeded runs from being presented as
+    reproducible independent repetitions. Requiring equal episode counts
+    prevents a partially completed run from being silently treated as a full
+    benchmark repetition. The statistics remain seed-level rather than pooling
+    episodes across repetitions.
     """
 
     selected_reports = tuple(reports)
     if not selected_reports:
         raise ValueError("reports must contain at least one benchmark report")
 
-    seeds = tuple(report.seed for report in selected_reports)
+    optional_seeds = tuple(report.seed for report in selected_reports)
+    if any(seed is None for seed in optional_seeds):
+        raise ValueError("benchmark report seeds must be explicit")
+    seeds = tuple(seed for seed in optional_seeds if seed is not None)
     if len(seeds) != len(set(seeds)):
         raise ValueError("benchmark report seeds must be unique")
 
