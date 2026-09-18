@@ -8,6 +8,9 @@ from dataclasses import dataclass, field
 from math import isfinite
 from time import perf_counter
 from types import MappingProxyType
+from typing import TypeVar
+
+MetricValue = TypeVar("MetricValue", int, float)
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +85,7 @@ class MetricTimer:
         self.recorder.observe_duration(self.name, perf_counter() - self._started_at)
 
 
-def _immutable_mapping(values: Mapping[str, int] | Mapping[str, float]) -> Mapping[str, int | float]:
+def _immutable_mapping(values: Mapping[str, MetricValue]) -> Mapping[str, MetricValue]:
     """Return a deterministic read-only copy of metric values."""
 
     return MappingProxyType(dict(sorted(values.items())))
