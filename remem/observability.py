@@ -50,7 +50,7 @@ class MetricsRecorder:
         self._timing_seconds[metric_name] = self._timing_seconds.get(metric_name, 0.0) + duration
         self._timing_counts[metric_name] += 1
 
-    def timer(self, name: str) -> MetricTimer:
+    def timer(self, name: str) -> "MetricTimer":
         """Return a context manager that records elapsed wall-clock duration."""
 
         return MetricTimer(recorder=self, name=_validate_metric_name(name))
@@ -73,7 +73,7 @@ class MetricTimer:
     name: str
     _started_at: float | None = field(default=None, init=False, repr=False)
 
-    def __enter__(self) -> MetricTimer:
+    def __enter__(self) -> "MetricTimer":
         if self._started_at is not None:
             raise RuntimeError("metric timer cannot be entered more than once")
         self._started_at = perf_counter()
