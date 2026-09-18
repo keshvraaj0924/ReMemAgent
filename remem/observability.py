@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from math import isfinite
 from time import perf_counter
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
+from types import MappingProxyType
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,12 +53,12 @@ class MetricsRecorder:
         return MetricTimer(recorder=self, name=_validate_metric_name(name))
 
     def snapshot(self) -> MetricSnapshot:
-        """Return an immutable copy suitable for logging or report persistence."""
+        """Return a deeply immutable copy suitable for persistence or logging."""
 
         return MetricSnapshot(
-            counters=dict(sorted(self._counters.items())),
-            timing_seconds=dict(sorted(self._timing_seconds.items())),
-            timing_counts=dict(sorted(self._timing_counts.items())),
+            counters=_immutable_mapping(self._counters),
+            timing_seconds=_immutable_mapping(self._timing_seconds),
+            timing_counts=_immutable_mapping(self._timing_counts),
         )
 
 
@@ -82,6 +80,12 @@ class MetricTimer:
         if self._started_at is None:
             raise RuntimeError("metric timer was not started")
         self.recorder.observe_duration(self.name, perf_counter() - self._started_at)
+
+
+def _immutable_mapping(values: Mapping[str, int] | Mapping[str, float]) -> Mapping[str, int | float]:
+    """Return a deterministic read-only copy of metric values."""
+
+    return MappingProxyType(dict(sorted(values.items())))
 
 
 def _validate_metric_name(name: str) -> str:
