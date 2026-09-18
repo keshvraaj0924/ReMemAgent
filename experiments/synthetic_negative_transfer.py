@@ -64,6 +64,12 @@ class BenchmarkResult:
             else 0.0
         )
 
+    @property
+    def mean_routing_regret(self) -> float:
+        """Return mean utility lost relative to the per-case oracle route."""
+
+        return self.routing_regret / self.total_cases if self.total_cases else 0.0
+
 
 def _constant_utility(value: float) -> Callable[[], float]:
     """Build a typed zero-argument evaluator for one benchmark utility."""
@@ -72,6 +78,19 @@ def _constant_utility(value: float) -> Callable[[], float]:
         return value
 
     return evaluate
+
+
+def _selected_utility(case: BenchmarkCase, route: str) -> float:
+    """Return utility realized by the route selected for one matched case."""
+
+    return case.utility_with_memory if route == "memory" else case.utility_without_memory
+
+
+def _routing_regret(case: BenchmarkCase, route: str) -> float:
+    """Return non-negative utility loss against the best route for one case."""
+
+    oracle_utility = max(case.utility_with_memory, case.utility_without_memory)
+    return oracle_utility - _selected_utility(case, route)
 
 
 def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> BenchmarkResult:
@@ -96,11 +115,11 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
             memory_selected += 1
             if memory_is_worse:
                 selected_negative_transfer_cases += 1
-                routing_regret += case.utility_without_memory - case.utility_with_memory
         else:
             self_reasoning_selected += 1
             if memory_is_worse:
                 avoided_negative_transfer_cases += 1
+        routing_regret += _routing_regret(case, decision.route)
 
     return BenchmarkResult(
         total_cases=len(cases),
