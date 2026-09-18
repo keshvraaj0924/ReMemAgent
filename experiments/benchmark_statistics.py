@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from math import sqrt
+from math import isfinite, sqrt
 from typing import Any
 
 from remem.benchmark import BenchmarkRunReport
@@ -71,16 +71,26 @@ def summarize_benchmark_reports(
     return BenchmarkSeedStatistics(
         benchmark_name=selected_reports[0].benchmark_name,
         seeds=seeds,
-        success_rate=_summarize(tuple(report.success_rate for report in selected_reports)),
-        mean_reward=_summarize(tuple(report.mean_reward for report in selected_reports)),
+        success_rate=_summarize(
+            tuple(report.success_rate for report in selected_reports),
+            metric_name="success_rate",
+        ),
+        mean_reward=_summarize(
+            tuple(report.mean_reward for report in selected_reports),
+            metric_name="mean_reward",
+        ),
         transfer_success_rate=_summarize(
-            tuple(report.transfer_success_rate for report in selected_reports)
+            tuple(report.transfer_success_rate for report in selected_reports),
+            metric_name="transfer_success_rate",
         ),
     )
 
 
-def _summarize(values: tuple[float, ...]) -> MetricSummary:
-    """Compute descriptive seed-level statistics for one metric."""
+def _summarize(values: tuple[float, ...], *, metric_name: str) -> MetricSummary:
+    """Compute descriptive seed-level statistics for one finite metric."""
+
+    if any(not isfinite(value) for value in values):
+        raise ValueError(f"{metric_name} observations must be finite")
 
     mean = sum(values) / len(values)
     if len(values) == 1:
