@@ -4,6 +4,7 @@ import pytest
 
 from experiments.benchmark_statistics import (
     MetricSummary,
+    _critical_value_95,
     _summarize,
     summarize_benchmark_reports,
 )
@@ -72,6 +73,10 @@ def test_summarize_benchmark_reports_uses_seed_level_observations() -> None:
     assert statistics.mean_reward.mean == pytest.approx(3.0)
     assert statistics.mean_reward.sample_stddev == pytest.approx(2.0)
     assert statistics.mean_reward.standard_error == pytest.approx(2.0 / 3.0**0.5)
+    expected_margin = 4.303 * statistics.mean_reward.standard_error
+    assert statistics.mean_reward.confidence_interval_95 == pytest.approx(
+        (3.0 - expected_margin, 3.0 + expected_margin)
+    )
     assert statistics.transfer_success_rate.mean == pytest.approx(0.0)
 
 
@@ -82,6 +87,16 @@ def test_single_seed_summary_has_zero_uncertainty() -> None:
     assert statistics.mean_reward.sample_stddev == 0.0
     assert statistics.mean_reward.standard_error == 0.0
     assert statistics.mean_reward.confidence_interval_95 == (4.0, 4.0)
+
+
+def test_critical_value_uses_asymptotic_normal_value_after_table() -> None:
+    assert _critical_value_95(31) == pytest.approx(2.042)
+    assert _critical_value_95(32) == pytest.approx(1.96)
+
+
+def test_critical_value_requires_two_observations() -> None:
+    with pytest.raises(ValueError, match="at least two"):
+        _critical_value_95(1)
 
 
 def test_summarize_benchmark_reports_rejects_empty_input() -> None:
