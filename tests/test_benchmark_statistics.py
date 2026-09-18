@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from experiments.benchmark_statistics import summarize_benchmark_reports
@@ -93,3 +95,18 @@ def test_summarize_benchmark_reports_rejects_mixed_benchmarks() -> None:
 
     with pytest.raises(ValueError, match="one benchmark name"):
         summarize_benchmark_reports((first, second))
+
+
+@pytest.mark.parametrize("invalid_reward", [float("nan"), float("inf"), float("-inf")])
+def test_summarize_benchmark_reports_rejects_non_finite_rewards(
+    invalid_reward: float,
+) -> None:
+    report = _build_report(1, 1.0, True)
+    invalid_episode = replace(report.episodes[0].episode, total_reward=invalid_reward)
+    invalid_report = replace(
+        report,
+        episodes=(replace(report.episodes[0], episode=invalid_episode),),
+    )
+
+    with pytest.raises(ValueError, match="mean_reward observations must be finite"):
+        summarize_benchmark_reports((invalid_report,))
