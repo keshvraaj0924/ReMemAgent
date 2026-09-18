@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -19,6 +20,10 @@ class BenchmarkCase:
     def __post_init__(self) -> None:
         if not self.case_id.strip():
             raise ValueError("case_id must not be empty")
+        if not math.isfinite(self.utility_with_memory):
+            raise ValueError("utility_with_memory must be finite")
+        if not math.isfinite(self.utility_without_memory):
+            raise ValueError("utility_without_memory must be finite")
 
 
 @dataclass(frozen=True, slots=True)
