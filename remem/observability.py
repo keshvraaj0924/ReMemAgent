@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from math import isfinite
 from time import perf_counter
 from types import MappingProxyType
-from typing import TypeVar
+from typing import Self, TypeVar
 
 MetricValue = TypeVar("MetricValue", int, float)
 
@@ -71,7 +71,7 @@ class MetricTimer:
     name: str
     _started_at: float | None = field(default=None, init=False, repr=False)
 
-    def __enter__(self) -> "MetricTimer":
+    def __enter__(self) -> Self:
         if self._started_at is not None:
             raise RuntimeError("metric timer cannot be entered more than once")
         self._started_at = perf_counter()
