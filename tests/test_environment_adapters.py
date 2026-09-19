@@ -195,3 +195,72 @@ def test_adapter_context_manager_closes_wrapped_environment(adapter_type) -> Non
 @pytest.mark.parametrize("adapter_type", [AlfWorldAdapter, WebShopAdapter])
 def test_adapter_close_is_safe_when_environment_has_no_close(adapter_type) -> None:
     adapter_type(_LegacyEnvironment()).close()
+
+
+class _OfficialAlfWorldBatchEnvironment:
+    def __init__(self) -> None:
+        self.dispatched_actions: list[list[str]] = []
+
+    def reset(self):
+        return ["initial"], {
+            "admissible_commands": [["look", "inventory"]],
+            "won": [False],
+            "extra.gamefile": ["task/game.tw-pddl"],
+        }
+
+    def step(self, actions: list[str]):
+        self.dispatched_actions.append(actions)
+        return (
+            ["next"],
+            [1.0],
+            [True],
+            {
+                "admissible_commands": [["inventory"]],
+                "won": [True],
+                "extra.gamefile": ["task/game.tw-pddl"],
+            },
+        )
+
+
+def test_alfworld_adapter_supports_official_batch_size_one_contract() -> None:
+    environment = _OfficialAlfWorldBatchEnvironment()
+    adapter = AlfWorldAdapter(environment)
+
+    assert adapter.reset() == "initial"
+    result = adapter.step("look")
+
+    assert environment.dispatched_actions == [["look"]]
+    assert result.observation == "next"
+    assert result.reward == 1.0
+    assert result.terminated is True
+    assert result.truncated is False
+    assert result.info == {
+        "admissible_commands": ["inventory"],
+        "won": True,
+        "extra.gamefile": "task/game.tw-pddl",
+    }
+
+
+class _MultiItemAlfWorldBatchEnvironment(_OfficialAlfWorldBatchEnvironment):
+    def reset(self):
+        return ["first", "second"], {"won": [False, False]}
+
+
+def test_alfworld_adapter_rejects_multi_episode_batch() -> None:
+    adapter = AlfWorldAdapter(_MultiItemAlfWorldBatchEnvironment())
+
+    with pytest.raises(ValueError, match="exactly one item"):
+        adapter.reset()
+
+
+class _MalformedAlfWorldStepEnvironment(_OfficialAlfWorldBatchEnvironment):
+    def step(self, actions: list[str]):
+        return ["first", "second"], [0.0], [False], {"won": [False]}
+
+
+def test_alfworld_adapter_rejects_mismatched_batched_step_shape() -> None:
+    adapter = AlfWorldAdapter(_MalformedAlfWorldStepEnvironment())
+    adapter.reset()
+
+    with pytest.raises(ValueError, match="exactly one item"):
+        adapter.step("look")
