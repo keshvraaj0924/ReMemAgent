@@ -1,14 +1,13 @@
-"""verl-compatible custom reward entrypoint for ReMemAgent GRPO training.
+"""verl-compatible custom reward entrypoints for ReMemAgent GRPO training.
 
-verl loads custom reward functions by file path and calls ``compute_score`` with the
-``(data_source, solution_str, ground_truth, extra_info)`` contract. ReMemAgent keeps
-that framework-specific surface here and delegates reward semantics to the typed,
-dependency-light :class:`VerlRewardAdapter`.
+verl loads custom reward functions by file path. ReMemAgent keeps that framework-specific
+surface here and delegates reward semantics to the typed, dependency-light
+:class:`VerlRewardAdapter`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from remem.training.grpo import GrpoRewardConfig
@@ -58,6 +57,47 @@ def compute_score(
     return adapter.from_extra_info(solution_str, ground_truth, extra_info)
 
 
+def compute_score_batched(
+    data_sources: Sequence[Any],
+    solution_strs: Sequence[str],
+    ground_truths: Sequence[str],
+    extra_infos: Sequence[Mapping[str, Any]],
+    **reward_kwargs: Any,
+) -> list[float]:
+    """Compute rewards for verl's batched custom-reward contract.
+
+    The batch boundary validates aligned cardinality before scoring so malformed trainer
+    batches fail closed instead of being silently truncated by ``zip``. Each item is
+    delegated to :func:`compute_score`, keeping scalar and batched reward semantics
+    identical and preserving configurable reward fields and weights.
+    """
+    batch_size = len(data_sources)
+    lengths = {
+        "solution_strs": len(solution_strs),
+        "ground_truths": len(ground_truths),
+        "extra_infos": len(extra_infos),
+    }
+    mismatched = {name: size for name, size in lengths.items() if size != batch_size}
+    if mismatched:
+        details = ", ".join(f"{name}={size}" for name, size in mismatched.items())
+        raise ValueError(
+            f"verl reward batch lengths must match data_sources={batch_size}: {details}"
+        )
+
+    return [
+        compute_score(
+            data_source=data_source,
+            solution_str=solution_str,
+            ground_truth=ground_truth,
+            extra_info=extra_info,
+            **reward_kwargs,
+        )
+        for data_source, solution_str, ground_truth, extra_info in zip(
+            data_sources, solution_strs, ground_truths, extra_infos, strict=True
+        )
+    ]
+
+
 def _build_adapter(reward_kwargs: Mapping[str, Any]) -> VerlRewardAdapter:
     """Build an adapter from explicitly supported trainer reward options."""
     unknown_options = set(reward_kwargs) - _ALLOWED_REWARD_KWARGS
@@ -97,4 +137,4 @@ def _string_option(options: Mapping[str, Any], name: str, default: str) -> str:
     return value
 
 
-__all__ = ["compute_score"]
+__all__ = ["compute_score", "compute_score_batched"]
