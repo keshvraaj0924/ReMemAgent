@@ -112,7 +112,7 @@ class ArtifactManifest:
                 raise TypeError("artifacts must contain ArtifactIntegrityRecord values")
             if record.run_id != self.run_id:
                 raise ValueError("artifact run_id must match manifest run_id")
-            record._validate_structure()
+            record.to_json()
             if record.relative_path in relative_paths:
                 raise ValueError(f"duplicate artifact path: {record.relative_path}")
             if previous_path is not None and record.relative_path < previous_path:
