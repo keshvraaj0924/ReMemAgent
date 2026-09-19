@@ -82,7 +82,9 @@ class ArtifactIntegrityRecord:
         if missing_fields:
             raise ValueError(f"artifact integrity is missing fields: {sorted(missing_fields)}")
         if unknown_fields:
-            raise ValueError(f"artifact integrity contains unknown fields: {sorted(unknown_fields)}")
+            raise ValueError(
+                f"artifact integrity contains unknown fields: {sorted(unknown_fields)}"
+            )
         record = cls(**raw)
         record._validate_structure()
         return record
