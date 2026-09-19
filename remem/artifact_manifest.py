@@ -75,9 +75,7 @@ class ArtifactManifest:
         if missing_fields:
             raise ValueError(f"artifact manifest is missing fields: {sorted(missing_fields)}")
         if unknown_fields:
-            raise ValueError(
-                f"artifact manifest contains unknown fields: {sorted(unknown_fields)}",
-            )
+            raise ValueError(f"artifact manifest contains unknown fields: {sorted(unknown_fields)}")
         if not isinstance(raw["artifacts"], list):
             raise TypeError("artifacts must be a list")
 
