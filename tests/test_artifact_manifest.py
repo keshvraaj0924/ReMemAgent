@@ -55,7 +55,11 @@ def test_manifest_rejects_duplicate_artifact_paths(tmp_path) -> None:
 def test_manifest_rejects_mixed_run_ids(tmp_path) -> None:
     artifact = tmp_path / "metrics.json"
     artifact.write_text("{}", encoding="utf-8")
-    record = ArtifactIntegrityRecord.capture(run_id="other-run", path=artifact, root=tmp_path)
+    record = ArtifactIntegrityRecord.capture(
+        run_id="other-run",
+        path=artifact,
+        root=tmp_path,
+    )
     payload = {
         "schema_version": 1,
         "run_id": "run-004",
@@ -85,8 +89,16 @@ def test_manifest_rejects_unsorted_serialized_records(tmp_path) -> None:
     second = tmp_path / "b.json"
     first.write_text("{}", encoding="utf-8")
     second.write_text("{}", encoding="utf-8")
-    first_record = ArtifactIntegrityRecord.capture(run_id="run-006", path=first, root=tmp_path)
-    second_record = ArtifactIntegrityRecord.capture(run_id="run-006", path=second, root=tmp_path)
+    first_record = ArtifactIntegrityRecord.capture(
+        run_id="run-006",
+        path=first,
+        root=tmp_path,
+    )
+    second_record = ArtifactIntegrityRecord.capture(
+        run_id="run-006",
+        path=second,
+        root=tmp_path,
+    )
     payload = {
         "schema_version": 1,
         "run_id": "run-006",
