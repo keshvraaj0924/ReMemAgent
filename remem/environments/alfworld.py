@@ -51,9 +51,7 @@ class AlfWorldAdapter(EnvironmentAdapter):
             raise ValueError("action must be a non-empty string")
 
         dispatched_action: str | list[str]
-        dispatched_action = (
-            [action] if self._uses_alfworld_batch_contract else action
-        )
+        dispatched_action = [action] if self._uses_alfworld_batch_contract else action
         result = self._environment.step(dispatched_action)
         if self._uses_alfworld_batch_contract:
             result = _unbatch_step_result(result)
