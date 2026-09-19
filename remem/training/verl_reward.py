@@ -80,7 +80,9 @@ def compute_score_batched(
     mismatched = {name: size for name, size in lengths.items() if size != batch_size}
     if mismatched:
         details = ", ".join(f"{name}={size}" for name, size in mismatched.items())
-        raise ValueError(f"verl reward batch lengths must match data_sources={batch_size}: {details}")
+        raise ValueError(
+            f"verl reward batch lengths must match data_sources={batch_size}: {details}"
+        )
 
     return [
         compute_score(
