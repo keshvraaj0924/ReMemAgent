@@ -33,8 +33,6 @@ class ArtifactIntegrityRecord:
             relative_path = artifact_path.relative_to(root_path)
         except ValueError as error:
             raise ValueError("artifact must be contained by root") from error
-        if relative_path == Path("."):
-            raise ValueError("artifact path must identify a file below root")
 
         digest = hashlib.sha256()
         size_bytes = 0
@@ -53,28 +51,10 @@ class ArtifactIntegrityRecord:
 
     def verify(self, *, root: str | Path) -> None:
         """Verify record structure and reject missing, moved, or modified artifacts."""
-        if self.schema_version != _ARTIFACT_SCHEMA_VERSION:
-            raise ValueError(f"unsupported artifact schema version: {self.schema_version}")
-        self._validate_run_id(self.run_id)
-        if not isinstance(self.relative_path, str) or not self.relative_path:
-            raise ValueError("relative_path must be a non-empty string")
-        relative_path = Path(self.relative_path)
-        if relative_path.is_absolute() or ".." in relative_path.parts:
-            raise ValueError("relative_path must stay within root")
-        if isinstance(self.size_bytes, bool) or not isinstance(self.size_bytes, int):
-            raise TypeError("size_bytes must be an integer")
-        if self.size_bytes < 0:
-            raise ValueError("size_bytes must be non-negative")
-        if not isinstance(self.sha256, str) or len(self.sha256) != 64:
-            raise ValueError("sha256 must be a 64-character hexadecimal digest")
-        try:
-            bytes.fromhex(self.sha256)
-        except ValueError as error:
-            raise ValueError("sha256 must be hexadecimal") from error
-
+        self._validate_structure()
         current = type(self).capture(
             run_id=self.run_id,
-            path=Path(root) / relative_path,
+            path=Path(root) / self.relative_path,
             root=root,
         )
         if current.size_bytes != self.size_bytes or current.sha256 != self.sha256:
@@ -108,6 +88,8 @@ class ArtifactIntegrityRecord:
         return record
 
     def _validate_structure(self) -> None:
+        if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int):
+            raise TypeError("schema_version must be an integer")
         if self.schema_version != _ARTIFACT_SCHEMA_VERSION:
             raise ValueError(f"unsupported artifact schema version: {self.schema_version}")
         self._validate_run_id(self.run_id)
