@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from remem.environments._normalization import normalize_reset_result, normalize_step_result
+from remem.environments._normalization import (
+    normalize_reset_result,
+    normalize_step_result,
+)
 from remem.environments.base import EnvironmentAdapter, StepResult
 
 
@@ -34,7 +37,9 @@ class AlfWorldAdapter(EnvironmentAdapter):
         if _is_single_item_batch_reset(result):
             self._uses_alfworld_batch_contract = True
             observation, _ = result
-            return normalize_reset_result((_single_item(observation, "observation"), {}))
+            return normalize_reset_result(
+                (_single_item(observation, "observation"), {})
+            )
 
         self._uses_alfworld_batch_contract = False
         return normalize_reset_result(result)
@@ -74,7 +79,11 @@ def _is_single_item_batch_reset(result: Any) -> bool:
 def _unbatch_step_result(result: Any) -> tuple[Any, Any, Any, dict[str, Any]]:
     """Convert ALFWorld's batch-size-one step result to the legacy Gym contract."""
 
-    if not isinstance(result, Sequence) or isinstance(result, (str, bytes)) or len(result) != 4:
+    if (
+        not isinstance(result, Sequence)
+        or isinstance(result, (str, bytes))
+        or len(result) != 4
+    ):
         raise ValueError("batched ALFWorld step() must return exactly 4 items")
 
     observations, rewards, dones, infos = result
@@ -109,7 +118,9 @@ def _single_item(value: Any, field_name: str) -> Any:
     if not _is_non_text_sequence(value):
         raise TypeError(f"batched ALFWorld {field_name} must be a sequence")
     if len(value) != 1:
-        raise ValueError(f"batched ALFWorld {field_name} must contain exactly one item")
+        raise ValueError(
+            f"batched ALFWorld {field_name} must contain exactly one item"
+        )
     return value[0]
 
 
