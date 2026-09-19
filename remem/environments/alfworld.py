@@ -5,10 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from remem.environments._normalization import (
-    normalize_reset_result,
-    normalize_step_result,
-)
+from remem.environments._normalization import normalize_reset_result, normalize_step_result
 from remem.environments.base import EnvironmentAdapter, StepResult
 
 
@@ -77,11 +74,7 @@ def _is_single_item_batch_reset(result: Any) -> bool:
 def _unbatch_step_result(result: Any) -> tuple[Any, Any, Any, dict[str, Any]]:
     """Convert ALFWorld's batch-size-one step result to the legacy Gym contract."""
 
-    if (
-        not isinstance(result, Sequence)
-        or isinstance(result, (str, bytes))
-        or len(result) != 4
-    ):
+    if not isinstance(result, Sequence) or isinstance(result, (str, bytes)) or len(result) != 4:
         raise ValueError("batched ALFWorld step() must return exactly 4 items")
 
     observations, rewards, dones, infos = result
