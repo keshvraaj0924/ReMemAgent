@@ -37,9 +37,7 @@ class AlfWorldAdapter(EnvironmentAdapter):
         if _is_single_item_batch_reset(result):
             self._uses_alfworld_batch_contract = True
             observation, _ = result
-            return normalize_reset_result(
-                (_single_item(observation, "observation"), {})
-            )
+            return normalize_reset_result((_single_item(observation, "observation"), {}))
 
         self._uses_alfworld_batch_contract = False
         return normalize_reset_result(result)
@@ -53,7 +51,9 @@ class AlfWorldAdapter(EnvironmentAdapter):
             raise ValueError("action must be a non-empty string")
 
         dispatched_action: str | list[str]
-        dispatched_action = [action] if self._uses_alfworld_batch_contract else action
+        dispatched_action = (
+            [action] if self._uses_alfworld_batch_contract else action
+        )
         result = self._environment.step(dispatched_action)
         if self._uses_alfworld_batch_contract:
             result = _unbatch_step_result(result)
