@@ -210,11 +210,16 @@ class _OfficialAlfWorldBatchEnvironment:
 
     def step(self, actions: list[str]):
         self.dispatched_actions.append(actions)
-        return ["next"], [1.0], [True], {
-            "admissible_commands": [["inventory"]],
-            "won": [True],
-            "extra.gamefile": ["task/game.tw-pddl"],
-        }
+        return (
+            ["next"],
+            [1.0],
+            [True],
+            {
+                "admissible_commands": [["inventory"]],
+                "won": [True],
+                "extra.gamefile": ["task/game.tw-pddl"],
+            },
+        )
 
 
 def test_alfworld_adapter_supports_official_batch_size_one_contract() -> None:
