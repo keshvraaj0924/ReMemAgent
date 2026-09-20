@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Self, TypeVar
 
 MetricValue = TypeVar("MetricValue", int, float)
+_REQUIRED_SNAPSHOT_FIELDS = frozenset({"counters", "timing_seconds", "timing_counts"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +28,38 @@ class MetricSnapshot:
             "timing_seconds": dict(sorted(self.timing_seconds.items())),
             "timing_counts": dict(sorted(self.timing_counts.items())),
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> Self:
+        """Restore and validate a snapshot from persisted JSON-like data.
+
+        Validation is intentionally strict so malformed or partially written
+        observability artifacts cannot silently contaminate aggregated metrics.
+        """
+
+        if not isinstance(payload, Mapping):
+            raise TypeError("metric snapshot payload must be a mapping")
+        payload_fields = set(payload)
+        if payload_fields != _REQUIRED_SNAPSHOT_FIELDS:
+            missing_fields = sorted(_REQUIRED_SNAPSHOT_FIELDS - payload_fields)
+            unknown_fields = sorted(payload_fields - _REQUIRED_SNAPSHOT_FIELDS)
+            raise ValueError(
+                "metric snapshot fields do not match schema: "
+                f"missing={missing_fields}, unknown={unknown_fields}"
+            )
+
+        counters = _require_mapping(payload["counters"], "counters")
+        timing_seconds = _require_mapping(payload["timing_seconds"], "timing_seconds")
+        timing_counts = _require_mapping(payload["timing_counts"], "timing_counts")
+
+        candidate = cls(
+            counters=counters,  # type: ignore[arg-type]
+            timing_seconds=timing_seconds,  # type: ignore[arg-type]
+            timing_counts=timing_counts,  # type: ignore[arg-type]
+        )
+        recorder = MetricsRecorder()
+        recorder.merge(candidate)
+        return recorder.snapshot()
 
 
 @dataclass(slots=True)
@@ -131,6 +164,14 @@ def _immutable_mapping(values: Mapping[str, MetricValue]) -> Mapping[str, Metric
     """Return a deterministic read-only copy of metric values."""
 
     return MappingProxyType(dict(sorted(values.items())))
+
+
+def _require_mapping(value: object, field_name: str) -> Mapping[object, object]:
+    """Require a mapping-valued snapshot field before semantic validation."""
+
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{field_name} must be a mapping")
+    return value
 
 
 def _validate_metric_name(name: str) -> str:
