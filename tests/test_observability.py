@@ -65,9 +65,7 @@ def test_metric_snapshot_rejects_invalid_persisted_schema() -> None:
         MetricSnapshot.from_dict({"counters": {}, "timing_seconds": {}})
 
     with pytest.raises(TypeError, match="counters must be a mapping"):
-        MetricSnapshot.from_dict(
-            {"counters": [], "timing_seconds": {}, "timing_counts": {}}
-        )
+        MetricSnapshot.from_dict({"counters": [], "timing_seconds": {}, "timing_counts": {}})
 
     with pytest.raises(TypeError, match="counter amount must be an integer"):
         MetricSnapshot.from_dict(
