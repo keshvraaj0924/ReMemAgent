@@ -61,6 +61,23 @@ class ArtifactManifest:
         if missing_paths:
             raise ValueError(f"artifact manifest is missing required paths: {missing_paths}")
 
+    def verify_required(self, *, paths: Iterable[str | Path], root: str | Path) -> None:
+        """Verify that mandatory evidence is captured and still byte-identical.
+
+        Unlike :meth:`verify`, this method intentionally verifies only the artifacts
+        named by an evidence contract. This is useful when a run also contains large
+        optional outputs that should not block publication of a specific result.
+        Missing evidence fails before any filesystem verification is attempted.
+        """
+        self._validate_structure()
+        required_paths = {_normalize_required_path(path) for path in paths}
+        records_by_path = {record.relative_path: record for record in self.artifacts}
+        missing_paths = sorted(required_paths - records_by_path.keys())
+        if missing_paths:
+            raise ValueError(f"artifact manifest is missing required paths: {missing_paths}")
+        for relative_path in sorted(required_paths):
+            records_by_path[relative_path].verify(root=root)
+
     def to_json(self) -> str:
         """Serialize the manifest deterministically for durable provenance storage."""
         self._validate_structure()
