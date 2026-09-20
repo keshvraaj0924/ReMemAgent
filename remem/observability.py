@@ -19,6 +19,15 @@ class MetricSnapshot:
     timing_seconds: Mapping[str, float]
     timing_counts: Mapping[str, int]
 
+    def to_dict(self) -> dict[str, dict[str, int | float]]:
+        """Return a deterministic JSON-serializable representation."""
+
+        return {
+            "counters": dict(sorted(self.counters.items())),
+            "timing_seconds": dict(sorted(self.timing_seconds.items())),
+            "timing_counts": dict(sorted(self.timing_counts.items())),
+        }
+
 
 @dataclass(slots=True)
 class MetricsRecorder:
@@ -47,6 +56,41 @@ class MetricsRecorder:
             raise ValueError("duration_seconds must be finite and non-negative")
         self._timing_seconds[metric_name] = self._timing_seconds.get(metric_name, 0.0) + duration
         self._timing_counts[metric_name] += 1
+
+    def merge(self, snapshot: MetricSnapshot) -> None:
+        """Merge a validated snapshot into this recorder.
+
+        This supports deterministic aggregation of metrics collected by separate
+        workers without coupling the core research framework to a telemetry SDK.
+        """
+
+        if not isinstance(snapshot, MetricSnapshot):
+            raise TypeError("snapshot must be a MetricSnapshot")
+
+        for name, amount in snapshot.counters.items():
+            self.increment(name, amount)
+
+        timing_names = set(snapshot.timing_seconds) | set(snapshot.timing_counts)
+        if set(snapshot.timing_seconds) != set(snapshot.timing_counts):
+            raise ValueError("timing_seconds and timing_counts must contain the same metric names")
+
+        for name in sorted(timing_names):
+            metric_name = _validate_metric_name(name)
+            duration = snapshot.timing_seconds[name]
+            count = snapshot.timing_counts[name]
+            if isinstance(count, bool) or not isinstance(count, int):
+                raise TypeError("timing count must be an integer")
+            if count <= 0:
+                raise ValueError("timing count must be positive")
+            if isinstance(duration, bool) or not isinstance(duration, (int, float)):
+                raise TypeError("timing duration must be numeric")
+            total_duration = float(duration)
+            if not isfinite(total_duration) or total_duration < 0.0:
+                raise ValueError("timing duration must be finite and non-negative")
+            self._timing_seconds[metric_name] = (
+                self._timing_seconds.get(metric_name, 0.0) + total_duration
+            )
+            self._timing_counts[metric_name] += count
 
     def timer(self, name: str) -> "MetricTimer":
         """Return a context manager that records elapsed wall-clock duration."""
