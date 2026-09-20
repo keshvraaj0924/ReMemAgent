@@ -143,7 +143,9 @@ def _normalize_required_path(path: str | Path) -> str:
     if not raw_path or "\\" in raw_path:
         raise ValueError("required artifact paths must use non-empty POSIX-style paths")
     normalized_path = PurePosixPath(raw_path)
-    if normalized_path.is_absolute() or any(part in {"", ".", ".."} for part in normalized_path.parts):
+    if normalized_path.is_absolute() or any(
+        part in {"", ".", ".."} for part in normalized_path.parts
+    ):
         raise ValueError("required artifact paths must be normalized run-relative paths")
     if normalized_path.as_posix() != raw_path:
         raise ValueError("required artifact paths must be normalized run-relative paths")
