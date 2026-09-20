@@ -24,9 +24,7 @@ class EvidenceContract:
     @classmethod
     def create(cls, *, name: str, required_paths: Iterable[str | Path]) -> Self:
         """Create a canonical contract from portable run-relative artifact paths."""
-        normalized_paths = tuple(
-            sorted({normalize_evidence_path(path) for path in required_paths})
-        )
+        normalized_paths = tuple(sorted({normalize_evidence_path(path) for path in required_paths}))
         contract = cls(
             schema_version=_EVIDENCE_CONTRACT_SCHEMA_VERSION,
             name=name,
