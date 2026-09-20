@@ -12,11 +12,7 @@ def test_manifest_capture_is_sorted_and_verifiable(tmp_path) -> None:
     second.write_text('{"value":2}', encoding="utf-8")
     first.write_text('{"value":1}', encoding="utf-8")
 
-    manifest = ArtifactManifest.capture(
-        run_id="run-001",
-        paths=[second, first],
-        root=tmp_path,
-    )
+    manifest = ArtifactManifest.capture(run_id="run-001", paths=[second, first], root=tmp_path)
 
     assert [record.relative_path for record in manifest.artifacts] == [
         "first.json",
@@ -28,11 +24,7 @@ def test_manifest_capture_is_sorted_and_verifiable(tmp_path) -> None:
 def test_manifest_round_trip_is_deterministic(tmp_path) -> None:
     artifact = tmp_path / "metrics.json"
     artifact.write_text('{"accuracy":0.5}', encoding="utf-8")
-    manifest = ArtifactManifest.capture(
-        run_id="run-002",
-        paths=[artifact],
-        root=tmp_path,
-    )
+    manifest = ArtifactManifest.capture(run_id="run-002", paths=[artifact], root=tmp_path)
 
     restored = ArtifactManifest.from_json(manifest.to_json())
 
@@ -45,11 +37,7 @@ def test_manifest_rejects_duplicate_artifact_paths(tmp_path) -> None:
     artifact.write_text("{}", encoding="utf-8")
 
     with pytest.raises(ValueError, match="duplicate artifact path"):
-        ArtifactManifest.capture(
-            run_id="run-003",
-            paths=[artifact, artifact],
-            root=tmp_path,
-        )
+        ArtifactManifest.capture(run_id="run-003", paths=[artifact, artifact], root=tmp_path)
 
 
 def test_manifest_rejects_mixed_run_ids(tmp_path) -> None:
@@ -69,11 +57,7 @@ def test_manifest_rejects_mixed_run_ids(tmp_path) -> None:
 def test_manifest_detects_post_run_artifact_mutation(tmp_path) -> None:
     artifact = tmp_path / "raw.jsonl"
     artifact.write_text('{"reward":1}\n', encoding="utf-8")
-    manifest = ArtifactManifest.capture(
-        run_id="run-005",
-        paths=[artifact],
-        root=tmp_path,
-    )
+    manifest = ArtifactManifest.capture(run_id="run-005", paths=[artifact], root=tmp_path)
     artifact.write_text('{"reward":0}\n', encoding="utf-8")
 
     with pytest.raises(ValueError, match="artifact integrity mismatch"):
