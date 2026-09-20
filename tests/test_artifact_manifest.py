@@ -102,6 +102,37 @@ def test_manifest_requires_captured_evidence_paths(tmp_path) -> None:
         manifest.require_paths(["config.json", "metrics.json"])
 
 
+def test_manifest_verifies_required_evidence_bytes(tmp_path) -> None:
+    required = tmp_path / "metrics.json"
+    optional = tmp_path / "debug.log"
+    required.write_text('{"success_rate":0.5}', encoding="utf-8")
+    optional.write_text("initial debug output", encoding="utf-8")
+    manifest = ArtifactManifest.capture(
+        run_id="run-008",
+        paths=[required, optional],
+        root=tmp_path,
+    )
+
+    optional.write_text("changed optional output", encoding="utf-8")
+    manifest.verify_required(paths=["metrics.json"], root=tmp_path)
+
+    required.write_text('{"success_rate":0.9}', encoding="utf-8")
+    with pytest.raises(ValueError, match="artifact integrity mismatch"):
+        manifest.verify_required(paths=["metrics.json"], root=tmp_path)
+
+
+def test_manifest_verify_required_fails_when_evidence_is_missing(tmp_path) -> None:
+    config = tmp_path / "config.json"
+    config.write_text('{"seed":7}', encoding="utf-8")
+    manifest = ArtifactManifest.capture(run_id="run-009", paths=[config], root=tmp_path)
+
+    with pytest.raises(ValueError, match="missing required paths.*metrics.json"):
+        manifest.verify_required(
+            paths=["config.json", "metrics.json"],
+            root=tmp_path,
+        )
+
+
 @pytest.mark.parametrize(
     "invalid_path",
     ["", "/absolute.json", "../outside.json", "raw/../metrics.json", "raw\\metrics.json"],
@@ -109,7 +140,7 @@ def test_manifest_requires_captured_evidence_paths(tmp_path) -> None:
 def test_manifest_rejects_ambiguous_required_paths(tmp_path, invalid_path: str) -> None:
     artifact = tmp_path / "metrics.json"
     artifact.write_text("{}", encoding="utf-8")
-    manifest = ArtifactManifest.capture(run_id="run-008", paths=[artifact], root=tmp_path)
+    manifest = ArtifactManifest.capture(run_id="run-010", paths=[artifact], root=tmp_path)
 
     with pytest.raises(ValueError, match="required artifact paths"):
         manifest.require_paths([invalid_path])
@@ -118,7 +149,7 @@ def test_manifest_rejects_ambiguous_required_paths(tmp_path, invalid_path: str) 
 def test_manifest_rejects_non_path_requirement(tmp_path) -> None:
     artifact = tmp_path / "metrics.json"
     artifact.write_text("{}", encoding="utf-8")
-    manifest = ArtifactManifest.capture(run_id="run-009", paths=[artifact], root=tmp_path)
+    manifest = ArtifactManifest.capture(run_id="run-011", paths=[artifact], root=tmp_path)
 
     with pytest.raises(TypeError, match="required artifact paths"):
         manifest.require_paths([123])  # type: ignore[list-item]
