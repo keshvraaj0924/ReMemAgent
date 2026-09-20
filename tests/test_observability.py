@@ -48,6 +48,42 @@ def test_metric_snapshot_to_dict_is_deterministic_and_json_serializable() -> Non
     assert json.loads(json.dumps(payload)) == payload
 
 
+def test_metric_snapshot_round_trip_validates_persisted_payload() -> None:
+    recorder = MetricsRecorder()
+    recorder.increment("episodes", 4)
+    recorder.observe_duration("episode", 1.25)
+
+    restored = MetricSnapshot.from_dict(json.loads(json.dumps(recorder.snapshot().to_dict())))
+
+    assert restored.to_dict() == recorder.snapshot().to_dict()
+    with pytest.raises(TypeError):
+        restored.counters["episodes"] = 8  # type: ignore[index]
+
+
+def test_metric_snapshot_rejects_invalid_persisted_schema() -> None:
+    with pytest.raises(ValueError, match="fields do not match schema"):
+        MetricSnapshot.from_dict({"counters": {}, "timing_seconds": {}})
+
+    with pytest.raises(TypeError, match="counters must be a mapping"):
+        MetricSnapshot.from_dict(
+            {"counters": [], "timing_seconds": {}, "timing_counts": {}}
+        )
+
+    with pytest.raises(TypeError, match="counter amount must be an integer"):
+        MetricSnapshot.from_dict(
+            {"counters": {"episodes": 1.5}, "timing_seconds": {}, "timing_counts": {}}
+        )
+
+    with pytest.raises(ValueError, match="same metric names"):
+        MetricSnapshot.from_dict(
+            {
+                "counters": {},
+                "timing_seconds": {"episode": 1.0},
+                "timing_counts": {},
+            }
+        )
+
+
 def test_metrics_recorder_merges_worker_snapshots() -> None:
     first_worker = MetricsRecorder()
     first_worker.increment("episodes", 2)
