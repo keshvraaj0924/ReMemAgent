@@ -134,7 +134,7 @@ No benchmark number should be added to this README unless its generating revisio
 
 ## Research documentation
 
-Start with [`docs/research-status.md`](docs/research-status.md) for current evidence boundaries. Reproducibility, runtime provenance, policy contracts, and architecture are documented in `docs/reproducibility.md`, `docs/runtime-provenance.md`, `docs/policy-contract.md`, and `docs/ARCHITECTURE.md`.
+Start with [`docs/research-status.md`](docs/research-status.md) for current evidence boundaries and [`docs/experiment-reporting.md`](docs/experiment-reporting.md) for the minimum evidence required before reporting quantitative results. Reproducibility, runtime provenance, policy contracts, and architecture are documented in `docs/reproducibility.md`, `docs/runtime-provenance.md`, `docs/policy-contract.md`, and `docs/ARCHITECTURE.md`.
 
 ## Research lineage
 
