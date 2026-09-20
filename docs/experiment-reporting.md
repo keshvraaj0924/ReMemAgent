@@ -16,7 +16,7 @@ Every reported run must preserve:
 
 A missing or incomplete run is not a zero-valued result. Keep failures distinguishable from completed evaluations.
 
-For automated reporting pipelines, use `ArtifactManifest.require_paths(...)` to declare the run-relative evidence files that must have been captured before a result is accepted for reporting. The check fails closed on missing evidence and rejects absolute, parent-traversing, backslash-based, or otherwise non-normalized requirements so the evidence contract remains portable and unambiguous.
+For automated reporting pipelines, use `EvidenceContract` to persist the exact run-relative files required for a result class and call `EvidenceContract.verify(...)` before accepting the result. Contracts are canonical, deterministic JSON and fail closed when required evidence is absent or its captured bytes have changed. `ArtifactManifest.require_paths(...)` and `ArtifactManifest.verify_required(...)` remain available for lower-level checks. Evidence paths reject absolute, parent-traversing, backslash-based, or otherwise non-normalized requirements so contracts remain portable and unambiguous.
 
 ## Baseline matrix
 
