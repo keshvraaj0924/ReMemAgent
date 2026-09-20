@@ -42,11 +42,20 @@ Report task success and memory-specific outcomes separately. Memory evaluation s
 
 Every reported table should identify the exact repository revision and experiment configuration that generated it. Failed or incomplete runs should remain distinguishable from zero-valued results.
 
+The normative reporting rules live in `docs/experiment-reporting.md`. Before running or publishing an experiment, follow `docs/research-execution-checklist.md`; it translates those rules into ordered pre-run, execution, evidence-preservation, and reporting checks.
+
 ## Reproducibility and observability
 
 The reproducibility and runtime-provenance documentation defines how deterministic experiment identity and execution metadata are recorded. The observability module supplies dependency-free counters and duration aggregates for instrumentation; it is infrastructure rather than a benchmark result.
 
-See `docs/reproducibility.md`, `docs/runtime-provenance.md`, `docs/policy-contract.md`, and `docs/ARCHITECTURE.md` for the corresponding contracts.
+Use these documents together:
+
+- `docs/experiment-reporting.md` — evidence and reporting contract;
+- `docs/research-execution-checklist.md` — operational experiment checklist;
+- `docs/reproducibility.md` — deterministic experiment identity;
+- `docs/runtime-provenance.md` — execution metadata and provenance;
+- `docs/policy-contract.md` — policy boundaries and semantics;
+- `docs/ARCHITECTURE.md` — component responsibilities and data flow.
 
 ## Next empirical milestone
 
