@@ -96,10 +96,7 @@ class ArtifactManifest:
         return manifest
 
     def _validate_structure(self) -> None:
-        schema_version_is_integer = isinstance(self.schema_version, int) and not isinstance(
-            self.schema_version, bool
-        )
-        if not schema_version_is_integer:
+        if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int):
             raise TypeError("schema_version must be an integer")
         if self.schema_version != _MANIFEST_SCHEMA_VERSION:
             raise ValueError(f"unsupported manifest schema version: {self.schema_version}")
