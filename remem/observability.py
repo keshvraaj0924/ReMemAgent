@@ -59,7 +59,12 @@ class MetricSnapshot:
         )
         recorder = MetricsRecorder()
         recorder.merge(candidate)
-        return recorder.snapshot()
+        validated = recorder.snapshot()
+        return cls(
+            counters=validated.counters,
+            timing_seconds=validated.timing_seconds,
+            timing_counts=validated.timing_counts,
+        )
 
 
 @dataclass(slots=True)
