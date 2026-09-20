@@ -16,6 +16,8 @@ Every reported run must preserve:
 
 A missing or incomplete run is not a zero-valued result. Keep failures distinguishable from completed evaluations.
 
+For automated reporting pipelines, use `ArtifactManifest.require_paths(...)` to declare the run-relative evidence files that must have been captured before a result is accepted for reporting. The check fails closed on missing evidence and rejects absolute, parent-traversing, backslash-based, or otherwise non-normalized requirements so the evidence contract remains portable and unambiguous.
+
 ## Baseline matrix
 
 When the corresponding policies are supported, evaluate the same task set under:
