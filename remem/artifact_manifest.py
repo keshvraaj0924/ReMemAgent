@@ -30,8 +30,7 @@ class ArtifactManifest:
     ) -> Self:
         """Capture a deterministic manifest for a run's output files."""
         records = tuple(
-            ArtifactIntegrityRecord.capture(run_id=run_id, path=path, root=root)
-            for path in paths
+            ArtifactIntegrityRecord.capture(run_id=run_id, path=path, root=root) for path in paths
         )
         manifest = cls(
             schema_version=_MANIFEST_SCHEMA_VERSION,
