@@ -130,7 +130,11 @@ def test_contract_deserialization_rejects_malformed_payloads(
         (EvidenceContract(True, "bad", ("metrics.json",)), TypeError, "schema_version"),
         (EvidenceContract(2, "bad", ("metrics.json",)), ValueError, "unsupported"),
         (EvidenceContract(1, "   ", ("metrics.json",)), ValueError, "non-empty string"),
-        (EvidenceContract(1, "bad", ["metrics.json"]), TypeError, "required_paths must be a tuple"),
+        (
+            EvidenceContract(1, "bad", ["metrics.json"]),  # type: ignore[arg-type]
+            TypeError,
+            "required_paths must be a tuple",
+        ),
         (EvidenceContract(1, "bad", ()), ValueError, "at least one artifact"),
     ],
 )
