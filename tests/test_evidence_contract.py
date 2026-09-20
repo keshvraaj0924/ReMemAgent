@@ -66,7 +66,7 @@ def test_contract_json_round_trip_is_deterministic() -> None:
     ["", "/absolute.json", "../outside.json", "raw/../metrics.json", "raw\\metrics.json"],
 )
 def test_contract_rejects_ambiguous_paths(invalid_path: str) -> None:
-    with pytest.raises(ValueError, match="evidence paths"):
+    with pytest.raises(ValueError, match="required artifact paths"):
         EvidenceContract.create(name="invalid", required_paths=[invalid_path])
 
 
