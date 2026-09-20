@@ -96,3 +96,51 @@ def test_contract_deserialization_rejects_unsorted_or_duplicate_paths() -> None:
         EvidenceContract.from_json(unsorted_payload)
     with pytest.raises(ValueError, match="unique and sorted"):
         EvidenceContract.from_json(duplicate_payload)
+
+
+@pytest.mark.parametrize(
+    ("payload", "error_type", "message"),
+    [
+        (None, TypeError, "payload must be a string"),
+        ("not-json", ValueError, "valid JSON"),
+        ("[]", TypeError, "root must be an object"),
+        ('{"name":"missing","required_paths":["metrics.json"]}', ValueError, "missing fields"),
+        (
+            '{"schema_version":1,"name":"extra","required_paths":["metrics.json"],"extra":1}',
+            ValueError,
+            "unknown fields",
+        ),
+        (
+            '{"schema_version":1,"name":"bad","required_paths":"metrics.json"}',
+            TypeError,
+            "required_paths must be a list",
+        ),
+    ],
+)
+def test_contract_deserialization_rejects_malformed_payloads(
+    payload: object, error_type: type[Exception], message: str
+) -> None:
+    with pytest.raises(error_type, match=message):
+        EvidenceContract.from_json(payload)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("contract", "error_type", "message"),
+    [
+        (EvidenceContract(True, "bad", ("metrics.json",)), TypeError, "schema_version"),
+        (EvidenceContract(2, "bad", ("metrics.json",)), ValueError, "unsupported"),
+        (EvidenceContract(1, "   ", ("metrics.json",)), ValueError, "non-empty string"),
+        (EvidenceContract(1, "bad", ["metrics.json"]), TypeError, "required_paths must be a tuple"),
+        (EvidenceContract(1, "bad", ()), ValueError, "at least one artifact"),
+    ],
+)
+def test_contract_rejects_malformed_direct_state(
+    contract: EvidenceContract, error_type: type[Exception], message: str
+) -> None:
+    with pytest.raises(error_type, match=message):
+        contract.to_json()
+
+
+def test_contract_rejects_non_path_required_value() -> None:
+    with pytest.raises(TypeError, match="strings or Path"):
+        EvidenceContract.create(name="invalid", required_paths=[object()])  # type: ignore[list-item]
