@@ -82,3 +82,43 @@ def test_manifest_rejects_unsorted_serialized_records(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="artifacts must be sorted"):
         ArtifactManifest.from_json(json.dumps(payload))
+
+
+def test_manifest_requires_captured_evidence_paths(tmp_path) -> None:
+    raw_results = tmp_path / "raw" / "episodes.jsonl"
+    config = tmp_path / "config.json"
+    raw_results.parent.mkdir()
+    raw_results.write_text('{"reward":1}\n', encoding="utf-8")
+    config.write_text('{"seed":7}', encoding="utf-8")
+    manifest = ArtifactManifest.capture(
+        run_id="run-007",
+        paths=[raw_results, config],
+        root=tmp_path,
+    )
+
+    manifest.require_paths(["config.json", "raw/episodes.jsonl", "config.json"])
+
+    with pytest.raises(ValueError, match="missing required paths.*metrics.json"):
+        manifest.require_paths(["config.json", "metrics.json"])
+
+
+@pytest.mark.parametrize(
+    "invalid_path",
+    ["", "/absolute.json", "../outside.json", "raw/../metrics.json", "raw\\metrics.json"],
+)
+def test_manifest_rejects_ambiguous_required_paths(tmp_path, invalid_path: str) -> None:
+    artifact = tmp_path / "metrics.json"
+    artifact.write_text("{}", encoding="utf-8")
+    manifest = ArtifactManifest.capture(run_id="run-008", paths=[artifact], root=tmp_path)
+
+    with pytest.raises(ValueError, match="required artifact paths"):
+        manifest.require_paths([invalid_path])
+
+
+def test_manifest_rejects_non_path_requirement(tmp_path) -> None:
+    artifact = tmp_path / "metrics.json"
+    artifact.write_text("{}", encoding="utf-8")
+    manifest = ArtifactManifest.capture(run_id="run-009", paths=[artifact], root=tmp_path)
+
+    with pytest.raises(TypeError, match="required artifact paths"):
+        manifest.require_paths([123])  # type: ignore[list-item]

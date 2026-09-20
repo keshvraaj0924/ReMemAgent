@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Self
 
 from remem.artifact_integrity import ArtifactIntegrityRecord
@@ -45,6 +45,21 @@ class ArtifactManifest:
         self._validate_structure()
         for record in self.artifacts:
             record.verify(root=root)
+
+    def require_paths(self, paths: Iterable[str | Path]) -> None:
+        """Require a set of run-relative evidence paths to exist in the manifest.
+
+        This check lets experiment/reporting code fail closed when mandatory evidence
+        such as raw results, configuration, or provenance was not captured. Paths are
+        intentionally restricted to normalized POSIX-style run-relative locations so
+        the same evidence contract is portable across operating systems.
+        """
+        self._validate_structure()
+        required_paths = {_normalize_required_path(path) for path in paths}
+        captured_paths = {record.relative_path for record in self.artifacts}
+        missing_paths = sorted(required_paths - captured_paths)
+        if missing_paths:
+            raise ValueError(f"artifact manifest is missing required paths: {missing_paths}")
 
     def to_json(self) -> str:
         """Serialize the manifest deterministically for durable provenance storage."""
@@ -118,6 +133,23 @@ class ArtifactManifest:
                 raise ValueError("artifacts must be sorted by relative_path")
             relative_paths.add(record.relative_path)
             previous_path = record.relative_path
+
+
+def _normalize_required_path(path: str | Path) -> str:
+    """Return a canonical run-relative path or reject an ambiguous requirement."""
+    if not isinstance(path, (str, Path)):
+        raise TypeError("required artifact paths must be strings or Path values")
+    raw_path = str(path)
+    if not raw_path or "\\" in raw_path:
+        raise ValueError("required artifact paths must use non-empty POSIX-style paths")
+    normalized_path = PurePosixPath(raw_path)
+    if normalized_path.is_absolute() or any(
+        part in {"", ".", ".."} for part in normalized_path.parts
+    ):
+        raise ValueError("required artifact paths must be normalized run-relative paths")
+    if normalized_path.as_posix() != raw_path:
+        raise ValueError("required artifact paths must be normalized run-relative paths")
+    return raw_path
 
 
 __all__ = ["ArtifactManifest"]
