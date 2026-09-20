@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Iterable, Self
 
 from remem.artifact_manifest import ArtifactManifest
+from remem.evidence_paths import normalize_evidence_path
 
 _EVIDENCE_CONTRACT_SCHEMA_VERSION = 1
 
@@ -24,7 +25,7 @@ class EvidenceContract:
     def create(cls, *, name: str, required_paths: Iterable[str | Path]) -> Self:
         """Create a canonical contract from portable run-relative artifact paths."""
         normalized_paths = tuple(
-            sorted({_normalize_required_path(path) for path in required_paths})
+            sorted({normalize_evidence_path(path) for path in required_paths})
         )
         contract = cls(
             schema_version=_EVIDENCE_CONTRACT_SCHEMA_VERSION,
@@ -93,26 +94,9 @@ class EvidenceContract:
         if not self.required_paths:
             raise ValueError("evidence contract must require at least one artifact")
 
-        normalized_paths = tuple(_normalize_required_path(path) for path in self.required_paths)
+        normalized_paths = tuple(normalize_evidence_path(path) for path in self.required_paths)
         if normalized_paths != tuple(sorted(set(normalized_paths))):
             raise ValueError("required_paths must be unique and sorted")
-
-
-def _normalize_required_path(path: str | Path) -> str:
-    """Return a canonical run-relative POSIX path for a contract requirement."""
-    if not isinstance(path, (str, Path)):
-        raise TypeError("evidence paths must be strings or Path values")
-    raw_path = str(path)
-    if not raw_path or "\\" in raw_path:
-        raise ValueError("evidence paths must use non-empty POSIX-style paths")
-    normalized_path = PurePosixPath(raw_path)
-    if normalized_path.is_absolute() or any(
-        part in {"", ".", ".."} for part in normalized_path.parts
-    ):
-        raise ValueError("evidence paths must be normalized run-relative paths")
-    if normalized_path.as_posix() != raw_path:
-        raise ValueError("evidence paths must be normalized run-relative paths")
-    return raw_path
 
 
 __all__ = ["EvidenceContract"]
