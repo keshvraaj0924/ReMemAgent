@@ -84,12 +84,10 @@ def test_contract_rejects_non_manifest_verification_target(tmp_path) -> None:
 
 def test_contract_deserialization_rejects_unsorted_or_duplicate_paths() -> None:
     unsorted_payload = (
-        '{"name":"bad","required_paths":["metrics.json","config.json"],'
-        '"schema_version":1}'
+        '{"name":"bad","required_paths":["metrics.json","config.json"],"schema_version":1}'
     )
     duplicate_payload = (
-        '{"name":"bad","required_paths":["metrics.json","metrics.json"],'
-        '"schema_version":1}'
+        '{"name":"bad","required_paths":["metrics.json","metrics.json"],"schema_version":1}'
     )
 
     with pytest.raises(ValueError, match="unique and sorted"):
