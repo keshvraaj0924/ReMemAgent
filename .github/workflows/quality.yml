@@ -79,7 +79,17 @@ jobs:
           if-no-files-found: error
 
       - name: Check lint rules
-        run: python -m ruff check .
+        run: |
+          mkdir -p lint-results
+          python -m ruff check . 2>&1 | tee lint-results/ruff-${{ matrix.python-version }}.txt
+
+      - name: Upload lint diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-lint-${{ matrix.python-version }}
+          path: lint-results/ruff-${{ matrix.python-version }}.txt
+          if-no-files-found: error
 
       - name: Check type annotations
         run: python -m mypy remem experiments
