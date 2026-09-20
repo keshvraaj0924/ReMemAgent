@@ -73,9 +73,11 @@ class ArtifactManifest:
         missing_fields = expected_fields - set(raw)
         unknown_fields = set(raw) - expected_fields
         if missing_fields:
-            raise ValueError(f"artifact manifest is missing fields: {sorted(missing_fields)}")
+            missing_names = sorted(missing_fields)
+            raise ValueError(f"artifact manifest is missing fields: {missing_names}")
         if unknown_fields:
-            raise ValueError(f"artifact manifest contains unknown fields: {sorted(unknown_fields)}")
+            unknown_names = sorted(unknown_fields)
+            raise ValueError(f"artifact manifest contains unknown fields: {unknown_names}")
         if not isinstance(raw["artifacts"], list):
             raise TypeError("artifacts must be a list")
 
@@ -94,7 +96,10 @@ class ArtifactManifest:
         return manifest
 
     def _validate_structure(self) -> None:
-        if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int):
+        schema_version_is_integer = isinstance(self.schema_version, int) and not isinstance(
+            self.schema_version, bool
+        )
+        if not schema_version_is_integer:
             raise TypeError("schema_version must be an integer")
         if self.schema_version != _MANIFEST_SCHEMA_VERSION:
             raise ValueError(f"unsupported manifest schema version: {self.schema_version}")
