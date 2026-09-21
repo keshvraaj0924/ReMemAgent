@@ -6,6 +6,7 @@ import pytest
 
 from remem.environment_evaluation import evaluate_environment_seeds
 from remem.environments.base import EnvironmentAdapter, StepResult
+from remem.execution import EpisodeStep
 
 
 class SeededEnvironment(EnvironmentAdapter):
@@ -29,8 +30,8 @@ class SeededEnvironment(EnvironmentAdapter):
         self.closed = True
 
 
-def _policy_factory(seed: int) -> Callable[[str, tuple[object, ...]], str]:
-    def policy(observation: str, history: tuple[object, ...]) -> str:
+def _policy_factory(seed: int) -> Callable[[str, tuple[EpisodeStep, ...]], str]:
+    def policy(observation: str, history: tuple[EpisodeStep, ...]) -> str:
         del observation, history
         return f"act-{seed}"
 
