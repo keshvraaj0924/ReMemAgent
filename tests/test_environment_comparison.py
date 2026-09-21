@@ -4,25 +4,39 @@ import pytest
 
 from remem.environment_comparison import compare_environment_evaluations
 from remem.environment_evaluation import EnvironmentEvaluation, SeededEpisodeResult
-from remem.execution import EpisodeResult
+from remem.environments.base import StepResult
+from remem.execution import EpisodeResult, EpisodeStep
+
+
+def _episode(seed: int, reward: float, step_count: int) -> EpisodeResult:
+    steps = tuple(
+        EpisodeStep(
+            step_index=index,
+            observation=f"seed:{seed}:step:{index}",
+            action="act",
+            result=StepResult(
+                observation=f"seed:{seed}:step:{index + 1}",
+                reward=reward if index == step_count - 1 else 0.0,
+                terminated=index == step_count - 1,
+            ),
+        )
+        for index in range(step_count)
+    )
+    return EpisodeResult(
+        initial_observation=f"seed:{seed}",
+        steps=steps,
+        total_reward=reward,
+        terminated=True,
+    )
 
 
 def _evaluation(*results: tuple[int, float, int]) -> EnvironmentEvaluation:
-    episodes = tuple(
-        SeededEpisodeResult(
-            seed=seed,
-            result=EpisodeResult(
-                initial_observation=f"seed:{seed}",
-                steps=(),
-                total_reward=reward,
-                terminated=True,
-                truncated=False,
-                step_count=step_count,
-            ),
+    return EnvironmentEvaluation(
+        episodes=tuple(
+            SeededEpisodeResult(seed=seed, result=_episode(seed, reward, step_count))
+            for seed, reward, step_count in results
         )
-        for seed, reward, step_count in results
     )
-    return EnvironmentEvaluation(episodes=episodes)
 
 
 def test_compare_environment_evaluations_preserves_paired_deltas() -> None:
@@ -32,7 +46,11 @@ def test_compare_environment_evaluations_preserves_paired_deltas() -> None:
     comparison = compare_environment_evaluations(baseline, candidate)
 
     assert tuple(delta.seed for delta in comparison.paired_deltas) == (3, 1, 2)
-    assert tuple(delta.reward_delta for delta in comparison.paired_deltas) == (1.0, -1.0, 0.0)
+    assert tuple(delta.reward_delta for delta in comparison.paired_deltas) == (
+        1.0,
+        -1.0,
+        0.0,
+    )
     assert tuple(delta.step_delta for delta in comparison.paired_deltas) == (-1, 2, 0)
     assert comparison.mean_reward_delta == pytest.approx(0.0)
     assert comparison.mean_step_delta == pytest.approx(1 / 3)
