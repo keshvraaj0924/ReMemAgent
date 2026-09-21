@@ -20,7 +20,8 @@ def run_environment_episode(
 
     The policy receives the current observation and an immutable snapshot of the
     transitions already observed. Hitting ``max_steps`` before the environment
-    terminates is represented as truncation rather than success or termination.
+    finishes is represented as runner truncation. Environment-reported
+    truncation is preserved separately from termination.
     """
 
     if max_steps <= 0:
@@ -29,6 +30,7 @@ def run_environment_episode(
     steps: list[EpisodeStep] = []
     total_reward = 0.0
     terminated = False
+    environment_truncated = False
     initial_observation = ""
 
     try:
@@ -53,18 +55,20 @@ def run_environment_episode(
             )
             total_reward += result.reward
             observation = result.observation
-            if result.terminated:
-                terminated = True
+            if result.done:
+                terminated = result.terminated
+                environment_truncated = result.truncated
                 break
     finally:
         environment.close()
 
+    runner_truncated = not terminated and not environment_truncated and len(steps) == max_steps
     return EpisodeResult(
         initial_observation=initial_observation,
         steps=tuple(steps),
         total_reward=total_reward,
         terminated=terminated,
-        truncated=not terminated and len(steps) == max_steps,
+        truncated=environment_truncated or runner_truncated,
     )
 
 
