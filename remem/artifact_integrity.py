@@ -23,10 +23,20 @@ class ArtifactIntegrityRecord:
 
     @classmethod
     def capture(cls, *, run_id: str, path: str | Path, root: str | Path) -> Self:
-        """Hash an artifact and bind it to a run using a portable relative path."""
+        """Hash an artifact and bind it to a run using a portable relative path.
+
+        Relative artifact paths are interpreted relative to ``root`` rather than the
+        process working directory. This keeps experiment manifests independent of the
+        directory from which a runner happens to invoke the framework.
+        """
         cls._validate_run_id(run_id)
-        artifact_path = Path(path).resolve()
         root_path = Path(root).resolve()
+        supplied_path = Path(path)
+        artifact_path = (
+            supplied_path.resolve()
+            if supplied_path.is_absolute()
+            else (root_path / supplied_path).resolve()
+        )
         if not artifact_path.is_file():
             raise FileNotFoundError(f"artifact does not exist: {artifact_path}")
         try:
