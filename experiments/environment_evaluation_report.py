@@ -6,8 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from experiments.report_io import atomic_write_json
+from experiments.runtime_provenance import RuntimeProvenance
 from remem.environment_evaluation import EnvironmentEvaluation
 from remem.execution import EpisodeResult
+
+ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION = 2
 
 
 def build_environment_evaluation_report(
@@ -15,11 +18,12 @@ def build_environment_evaluation_report(
     *,
     benchmark_name: str,
     max_steps: int,
+    provenance: RuntimeProvenance,
 ) -> dict[str, Any]:
-    """Build a deterministic report containing aggregates and raw transitions.
+    """Build a deterministic report containing provenance, aggregates, and transitions.
 
-    The report intentionally preserves episode-level observations, actions, rewards,
-    termination state, and environment metadata so aggregate metrics remain auditable.
+    The report preserves the exact runtime provenance alongside episode-level
+    observations, actions, rewards, termination state, and environment metadata.
     Environment ``info`` values must be JSON serializable; persistence fails closed
     rather than silently dropping benchmark metadata.
     """
@@ -30,14 +34,18 @@ def build_environment_evaluation_report(
         raise ValueError("benchmark_name must be a non-empty string")
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
+    if not isinstance(provenance, RuntimeProvenance):
+        raise TypeError("provenance must be a RuntimeProvenance")
 
     return {
-        "schema_version": 1,
+        "schema_version": ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION,
         "benchmark_name": benchmark_name.strip(),
         "configuration": {
             "max_steps": max_steps,
             "seeds": [episode.seed for episode in evaluation.episodes],
         },
+        "provenance": provenance.to_dict(),
+        "provenance_fingerprint": provenance.fingerprint(),
         "aggregates": {
             "episode_count": evaluation.episode_count,
             "mean_reward": evaluation.mean_reward,
@@ -61,13 +69,15 @@ def save_environment_evaluation_report(
     *,
     benchmark_name: str,
     max_steps: int,
+    provenance: RuntimeProvenance,
 ) -> Path:
-    """Atomically persist a complete external-environment evaluation report."""
+    """Atomically persist a complete, provenance-bound environment report."""
 
     report = build_environment_evaluation_report(
         evaluation,
         benchmark_name=benchmark_name,
         max_steps=max_steps,
+        provenance=provenance,
     )
     return atomic_write_json(destination, report)
 
@@ -100,6 +110,7 @@ def _episode_payload(result: EpisodeResult) -> dict[str, Any]:
 
 
 __all__ = [
+    "ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION",
     "build_environment_evaluation_report",
     "save_environment_evaluation_report",
 ]
