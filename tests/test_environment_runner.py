@@ -52,7 +52,9 @@ def test_runner_marks_step_budget_as_truncation() -> None:
         [StepResult("one", 0.0, False), StepResult("two", 0.0, False)]
     )
 
-    result = run_environment_episode(environment, lambda _observation, _history: "wait", max_steps=2)
+    result = run_environment_episode(
+        environment, lambda _observation, _history: "wait", max_steps=2
+    )
 
     assert result.terminated is False
     assert result.truncated is True
@@ -62,7 +64,9 @@ def test_runner_marks_step_budget_as_truncation() -> None:
 def test_runner_preserves_environment_truncation() -> None:
     environment = ScriptedEnvironment([StepResult("timeout", 0.0, False, truncated=True)])
 
-    result = run_environment_episode(environment, lambda _observation, _history: "wait", max_steps=5)
+    result = run_environment_episode(
+        environment, lambda _observation, _history: "wait", max_steps=5
+    )
 
     assert result.terminated is False
     assert result.truncated is True
