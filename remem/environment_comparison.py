@@ -29,17 +29,13 @@ class EnvironmentPolicyComparison:
     def mean_reward_delta(self) -> float:
         """Return candidate-minus-baseline mean reward delta."""
 
-        return sum(delta.reward_delta for delta in self.paired_deltas) / len(
-            self.paired_deltas
-        )
+        return sum(delta.reward_delta for delta in self.paired_deltas) / len(self.paired_deltas)
 
     @property
     def mean_step_delta(self) -> float:
         """Return candidate-minus-baseline mean transition-count delta."""
 
-        return sum(delta.step_delta for delta in self.paired_deltas) / len(
-            self.paired_deltas
-        )
+        return sum(delta.step_delta for delta in self.paired_deltas) / len(self.paired_deltas)
 
     @property
     def improvement_rate(self) -> float:
@@ -81,12 +77,9 @@ def compare_environment_evaluations(
         PairedSeedDelta(
             seed=baseline_episode.seed,
             reward_delta=(
-                candidate_episode.result.total_reward
-                - baseline_episode.result.total_reward
+                candidate_episode.result.total_reward - baseline_episode.result.total_reward
             ),
-            step_delta=(
-                candidate_episode.result.step_count - baseline_episode.result.step_count
-            ),
+            step_delta=(candidate_episode.result.step_count - baseline_episode.result.step_count),
         )
         for baseline_episode, candidate_episode in zip(
             baseline.episodes, candidate.episodes, strict=True
