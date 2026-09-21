@@ -6,9 +6,11 @@ from pathlib import Path
 import pytest
 
 from experiments.environment_evaluation_report import (
+    ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION,
     build_environment_evaluation_report,
     save_environment_evaluation_report,
 )
+from experiments.runtime_provenance import RuntimeProvenance
 from remem.environment_evaluation import EnvironmentEvaluation, SeededEpisodeResult
 from remem.environments.base import StepResult
 from remem.execution import EpisodeResult, EpisodeStep
@@ -37,13 +39,31 @@ def _evaluation() -> EnvironmentEvaluation:
     return EnvironmentEvaluation(episodes=(SeededEpisodeResult(seed=7, result=result),))
 
 
-def test_report_preserves_configuration_aggregates_and_raw_transitions() -> None:
-    report = build_environment_evaluation_report(
-        _evaluation(), benchmark_name="ALFWorld", max_steps=50
+def _provenance() -> RuntimeProvenance:
+    return RuntimeProvenance.create(
+        code_revision="abc123",
+        working_tree_state="clean",
+        python_version="3.12.1",
+        platform="linux-x86_64",
+        package_version="0.1.0",
+        dependency_versions={"gymnasium": "1.0.0", "remem-agent": "0.1.0"},
     )
 
+
+def test_report_preserves_configuration_provenance_and_raw_transitions() -> None:
+    provenance = _provenance()
+    report = build_environment_evaluation_report(
+        _evaluation(),
+        benchmark_name="ALFWorld",
+        max_steps=50,
+        provenance=provenance,
+    )
+
+    assert report["schema_version"] == ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION
     assert report["benchmark_name"] == "ALFWorld"
     assert report["configuration"] == {"max_steps": 50, "seeds": [7]}
+    assert report["provenance"] == provenance.to_dict()
+    assert report["provenance_fingerprint"] == provenance.fingerprint()
     assert report["aggregates"] == {
         "episode_count": 1,
         "mean_reward": 1.0,
@@ -60,27 +80,50 @@ def test_report_preserves_configuration_aggregates_and_raw_transitions() -> None
 def test_report_persistence_is_deterministic_and_atomic(tmp_path: Path) -> None:
     destination = tmp_path / "evaluation.json"
     evaluation = _evaluation()
+    provenance = _provenance()
 
     save_environment_evaluation_report(
-        destination, evaluation, benchmark_name="WebShop", max_steps=20
+        destination,
+        evaluation,
+        benchmark_name="WebShop",
+        max_steps=20,
+        provenance=provenance,
     )
     first_bytes = destination.read_bytes()
     save_environment_evaluation_report(
-        destination, evaluation, benchmark_name="WebShop", max_steps=20
+        destination,
+        evaluation,
+        benchmark_name="WebShop",
+        max_steps=20,
+        provenance=provenance,
     )
 
     assert destination.read_bytes() == first_bytes
-    assert json.loads(first_bytes)["benchmark_name"] == "WebShop"
+    persisted = json.loads(first_bytes)
+    assert persisted["benchmark_name"] == "WebShop"
+    assert persisted["provenance_fingerprint"] == provenance.fingerprint()
     assert not tuple(tmp_path.glob(".evaluation.json.*.tmp"))
 
 
-def test_report_rejects_invalid_metadata() -> None:
+def test_report_rejects_invalid_metadata_and_provenance() -> None:
     evaluation = _evaluation()
+    provenance = _provenance()
 
     with pytest.raises(ValueError, match="benchmark_name"):
-        build_environment_evaluation_report(evaluation, benchmark_name=" ", max_steps=1)
+        build_environment_evaluation_report(
+            evaluation, benchmark_name=" ", max_steps=1, provenance=provenance
+        )
     with pytest.raises(ValueError, match="max_steps"):
-        build_environment_evaluation_report(evaluation, benchmark_name="ALFWorld", max_steps=0)
+        build_environment_evaluation_report(
+            evaluation, benchmark_name="ALFWorld", max_steps=0, provenance=provenance
+        )
+    with pytest.raises(TypeError, match="provenance"):
+        build_environment_evaluation_report(
+            evaluation,
+            benchmark_name="ALFWorld",
+            max_steps=1,
+            provenance=None,  # type: ignore[arg-type]
+        )
 
 
 def test_persistence_fails_closed_for_non_json_environment_metadata(tmp_path: Path) -> None:
@@ -101,7 +144,11 @@ def test_persistence_fails_closed_for_non_json_environment_metadata(tmp_path: Pa
 
     with pytest.raises(TypeError):
         save_environment_evaluation_report(
-            destination, evaluation, benchmark_name="ALFWorld", max_steps=1
+            destination,
+            evaluation,
+            benchmark_name="ALFWorld",
+            max_steps=1,
+            provenance=_provenance(),
         )
 
     assert not destination.exists()
