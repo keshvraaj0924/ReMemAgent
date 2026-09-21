@@ -31,6 +31,18 @@ def test_ablation_reports_memory_induced_negative_transfer() -> None:
     assert result.routing_regret == 0.7
 
 
+def test_routing_regret_includes_missed_beneficial_memory() -> None:
+    cases = [BenchmarkCase("helpful", 0.9, 0.6)]
+
+    results = run_ablations(cases, CounterfactualRouter(minimum_delta=0.5))
+    by_strategy = {result.strategy: result for result in results}
+
+    assert by_strategy[AblationStrategy.MEMORY_ALWAYS].routing_regret == 0.0
+    assert by_strategy[AblationStrategy.SELF_REASONING_ALWAYS].routing_regret == 0.3
+    assert by_strategy[AblationStrategy.COUNTERFACTUAL].selected_memory == 0
+    assert by_strategy[AblationStrategy.COUNTERFACTUAL].routing_regret == 0.3
+
+
 def test_ablation_rejects_duplicate_case_ids() -> None:
     cases = [BenchmarkCase("same", 0.8, 0.7), BenchmarkCase("same", 0.7, 0.8)]
 
