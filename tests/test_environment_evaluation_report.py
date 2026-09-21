@@ -50,17 +50,23 @@ def _provenance() -> RuntimeProvenance:
     )
 
 
-def test_report_preserves_configuration_provenance_and_raw_transitions() -> None:
+def test_report_preserves_policy_configuration_provenance_and_raw_transitions() -> None:
     provenance = _provenance()
     report = build_environment_evaluation_report(
         _evaluation(),
         benchmark_name="ALFWorld",
+        policy_name="counterfactual-memory-router",
+        policy_configuration={"minimum_delta": 0.15, "retrieval_limit": 5},
         max_steps=50,
         provenance=provenance,
     )
 
     assert report["schema_version"] == ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION
     assert report["benchmark_name"] == "ALFWorld"
+    assert report["policy"] == {
+        "name": "counterfactual-memory-router",
+        "configuration": {"minimum_delta": 0.15, "retrieval_limit": 5},
+    }
     assert report["configuration"] == {"max_steps": 50, "seeds": [7]}
     assert report["provenance"] == provenance.to_dict()
     assert report["provenance_fingerprint"] == provenance.fingerprint()
@@ -81,11 +87,14 @@ def test_report_persistence_is_deterministic_and_atomic(tmp_path: Path) -> None:
     destination = tmp_path / "evaluation.json"
     evaluation = _evaluation()
     provenance = _provenance()
+    policy_configuration = {"temperature": 0.0, "memory_enabled": True}
 
     save_environment_evaluation_report(
         destination,
         evaluation,
         benchmark_name="WebShop",
+        policy_name="deterministic-baseline",
+        policy_configuration=policy_configuration,
         max_steps=20,
         provenance=provenance,
     )
@@ -94,6 +103,8 @@ def test_report_persistence_is_deterministic_and_atomic(tmp_path: Path) -> None:
         destination,
         evaluation,
         benchmark_name="WebShop",
+        policy_name="deterministic-baseline",
+        policy_configuration=policy_configuration,
         max_steps=20,
         provenance=provenance,
     )
@@ -101,29 +112,54 @@ def test_report_persistence_is_deterministic_and_atomic(tmp_path: Path) -> None:
     assert destination.read_bytes() == first_bytes
     persisted = json.loads(first_bytes)
     assert persisted["benchmark_name"] == "WebShop"
+    assert persisted["policy"]["name"] == "deterministic-baseline"
     assert persisted["provenance_fingerprint"] == provenance.fingerprint()
     assert not tuple(tmp_path.glob(".evaluation.json.*.tmp"))
 
 
-def test_report_rejects_invalid_metadata_and_provenance() -> None:
+def test_report_rejects_invalid_metadata_policy_and_provenance() -> None:
     evaluation = _evaluation()
     provenance = _provenance()
+    valid_arguments = {
+        "benchmark_name": "ALFWorld",
+        "policy_name": "baseline",
+        "policy_configuration": {},
+        "max_steps": 1,
+        "provenance": provenance,
+    }
 
     with pytest.raises(ValueError, match="benchmark_name"):
         build_environment_evaluation_report(
-            evaluation, benchmark_name=" ", max_steps=1, provenance=provenance
+            evaluation, **{**valid_arguments, "benchmark_name": " "}
+        )
+    with pytest.raises(ValueError, match="policy_name"):
+        build_environment_evaluation_report(evaluation, **{**valid_arguments, "policy_name": " "})
+    with pytest.raises(TypeError, match="policy_configuration"):
+        build_environment_evaluation_report(
+            evaluation, **{**valid_arguments, "policy_configuration": None}
         )
     with pytest.raises(ValueError, match="max_steps"):
-        build_environment_evaluation_report(
-            evaluation, benchmark_name="ALFWorld", max_steps=0, provenance=provenance
-        )
+        build_environment_evaluation_report(evaluation, **{**valid_arguments, "max_steps": 0})
     with pytest.raises(TypeError, match="provenance"):
-        build_environment_evaluation_report(
-            evaluation,
+        build_environment_evaluation_report(evaluation, **{**valid_arguments, "provenance": None})
+
+
+def test_persistence_fails_closed_for_non_json_policy_configuration(tmp_path: Path) -> None:
+    destination = tmp_path / "invalid-policy.json"
+
+    with pytest.raises(TypeError):
+        save_environment_evaluation_report(
+            destination,
+            _evaluation(),
             benchmark_name="ALFWorld",
+            policy_name="baseline",
+            policy_configuration={"opaque": object()},
             max_steps=1,
-            provenance=None,  # type: ignore[arg-type]
+            provenance=_provenance(),
         )
+
+    assert not destination.exists()
+    assert not tuple(tmp_path.glob(".invalid-policy.json.*.tmp"))
 
 
 def test_persistence_fails_closed_for_non_json_environment_metadata(tmp_path: Path) -> None:
@@ -147,6 +183,8 @@ def test_persistence_fails_closed_for_non_json_environment_metadata(tmp_path: Pa
             destination,
             evaluation,
             benchmark_name="ALFWorld",
+            policy_name="baseline",
+            policy_configuration={},
             max_steps=1,
             provenance=_provenance(),
         )
