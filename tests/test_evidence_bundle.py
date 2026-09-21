@@ -44,9 +44,7 @@ def test_bundle_save_and_load_is_deterministic(tmp_path):
 
 def test_bundle_rejects_contract_missing_from_manifest(tmp_path):
     (tmp_path / "captured.json").write_text("{}", encoding="utf-8")
-    manifest = ArtifactManifest.capture(
-        run_id="run-001", paths=("captured.json",), root=tmp_path
-    )
+    manifest = ArtifactManifest.capture(run_id="run-001", paths=("captured.json",), root=tmp_path)
     contract = EvidenceContract.create(name="benchmark", required_paths=("missing.json",))
 
     with pytest.raises(ValueError, match="missing required paths"):
