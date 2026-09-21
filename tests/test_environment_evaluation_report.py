@@ -54,9 +54,7 @@ def test_report_preserves_configuration_aggregates_and_raw_transitions() -> None
     episode = report["episodes"][0]
     assert episode["seed"] == 7
     assert episode["result"]["steps"][0]["action"] == "take apple"
-    assert episode["result"]["steps"][0]["result"]["info"] == {
-        "task": "pick_and_place"
-    }
+    assert episode["result"]["steps"][0]["result"]["info"] == {"task": "pick_and_place"}
 
 
 def test_report_persistence_is_deterministic_and_atomic(tmp_path: Path) -> None:
@@ -98,9 +96,7 @@ def test_persistence_fails_closed_for_non_json_environment_metadata(tmp_path: Pa
         total_reward=0.0,
         terminated=True,
     )
-    evaluation = EnvironmentEvaluation(
-        episodes=(SeededEpisodeResult(seed=1, result=result),)
-    )
+    evaluation = EnvironmentEvaluation(episodes=(SeededEpisodeResult(seed=1, result=result),))
     destination = tmp_path / "invalid.json"
 
     with pytest.raises(TypeError):
