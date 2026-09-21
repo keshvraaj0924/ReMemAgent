@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
+from experiments.report_io import atomic_write_json
 from remem.routing.counterfactual import CounterfactualRouter
 
 
@@ -130,6 +132,31 @@ def run_benchmark(cases: list[BenchmarkCase], router: CounterfactualRouter) -> B
         avoided_negative_transfer_cases=avoided_negative_transfer_cases,
         routing_regret=routing_regret,
     )
+
+
+def save_benchmark_evidence(
+    cases: list[BenchmarkCase],
+    router: CounterfactualRouter,
+    output_path: str | Path,
+) -> Path:
+    """Execute the synthetic benchmark and persist its inputs and measured outputs."""
+
+    result = run_benchmark(cases, router)
+    payload = {
+        "benchmark": "synthetic_negative_transfer",
+        "cases": [asdict(case) for case in cases],
+        "router": {"minimum_delta": router.minimum_delta},
+        "result": {
+            **asdict(result),
+            "mean_routing_regret": result.mean_routing_regret,
+            "memory_induced_negative_transfer_rate": (
+                result.memory_induced_negative_transfer_rate
+            ),
+            "negative_transfer_avoidance_rate": result.negative_transfer_avoidance_rate,
+            "negative_transfer_rate": result.negative_transfer_rate,
+        },
+    }
+    return atomic_write_json(output_path, payload)
 
 
 def _validate_unique_case_ids(cases: list[BenchmarkCase]) -> None:
