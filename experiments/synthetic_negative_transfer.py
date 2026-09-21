@@ -149,9 +149,7 @@ def save_benchmark_evidence(
         "result": {
             **asdict(result),
             "mean_routing_regret": result.mean_routing_regret,
-            "memory_induced_negative_transfer_rate": (
-                result.memory_induced_negative_transfer_rate
-            ),
+            "memory_induced_negative_transfer_rate": (result.memory_induced_negative_transfer_rate),
             "negative_transfer_avoidance_rate": result.negative_transfer_avoidance_rate,
             "negative_transfer_rate": result.negative_transfer_rate,
         },
