@@ -42,6 +42,30 @@ def test_save_benchmark_report_persists_measured_metrics(tmp_path) -> None:
     assert persisted["transfer_success_rate"] == pytest.approx(0.0)
 
 
+def test_save_benchmark_report_replaces_existing_file_without_temp_artifacts(tmp_path) -> None:
+    output_path = tmp_path / "reports" / "report.json"
+    output_path.parent.mkdir()
+    output_path.write_text('{"stale":true}\n', encoding="utf-8")
+
+    save_benchmark_report(_build_report(11), output_path)
+
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted["seed"] == 11
+    assert "stale" not in persisted
+    assert not list(output_path.parent.glob(".*.tmp"))
+
+
+def test_save_benchmark_report_is_byte_deterministic(tmp_path) -> None:
+    report = _build_report(13)
+    output_path = tmp_path / "report.json"
+
+    save_benchmark_report(report, output_path)
+    first_bytes = output_path.read_bytes()
+    save_benchmark_report(report, output_path)
+
+    assert output_path.read_bytes() == first_bytes
+
+
 def test_benchmark_report_rejects_duplicate_episode_ids() -> None:
     report = _build_report()
     episode = report.episodes[0]
