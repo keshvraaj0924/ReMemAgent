@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -10,28 +11,34 @@ from experiments.runtime_provenance import RuntimeProvenance
 from remem.environment_evaluation import EnvironmentEvaluation
 from remem.execution import EpisodeResult
 
-ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION = 2
+ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION = 3
 
 
 def build_environment_evaluation_report(
     evaluation: EnvironmentEvaluation,
     *,
     benchmark_name: str,
+    policy_name: str,
+    policy_configuration: Mapping[str, Any],
     max_steps: int,
     provenance: RuntimeProvenance,
 ) -> dict[str, Any]:
-    """Build a deterministic report containing provenance, aggregates, and transitions.
+    """Build a deterministic report containing provenance, policy, and transitions.
 
-    The report preserves the exact runtime provenance alongside episode-level
-    observations, actions, rewards, termination state, and environment metadata.
-    Environment ``info`` values must be JSON serializable; persistence fails closed
-    rather than silently dropping benchmark metadata.
+    The report preserves the exact runtime provenance and evaluated policy alongside
+    episode-level observations, actions, rewards, termination state, and environment
+    metadata. Policy configuration and environment ``info`` values must be JSON
+    serializable; persistence fails closed rather than silently dropping evidence.
     """
 
     if not isinstance(evaluation, EnvironmentEvaluation):
         raise TypeError("evaluation must be an EnvironmentEvaluation")
     if not isinstance(benchmark_name, str) or not benchmark_name.strip():
         raise ValueError("benchmark_name must be a non-empty string")
+    if not isinstance(policy_name, str) or not policy_name.strip():
+        raise ValueError("policy_name must be a non-empty string")
+    if not isinstance(policy_configuration, Mapping):
+        raise TypeError("policy_configuration must be a mapping")
     if max_steps <= 0:
         raise ValueError("max_steps must be positive")
     if not isinstance(provenance, RuntimeProvenance):
@@ -40,6 +47,10 @@ def build_environment_evaluation_report(
     return {
         "schema_version": ENVIRONMENT_EVALUATION_REPORT_SCHEMA_VERSION,
         "benchmark_name": benchmark_name.strip(),
+        "policy": {
+            "name": policy_name.strip(),
+            "configuration": dict(policy_configuration),
+        },
         "configuration": {
             "max_steps": max_steps,
             "seeds": [episode.seed for episode in evaluation.episodes],
@@ -68,14 +79,18 @@ def save_environment_evaluation_report(
     evaluation: EnvironmentEvaluation,
     *,
     benchmark_name: str,
+    policy_name: str,
+    policy_configuration: Mapping[str, Any],
     max_steps: int,
     provenance: RuntimeProvenance,
 ) -> Path:
-    """Atomically persist a complete, provenance-bound environment report."""
+    """Atomically persist complete provenance- and policy-bound environment evidence."""
 
     report = build_environment_evaluation_report(
         evaluation,
         benchmark_name=benchmark_name,
+        policy_name=policy_name,
+        policy_configuration=policy_configuration,
         max_steps=max_steps,
         provenance=provenance,
     )
