@@ -56,7 +56,12 @@ def _evaluate_strategy(
     strategy: AblationStrategy,
     router: CounterfactualRouter,
 ) -> AblationResult:
-    """Evaluate one routing strategy over matched cases."""
+    """Evaluate one routing strategy over matched cases.
+
+    Routing regret is measured against a per-case oracle that selects the higher
+    of memory-assisted and self-reasoning utility. This captures both harmful
+    memory selection and missed opportunities to use beneficial memory.
+    """
 
     utilities: list[float] = []
     selected_memory = 0
@@ -67,12 +72,12 @@ def _evaluate_strategy(
         use_memory = _select_memory(case, strategy, router)
         utility = case.utility_with_memory if use_memory else case.utility_without_memory
         utilities.append(utility)
+        routing_regret += max(case.utility_with_memory, case.utility_without_memory) - utility
         if use_memory:
             selected_memory += 1
         memory_is_harmful = case.utility_with_memory < case.utility_without_memory
         if use_memory and memory_is_harmful:
             selected_negative_transfer_cases += 1
-            routing_regret += case.utility_without_memory - case.utility_with_memory
 
     mean_utility = round(sum(utilities) / len(utilities), 12) if utilities else 0.0
     return AblationResult(
