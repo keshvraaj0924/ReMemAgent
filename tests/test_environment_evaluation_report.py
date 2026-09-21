@@ -133,9 +133,7 @@ def test_report_rejects_invalid_metadata_policy_and_provenance() -> None:
             evaluation, **{**valid_arguments, "benchmark_name": " "}
         )
     with pytest.raises(ValueError, match="policy_name"):
-        build_environment_evaluation_report(
-            evaluation, **{**valid_arguments, "policy_name": " "}
-        )
+        build_environment_evaluation_report(evaluation, **{**valid_arguments, "policy_name": " "})
     with pytest.raises(TypeError, match="policy_configuration"):
         build_environment_evaluation_report(
             evaluation, **{**valid_arguments, "policy_configuration": None}
@@ -143,9 +141,7 @@ def test_report_rejects_invalid_metadata_policy_and_provenance() -> None:
     with pytest.raises(ValueError, match="max_steps"):
         build_environment_evaluation_report(evaluation, **{**valid_arguments, "max_steps": 0})
     with pytest.raises(TypeError, match="provenance"):
-        build_environment_evaluation_report(
-            evaluation, **{**valid_arguments, "provenance": None}
-        )
+        build_environment_evaluation_report(evaluation, **{**valid_arguments, "provenance": None})
 
 
 def test_persistence_fails_closed_for_non_json_policy_configuration(tmp_path: Path) -> None:
