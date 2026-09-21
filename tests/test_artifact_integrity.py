@@ -22,6 +22,25 @@ def test_capture_and_verify_artifact(tmp_path) -> None:
     record.verify(root=tmp_path)
 
 
+def test_capture_resolves_relative_path_against_root(tmp_path, monkeypatch) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    artifact = run_root / "result.json"
+    artifact.write_text("{}", encoding="utf-8")
+    other_directory = tmp_path / "caller"
+    other_directory.mkdir()
+    monkeypatch.chdir(other_directory)
+
+    record = ArtifactIntegrityRecord.capture(
+        run_id="run-123",
+        path="result.json",
+        root=run_root,
+    )
+
+    assert record.relative_path == "result.json"
+    record.verify(root=run_root)
+
+
 def test_verify_rejects_modified_artifact(tmp_path) -> None:
     artifact = tmp_path / "result.json"
     artifact.write_text("original", encoding="utf-8")
