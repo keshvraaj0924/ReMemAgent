@@ -13,6 +13,18 @@ def test_adapter_converts_sample_and_computes_reward() -> None:
     assert reward == pytest.approx(1.19)
 
 
+def test_adapter_exposes_same_reward_attribution_as_scalar_path() -> None:
+    adapter = VerlRewardAdapter()
+    sample = {"task_reward": 1.0, "memory_used": True, "counterfactual_delta": -0.2}
+
+    breakdown = adapter.breakdown(sample)
+
+    assert breakdown.task_component == pytest.approx(1.0)
+    assert breakdown.transfer_component == pytest.approx(-0.2)
+    assert breakdown.memory_cost_component == pytest.approx(-0.01)
+    assert breakdown.total_reward == pytest.approx(adapter(sample))
+
+
 def test_adapter_accepts_reward_manager_extra_info() -> None:
     adapter = VerlRewardAdapter()
 
@@ -40,6 +52,25 @@ def test_adapter_supports_metadata_only_reward_manager_call() -> None:
     )
 
     assert reward == pytest.approx(1.19)
+
+
+def test_metadata_only_breakdown_preserves_attribution() -> None:
+    adapter = VerlRewardAdapter()
+
+    breakdown = adapter.breakdown_from_extra_info(
+        solution_str="ignored generated answer",
+        ground_truth="ignored reference answer",
+        extra_info={
+            "task_reward": 0.8,
+            "memory_used": True,
+            "counterfactual_delta": 0.4,
+        },
+    )
+
+    assert breakdown.task_component == pytest.approx(0.8)
+    assert breakdown.transfer_component == pytest.approx(0.2)
+    assert breakdown.memory_cost_component == pytest.approx(-0.01)
+    assert breakdown.total_reward == pytest.approx(0.99)
 
 
 def test_metadata_only_call_requires_measured_reward_fields() -> None:
@@ -74,6 +105,20 @@ def test_adapter_computes_ordered_batch_rewards() -> None:
     rewards = adapter.compute_batch(samples)
 
     assert rewards == pytest.approx([1.19, 0.5, 0.59])
+
+
+def test_adapter_computes_ordered_batch_breakdowns() -> None:
+    adapter = VerlRewardAdapter()
+    samples = [
+        {"task_reward": 1.0, "memory_used": True, "counterfactual_delta": 0.4},
+        {"task_reward": 0.5, "memory_used": False},
+    ]
+
+    breakdowns = adapter.compute_batch_breakdowns(samples)
+
+    assert [item.total_reward for item in breakdowns] == pytest.approx([1.19, 0.5])
+    assert breakdowns[1].transfer_component == 0.0
+    assert breakdowns[1].memory_cost_component == 0.0
 
 
 def test_adapter_batch_rejects_invalid_sample() -> None:
