@@ -11,7 +11,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from remem.training.grpo import GrpoRewardConfig, GrpoTrajectory, compute_grpo_reward
+from remem.training.grpo import (
+    GrpoRewardBreakdown,
+    GrpoRewardConfig,
+    GrpoTrajectory,
+    compute_grpo_reward_breakdown,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,15 +49,29 @@ class VerlRewardAdapter:
         ground_truth: str | None = None,
         extra_info: Mapping[str, Any] | None = None,
     ) -> float:
-        """Compute reward from either direct metadata or a verl reward-manager call.
+        """Compute scalar reward from direct metadata or a verl reward-manager call."""
+        return self.breakdown(
+            sample,
+            solution_str=solution_str,
+            ground_truth=ground_truth,
+            extra_info=extra_info,
+        ).total_reward
 
-        ``solution_str`` and ``ground_truth`` are accepted for compatibility with
-        reward-manager call sites but are intentionally not used to infer memory
-        transfer. Transfer must come from measured trajectory metadata.
+    def breakdown(
+        self,
+        sample: Mapping[str, Any],
+        solution_str: str | None = None,
+        ground_truth: str | None = None,
+        extra_info: Mapping[str, Any] | None = None,
+    ) -> GrpoRewardBreakdown:
+        """Return auditable reward attribution for one trainer sample.
+
+        Generated and reference text are accepted only for compatibility with trainer
+        call sites. Transfer remains grounded in measured trajectory metadata.
         """
         del solution_str, ground_truth
         reward_sample = self._merge_extra_info(sample, extra_info)
-        return compute_grpo_reward(self.to_trajectory(reward_sample), self.config)
+        return compute_grpo_reward_breakdown(self.to_trajectory(reward_sample), self.config)
 
     def from_extra_info(
         self,
@@ -60,13 +79,21 @@ class VerlRewardAdapter:
         ground_truth: str,
         extra_info: Mapping[str, Any],
     ) -> float:
-        """Compute reward for verl call sites that carry measurements in ``extra_info``.
+        """Compute scalar reward for measurements carried in ``extra_info``."""
+        return self.breakdown_from_extra_info(
+            solution_str,
+            ground_truth,
+            extra_info,
+        ).total_reward
 
-        Generated and reference text are deliberately ignored. The method exists so a
-        trainer can pass the common ``(solution_str, ground_truth, extra_info)`` shape
-        without manufacturing an otherwise-empty sample mapping.
-        """
-        return self(
+    def breakdown_from_extra_info(
+        self,
+        solution_str: str,
+        ground_truth: str,
+        extra_info: Mapping[str, Any],
+    ) -> GrpoRewardBreakdown:
+        """Return reward attribution for verl-style ``extra_info`` metadata."""
+        return self.breakdown(
             {},
             solution_str=solution_str,
             ground_truth=ground_truth,
@@ -76,6 +103,12 @@ class VerlRewardAdapter:
     def compute_batch(self, samples: Sequence[Mapping[str, Any]]) -> list[float]:
         """Compute rewards for an ordered trainer batch without mutating its samples."""
         return [self(sample) for sample in samples]
+
+    def compute_batch_breakdowns(
+        self, samples: Sequence[Mapping[str, Any]]
+    ) -> list[GrpoRewardBreakdown]:
+        """Compute ordered reward attribution for a trainer batch."""
+        return [self.breakdown(sample) for sample in samples]
 
     @staticmethod
     def _merge_extra_info(
