@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import json
 import os
 from pathlib import Path
 import tempfile
 
-from remem.observability import MetricSnapshot
+from remem.observability import MetricSnapshot, MetricsRecorder
 
 
 def save_metric_snapshot(snapshot: MetricSnapshot, path: str | Path) -> Path:
@@ -55,4 +56,34 @@ def load_metric_snapshot(path: str | Path) -> MetricSnapshot:
     return MetricSnapshot.from_dict(payload)
 
 
-__all__ = ["load_metric_snapshot", "save_metric_snapshot"]
+def merge_metric_snapshots(paths: Iterable[str | Path]) -> MetricSnapshot:
+    """Load and deterministically aggregate persisted worker metric snapshots.
+
+    Duplicate paths are rejected rather than silently double-counted. Every input
+    passes through :func:`load_metric_snapshot`, so malformed worker artifacts fail
+    the aggregation before a combined snapshot can be reported as evidence.
+    """
+    if isinstance(paths, (str, Path)):
+        raise TypeError("paths must be an iterable of snapshot paths, not a single path")
+
+    normalized_paths: list[Path] = []
+    seen_paths: set[Path] = set()
+    for raw_path in paths:
+        if not isinstance(raw_path, (str, Path)):
+            raise TypeError("each snapshot path must be a string or Path")
+        path = Path(raw_path).resolve(strict=False)
+        if path in seen_paths:
+            raise ValueError(f"duplicate metric snapshot path: {raw_path}")
+        seen_paths.add(path)
+        normalized_paths.append(path)
+
+    if not normalized_paths:
+        raise ValueError("at least one metric snapshot path is required")
+
+    recorder = MetricsRecorder()
+    for path in sorted(normalized_paths, key=lambda item: str(item)):
+        recorder.merge(load_metric_snapshot(path))
+    return recorder.snapshot()
+
+
+__all__ = ["load_metric_snapshot", "merge_metric_snapshots", "save_metric_snapshot"]
