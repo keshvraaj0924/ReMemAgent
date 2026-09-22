@@ -29,6 +29,22 @@ class MetricSnapshot:
             "timing_counts": dict(sorted(self.timing_counts.items())),
         }
 
+    def mean_durations(self) -> Mapping[str, float]:
+        """Return deterministic mean durations for all recorded timing metrics.
+
+        The snapshot is validated before deriving means so manually constructed,
+        inconsistent snapshots cannot produce plausible-looking telemetry.
+        """
+
+        recorder = MetricsRecorder()
+        recorder.merge(self)
+        return MappingProxyType(
+            {
+                name: self.timing_seconds[name] / self.timing_counts[name]
+                for name in sorted(self.timing_seconds)
+            }
+        )
+
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> Self:
         """Restore and validate a snapshot from persisted JSON-like data.
