@@ -22,9 +22,7 @@ def test_metric_snapshot_persistence_round_trip(tmp_path: Path) -> None:
 def test_save_rejects_malformed_snapshot_before_replacing_file(tmp_path: Path) -> None:
     destination = tmp_path / "metrics.json"
     destination.write_text("existing\n", encoding="utf-8")
-    malformed = MetricSnapshot(
-        counters={}, timing_seconds={"episode": 1.0}, timing_counts={}
-    )
+    malformed = MetricSnapshot(counters={}, timing_seconds={"episode": 1.0}, timing_counts={})
 
     with pytest.raises(ValueError, match="same metric names"):
         save_metric_snapshot(malformed, destination)
