@@ -102,3 +102,54 @@ def test_experiment_summary_rejects_invalid_rate_specifications() -> None:
 def test_experiment_summary_rejects_non_snapshot_input() -> None:
     with pytest.raises(TypeError, match="MetricSnapshot"):
         ExperimentSummary.from_snapshot({})  # type: ignore[arg-type]
+
+
+def test_experiment_summary_restores_validated_payload() -> None:
+    payload = {
+        "counters": {"retrieval.total": 4, "retrieval.accepted": 3},
+        "mean_durations": {"retrieval": 0.3},
+        "counter_rates": {"retrieval.acceptance_rate": 0.75},
+    }
+
+    summary = ExperimentSummary.from_dict(payload)
+
+    assert summary.to_dict() == {
+        "counters": {"retrieval.accepted": 3, "retrieval.total": 4},
+        "mean_durations": {"retrieval": 0.3},
+        "counter_rates": {"retrieval.acceptance_rate": 0.75},
+    }
+    with pytest.raises(TypeError):
+        summary.mean_durations["retrieval"] = 1.0  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("payload", "error_type"),
+    [
+        ({"counters": {}, "mean_durations": {}}, ValueError),
+        (
+            {"counters": {"episodes": -1}, "mean_durations": {}, "counter_rates": {}},
+            ValueError,
+        ),
+        (
+            {"counters": {"episodes": True}, "mean_durations": {}, "counter_rates": {}},
+            TypeError,
+        ),
+        (
+            {"counters": {}, "mean_durations": {"episode": float("inf")}, "counter_rates": {}},
+            ValueError,
+        ),
+        (
+            {"counters": {}, "mean_durations": {}, "counter_rates": {"acceptance": 1.1}},
+            ValueError,
+        ),
+        (
+            {"counters": {}, "mean_durations": {}, "counter_rates": {" ": 0.5}},
+            ValueError,
+        ),
+    ],
+)
+def test_experiment_summary_rejects_invalid_persisted_payloads(
+    payload: object, error_type: type[Exception]
+) -> None:
+    with pytest.raises(error_type):
+        ExperimentSummary.from_dict(payload)  # type: ignore[arg-type]
