@@ -17,6 +17,7 @@ from remem.training.grpo import (
     GrpoTrajectory,
     compute_grpo_reward_breakdown,
 )
+from remem.training.grpo_metrics import GrpoBatchMetrics, summarize_grpo_breakdowns
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +110,14 @@ class VerlRewardAdapter:
     ) -> list[GrpoRewardBreakdown]:
         """Compute ordered reward attribution for a trainer batch."""
         return [self.breakdown(sample) for sample in samples]
+
+    def summarize_batch(self, samples: Sequence[Mapping[str, Any]]) -> GrpoBatchMetrics:
+        """Return typed attribution metrics for an ordered trainer batch.
+
+        Metrics are derived from the same breakdown path as scalar rewards, ensuring
+        trainer observability cannot silently diverge from reward semantics.
+        """
+        return summarize_grpo_breakdowns(self.compute_batch_breakdowns(samples))
 
     @staticmethod
     def _merge_extra_info(
