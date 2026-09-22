@@ -18,6 +18,8 @@ A missing or incomplete run is not a zero-valued result. Keep failures distingui
 
 For automated reporting pipelines, use `EvidenceContract` to persist the exact run-relative files required for a result class and call `EvidenceContract.verify(...)` before accepting the result. Contracts are canonical, deterministic JSON and fail closed when required evidence is absent or its captured bytes have changed. `ArtifactManifest.require_paths(...)` and `ArtifactManifest.verify_required(...)` remain available for lower-level checks. Evidence paths reject absolute, parent-traversing, backslash-based, or otherwise non-normalized requirements so contracts remain portable and unambiguous.
 
+When a persisted `ExperimentSummary` is used as reportable aggregate evidence, name the summary file in the same `EvidenceContract` as its required raw inputs and consume it through `verify_reportable_summary(...)`. That boundary verifies the complete evidence bundle before parsing the aggregate summary, so a valid-looking summary cannot bypass missing or mutated source evidence. Do not load a standalone summary and treat successful JSON/schema validation as proof that its underlying experiment evidence is intact.
+
 ## Baseline matrix
 
 When the corresponding policies are supported, evaluate the same task set under:
