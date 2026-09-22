@@ -5,6 +5,8 @@ import pytest
 
 from experiments.synthetic_negative_transfer import (
     BenchmarkCase,
+    load_benchmark_cases,
+    main,
     run_benchmark,
     save_benchmark_evidence,
 )
@@ -132,3 +134,80 @@ def test_save_benchmark_evidence_is_byte_deterministic(tmp_path) -> None:
 
     assert output_path.read_bytes() == first_bytes
     assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_load_benchmark_cases_strictly_restores_json_cases(tmp_path) -> None:
+    input_path = tmp_path / "cases.json"
+    input_path.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "beneficial",
+                    "utility_with_memory": 0.9,
+                    "utility_without_memory": 0.6,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_benchmark_cases(input_path) == [BenchmarkCase("beneficial", 0.9, 0.6)]
+
+
+@pytest.mark.parametrize(
+    "payload, message",
+    [
+        ({"case_id": "not-an-array"}, "JSON array"),
+        ([{"case_id": "missing-utilities"}], "must contain exactly"),
+        ([{"case_id": 7, "utility_with_memory": 0.9, "utility_without_memory": 0.6}], "non-string case_id"),
+        ([{"case_id": "bool", "utility_with_memory": True, "utility_without_memory": 0.6}], "invalid utility_with_memory"),
+    ],
+)
+def test_load_benchmark_cases_rejects_invalid_schema(tmp_path, payload, message) -> None:
+    input_path = tmp_path / "cases.json"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_benchmark_cases(input_path)
+
+
+def test_cli_executes_configured_benchmark_and_writes_evidence(tmp_path) -> None:
+    input_path = tmp_path / "cases.json"
+    output_path = tmp_path / "evidence" / "result.json"
+    input_path.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "harmful",
+                    "utility_with_memory": 0.4,
+                    "utility_without_memory": 0.8,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "--cases",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--minimum-delta",
+            "0.05",
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["cases"][0]["case_id"] == "harmful"
+    assert payload["router"] == {"minimum_delta": 0.05}
+    assert payload["result"]["negative_transfer_avoidance_rate"] == 1.0
+
+
+def test_cli_rejects_non_finite_minimum_delta(tmp_path) -> None:
+    input_path = tmp_path / "cases.json"
+    input_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="minimum_delta must be finite"):
+        main(["--cases", str(input_path), "--output", str(tmp_path / "out.json"), "--minimum-delta", "nan"])
