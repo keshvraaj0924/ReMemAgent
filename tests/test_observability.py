@@ -48,6 +48,29 @@ def test_metric_snapshot_to_dict_is_deterministic_and_json_serializable() -> Non
     assert json.loads(json.dumps(payload)) == payload
 
 
+def test_metric_snapshot_mean_durations_are_validated_and_read_only() -> None:
+    recorder = MetricsRecorder()
+    recorder.observe_duration("retrieval", 0.2)
+    recorder.observe_duration("retrieval", 0.4)
+    recorder.observe_duration("reconstruction", 0.9)
+
+    means = recorder.snapshot().mean_durations()
+
+    assert list(means) == ["reconstruction", "retrieval"]
+    assert means["retrieval"] == pytest.approx(0.3)
+    assert means["reconstruction"] == pytest.approx(0.9)
+    with pytest.raises(TypeError):
+        means["retrieval"] = 99.0  # type: ignore[index]
+
+    malformed = MetricSnapshot(
+        counters={},
+        timing_seconds={"retrieval": 1.0},
+        timing_counts={},
+    )
+    with pytest.raises(ValueError, match="same metric names"):
+        malformed.mean_durations()
+
+
 def test_metric_snapshot_round_trip_validates_persisted_payload() -> None:
     recorder = MetricsRecorder()
     recorder.increment("episodes", 4)
