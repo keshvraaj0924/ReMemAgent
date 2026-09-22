@@ -121,7 +121,7 @@ ReMemAgent distinguishes software verification from research evidence:
 4. **Training results** require completed training plus reproducible provenance and evaluation.
 5. **Research claims** require repeated runs, suitable baselines, uncertainty reporting, and reproducibility.
 
-No benchmark number should be added to this README unless its generating revision, configuration, seeds, and raw outputs are preserved.
+No benchmark number should be added to this README unless its generating revision, configuration, seeds, and raw outputs are preserved. The [`claims and evidence matrix`](docs/claims-evidence-matrix.md) maps each major claim to the minimum evidence required before it can be reported.
 
 ## Engineering principles
 
@@ -134,7 +134,7 @@ No benchmark number should be added to this README unless its generating revisio
 
 ## Research documentation
 
-Start with [`docs/research-status.md`](docs/research-status.md) for current evidence boundaries and [`docs/experiment-reporting.md`](docs/experiment-reporting.md) for the minimum evidence required before reporting quantitative results. Reproducibility, runtime provenance, policy contracts, and architecture are documented in `docs/reproducibility.md`, `docs/runtime-provenance.md`, `docs/policy-contract.md`, and `docs/ARCHITECTURE.md`.
+Start with [`docs/research-status.md`](docs/research-status.md) for current evidence boundaries, [`docs/claims-evidence-matrix.md`](docs/claims-evidence-matrix.md) for claim-specific evidence requirements, and [`docs/experiment-reporting.md`](docs/experiment-reporting.md) for the minimum evidence required before reporting quantitative results. Reproducibility, runtime provenance, policy contracts, and architecture are documented in `docs/reproducibility.md`, `docs/runtime-provenance.md`, `docs/policy-contract.md`, and `docs/ARCHITECTURE.md`.
 
 ## Research lineage
 
