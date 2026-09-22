@@ -54,6 +54,24 @@ def test_batch_record_rejects_metric_count_mismatch() -> None:
         VerlBatchRewardRecord((reward,), metrics)
 
 
+def test_batch_record_rejects_tampered_component_metric() -> None:
+    breakdown = GrpoRewardBreakdown(1.0, 0.2, -0.01, 1.19)
+    reward = VerlRewardRecord.from_breakdown(0, breakdown)
+    metrics = GrpoBatchMetrics(1, 1.19, 1.0, 0.3, -0.01, 1.0, 0.0)
+
+    with pytest.raises(ValueError, match="mean_transfer_component"):
+        VerlBatchRewardRecord((reward,), metrics)
+
+
+def test_batch_record_rejects_tampered_transfer_rate() -> None:
+    breakdown = GrpoRewardBreakdown(1.0, 0.2, -0.01, 1.19)
+    reward = VerlRewardRecord.from_breakdown(0, breakdown)
+    metrics = GrpoBatchMetrics(1, 1.19, 1.0, 0.2, -0.01, 0.0, 0.0)
+
+    with pytest.raises(ValueError, match="positive_transfer_rate"):
+        VerlBatchRewardRecord((reward,), metrics)
+
+
 def test_build_batch_record_preserves_adapter_validation() -> None:
     adapter = VerlRewardAdapter()
 
