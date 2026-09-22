@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import argparse
 import math
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from experiments.report_io import atomic_write_json
-from experiments.synthetic_negative_transfer import BenchmarkCase, BenchmarkResult, run_benchmark
+from experiments.synthetic_negative_transfer import (
+    BenchmarkCase,
+    BenchmarkResult,
+    load_benchmark_cases,
+    run_benchmark,
+)
 from remem.routing.counterfactual import CounterfactualRouter
 
 
@@ -79,3 +86,37 @@ def _validate_thresholds(minimum_deltas: list[float]) -> None:
         raise ValueError("minimum_deltas must contain only finite values")
     if len(minimum_deltas) != len(set(minimum_deltas)):
         raise ValueError("minimum_deltas must be unique")
+
+
+def _build_argument_parser() -> argparse.ArgumentParser:
+    """Build the command-line interface for evidence-producing threshold sweeps."""
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--cases", required=True, type=Path, help="JSON array of matched benchmark cases"
+    )
+    parser.add_argument(
+        "--output", required=True, type=Path, help="path for deterministic JSON evidence"
+    )
+    parser.add_argument(
+        "--minimum-delta",
+        required=True,
+        type=float,
+        action="append",
+        dest="minimum_deltas",
+        help="routing threshold to evaluate; repeat for each threshold",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Execute a configured threshold sweep over one auditable matched case set."""
+
+    arguments = _build_argument_parser().parse_args(argv)
+    cases = load_benchmark_cases(arguments.cases)
+    save_threshold_ablation_evidence(cases, arguments.minimum_deltas, arguments.output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
