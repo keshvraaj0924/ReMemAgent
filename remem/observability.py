@@ -45,6 +45,25 @@ class MetricSnapshot:
             }
         )
 
+    def counter_rate(self, numerator: str, denominator: str) -> float:
+        """Return a validated ratio between two recorded counters.
+
+        This keeps experiment reporting from silently treating missing counters as
+        zero. Both names must exist in the snapshot, and the snapshot itself is
+        validated before the ratio is derived.
+        """
+
+        numerator_name = _validate_metric_name(numerator)
+        denominator_name = _validate_metric_name(denominator)
+        recorder = MetricsRecorder()
+        recorder.merge(self)
+
+        if numerator_name not in self.counters:
+            raise KeyError(f"counter is not present: {numerator_name}")
+        if denominator_name not in self.counters:
+            raise KeyError(f"counter is not present: {denominator_name}")
+        return self.counters[numerator_name] / self.counters[denominator_name]
+
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> Self:
         """Restore and validate a snapshot from persisted JSON-like data.

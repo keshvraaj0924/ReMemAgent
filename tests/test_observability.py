@@ -71,6 +71,30 @@ def test_metric_snapshot_mean_durations_are_validated_and_read_only() -> None:
         malformed.mean_durations()
 
 
+def test_metric_snapshot_counter_rate_requires_valid_recorded_counters() -> None:
+    recorder = MetricsRecorder()
+    recorder.increment("retrieval.accepted", 3)
+    recorder.increment("retrieval.total", 4)
+    snapshot = recorder.snapshot()
+
+    assert snapshot.counter_rate("retrieval.accepted", "retrieval.total") == pytest.approx(0.75)
+
+    with pytest.raises(KeyError, match="retrieval.missing"):
+        snapshot.counter_rate("retrieval.missing", "retrieval.total")
+    with pytest.raises(KeyError, match="retrieval.missing"):
+        snapshot.counter_rate("retrieval.accepted", "retrieval.missing")
+    with pytest.raises(ValueError, match="non-empty"):
+        snapshot.counter_rate(" ", "retrieval.total")
+
+    malformed = MetricSnapshot(
+        counters={"retrieval.accepted": 1, "retrieval.total": 0},
+        timing_seconds={},
+        timing_counts={},
+    )
+    with pytest.raises(ValueError, match="counter amount must be positive"):
+        malformed.counter_rate("retrieval.accepted", "retrieval.total")
+
+
 def test_metric_snapshot_round_trip_validates_persisted_payload() -> None:
     recorder = MetricsRecorder()
     recorder.increment("episodes", 4)
