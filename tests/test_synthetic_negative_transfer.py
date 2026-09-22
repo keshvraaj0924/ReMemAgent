@@ -159,8 +159,14 @@ def test_load_benchmark_cases_strictly_restores_json_cases(tmp_path) -> None:
     [
         ({"case_id": "not-an-array"}, "JSON array"),
         ([{"case_id": "missing-utilities"}], "must contain exactly"),
-        ([{"case_id": 7, "utility_with_memory": 0.9, "utility_without_memory": 0.6}], "non-string case_id"),
-        ([{"case_id": "bool", "utility_with_memory": True, "utility_without_memory": 0.6}], "invalid utility_with_memory"),
+        (
+            [{"case_id": 7, "utility_with_memory": 0.9, "utility_without_memory": 0.6}],
+            "non-string case_id",
+        ),
+        (
+            [{"case_id": "bool", "utility_with_memory": True, "utility_without_memory": 0.6}],
+            "invalid utility_with_memory",
+        ),
     ],
 )
 def test_load_benchmark_cases_rejects_invalid_schema(tmp_path, payload, message) -> None:
@@ -210,4 +216,13 @@ def test_cli_rejects_non_finite_minimum_delta(tmp_path) -> None:
     input_path.write_text("[]", encoding="utf-8")
 
     with pytest.raises(ValueError, match="minimum_delta must be finite"):
-        main(["--cases", str(input_path), "--output", str(tmp_path / "out.json"), "--minimum-delta", "nan"])
+        main(
+            [
+                "--cases",
+                str(input_path),
+                "--output",
+                str(tmp_path / "out.json"),
+                "--minimum-delta",
+                "nan",
+            ]
+        )
