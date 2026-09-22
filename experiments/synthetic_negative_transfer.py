@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from experiments.report_io import atomic_write_json
 from remem.routing.counterfactual import CounterfactualRouter
@@ -149,12 +152,43 @@ def save_benchmark_evidence(
         "result": {
             **asdict(result),
             "mean_routing_regret": result.mean_routing_regret,
-            "memory_induced_negative_transfer_rate": (result.memory_induced_negative_transfer_rate),
+            "memory_induced_negative_transfer_rate": result.memory_induced_negative_transfer_rate,
             "negative_transfer_avoidance_rate": result.negative_transfer_avoidance_rate,
             "negative_transfer_rate": result.negative_transfer_rate,
         },
     }
     return atomic_write_json(output_path, payload)
+
+
+def load_benchmark_cases(input_path: str | Path) -> list[BenchmarkCase]:
+    """Load and strictly validate benchmark cases from a JSON array."""
+
+    path = Path(input_path)
+    try:
+        payload: Any = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"unable to load benchmark cases from {path}") from exc
+    if not isinstance(payload, list):
+        raise ValueError("benchmark case file must contain a JSON array")
+
+    expected_fields = {"case_id", "utility_with_memory", "utility_without_memory"}
+    cases: list[BenchmarkCase] = []
+    for index, item in enumerate(payload):
+        if not isinstance(item, dict) or set(item) != expected_fields:
+            raise ValueError(f"benchmark case at index {index} must contain exactly {sorted(expected_fields)}")
+        case_id = item["case_id"]
+        with_memory = item["utility_with_memory"]
+        without_memory = item["utility_without_memory"]
+        if not isinstance(case_id, str):
+            raise ValueError(f"benchmark case at index {index} has non-string case_id")
+        if isinstance(with_memory, bool) or not isinstance(with_memory, (int, float)):
+            raise ValueError(f"benchmark case at index {index} has invalid utility_with_memory")
+        if isinstance(without_memory, bool) or not isinstance(without_memory, (int, float)):
+            raise ValueError(f"benchmark case at index {index} has invalid utility_without_memory")
+        cases.append(BenchmarkCase(case_id, float(with_memory), float(without_memory)))
+
+    _validate_unique_case_ids(cases)
+    return cases
 
 
 def _validate_unique_case_ids(cases: list[BenchmarkCase]) -> None:
@@ -165,14 +199,30 @@ def _validate_unique_case_ids(cases: list[BenchmarkCase]) -> None:
         raise ValueError("benchmark case_id values must be unique")
 
 
+def _build_argument_parser() -> argparse.ArgumentParser:
+    """Build the command-line interface for evidence-producing benchmark runs."""
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--cases", required=True, type=Path, help="JSON array of matched benchmark cases")
+    parser.add_argument("--output", required=True, type=Path, help="path for deterministic JSON evidence")
+    parser.add_argument("--minimum-delta", type=float, default=0.05, help="minimum memory utility advantage")
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Execute one configured benchmark and persist auditable evidence."""
+
+    arguments = _build_argument_parser().parse_args(argv)
+    if not math.isfinite(arguments.minimum_delta):
+        raise ValueError("minimum_delta must be finite")
+    cases = load_benchmark_cases(arguments.cases)
+    save_benchmark_evidence(
+        cases,
+        CounterfactualRouter(minimum_delta=arguments.minimum_delta),
+        arguments.output,
+    )
+    return 0
+
+
 if __name__ == "__main__":
-    benchmark_cases = [
-        BenchmarkCase("positive_1", 0.90, 0.70),
-        BenchmarkCase("positive_2", 0.85, 0.60),
-        BenchmarkCase("negative_1", 0.35, 0.80),
-        BenchmarkCase("negative_2", 0.40, 0.75),
-    ]
-    result = run_benchmark(benchmark_cases, CounterfactualRouter(minimum_delta=0.05))
-    print(f"negative_transfer_rate={result.negative_transfer_rate:.3f}")
-    print(f"negative_transfer_avoidance_rate={result.negative_transfer_avoidance_rate:.3f}")
-    print(f"routing_regret={result.routing_regret:.3f}")
+    raise SystemExit(main())
