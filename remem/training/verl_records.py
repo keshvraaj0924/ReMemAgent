@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from math import isfinite
+from math import isclose, isfinite
 from typing import Any
 
 from remem.training.grpo import GrpoRewardBreakdown
 from remem.training.grpo_metrics import GrpoBatchMetrics
 from remem.training.verl_adapter import VerlRewardAdapter
+
+_METRIC_ABSOLUTE_TOLERANCE = 1e-12
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +70,38 @@ class VerlBatchRewardRecord:
             raise ValueError("reward records must preserve contiguous batch order")
         if self.metrics.sample_count != len(self.rewards):
             raise ValueError("metrics sample_count must match reward records")
+        self._validate_metric_integrity()
+
+    def _validate_metric_integrity(self) -> None:
+        """Reject aggregate metrics that disagree with their sample records."""
+        denominator = float(len(self.rewards))
+        expected_metrics = {
+            "mean_total_reward": sum(record.total_reward for record in self.rewards) / denominator,
+            "mean_task_component": (
+                sum(record.task_component for record in self.rewards) / denominator
+            ),
+            "mean_transfer_component": (
+                sum(record.transfer_component for record in self.rewards) / denominator
+            ),
+            "mean_memory_cost_component": (
+                sum(record.memory_cost_component for record in self.rewards) / denominator
+            ),
+            "positive_transfer_rate": (
+                sum(record.transfer_component > 0.0 for record in self.rewards) / denominator
+            ),
+            "negative_transfer_rate": (
+                sum(record.transfer_component < 0.0 for record in self.rewards) / denominator
+            ),
+        }
+        for metric_name, expected_value in expected_metrics.items():
+            actual_value = getattr(self.metrics, metric_name)
+            if not isclose(
+                actual_value,
+                expected_value,
+                rel_tol=0.0,
+                abs_tol=_METRIC_ABSOLUTE_TOLERANCE,
+            ):
+                raise ValueError(f"metrics {metric_name} must match reward records")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable trainer logging payload."""
