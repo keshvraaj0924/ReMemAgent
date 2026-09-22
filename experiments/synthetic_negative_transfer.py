@@ -46,13 +46,11 @@ class BenchmarkResult:
     @property
     def negative_transfer_rate(self) -> float:
         """Return the share of cases where memory has lower utility."""
-
         return self.negative_transfer_cases / self.total_cases if self.total_cases else 0.0
 
     @property
     def memory_induced_negative_transfer_rate(self) -> float:
         """Return negative transfer among cases where memory was selected."""
-
         return (
             self.selected_negative_transfer_cases / self.memory_selected
             if self.memory_selected
@@ -62,7 +60,6 @@ class BenchmarkResult:
     @property
     def negative_transfer_avoidance_rate(self) -> float:
         """Return the share of negative-transfer opportunities the router avoided."""
-
         return (
             self.avoided_negative_transfer_cases / self.negative_transfer_cases
             if self.negative_transfer_cases
@@ -72,7 +69,6 @@ class BenchmarkResult:
     @property
     def mean_routing_regret(self) -> float:
         """Return mean utility lost relative to the per-case oracle route."""
-
         return self.routing_regret / self.total_cases if self.total_cases else 0.0
 
 
@@ -87,13 +83,11 @@ def _constant_utility(value: float) -> Callable[[], float]:
 
 def _selected_utility(case: BenchmarkCase, route: str) -> float:
     """Return utility realized by the route selected for one matched case."""
-
     return case.utility_with_memory if route == "memory" else case.utility_without_memory
 
 
 def _routing_regret(case: BenchmarkCase, route: str) -> float:
     """Return non-negative utility loss against the best route for one case."""
-
     oracle_utility = max(case.utility_with_memory, case.utility_without_memory)
     return oracle_utility - _selected_utility(case, route)
 
@@ -143,7 +137,6 @@ def save_benchmark_evidence(
     output_path: str | Path,
 ) -> Path:
     """Execute the synthetic benchmark and persist its inputs and measured outputs."""
-
     result = run_benchmark(cases, router)
     payload = {
         "benchmark": "synthetic_negative_transfer",
@@ -162,7 +155,6 @@ def save_benchmark_evidence(
 
 def load_benchmark_cases(input_path: str | Path) -> list[BenchmarkCase]:
     """Load and strictly validate benchmark cases from a JSON array."""
-
     path = Path(input_path)
     try:
         payload: Any = json.loads(path.read_text(encoding="utf-8"))
@@ -175,7 +167,9 @@ def load_benchmark_cases(input_path: str | Path) -> list[BenchmarkCase]:
     cases: list[BenchmarkCase] = []
     for index, item in enumerate(payload):
         if not isinstance(item, dict) or set(item) != expected_fields:
-            raise ValueError(f"benchmark case at index {index} must contain exactly {sorted(expected_fields)}")
+            raise ValueError(
+                f"benchmark case at index {index} must contain exactly {sorted(expected_fields)}"
+            )
         case_id = item["case_id"]
         with_memory = item["utility_with_memory"]
         without_memory = item["utility_without_memory"]
@@ -193,7 +187,6 @@ def load_benchmark_cases(input_path: str | Path) -> list[BenchmarkCase]:
 
 def _validate_unique_case_ids(cases: list[BenchmarkCase]) -> None:
     """Reject duplicate identifiers so aggregate results remain auditable."""
-
     case_ids = [case.case_id for case in cases]
     if len(case_ids) != len(set(case_ids)):
         raise ValueError("benchmark case_id values must be unique")
@@ -201,17 +194,21 @@ def _validate_unique_case_ids(cases: list[BenchmarkCase]) -> None:
 
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Build the command-line interface for evidence-producing benchmark runs."""
-
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cases", required=True, type=Path, help="JSON array of matched benchmark cases")
-    parser.add_argument("--output", required=True, type=Path, help="path for deterministic JSON evidence")
-    parser.add_argument("--minimum-delta", type=float, default=0.05, help="minimum memory utility advantage")
+    parser.add_argument(
+        "--cases", required=True, type=Path, help="JSON array of matched benchmark cases"
+    )
+    parser.add_argument(
+        "--output", required=True, type=Path, help="path for deterministic JSON evidence"
+    )
+    parser.add_argument(
+        "--minimum-delta", type=float, default=0.05, help="minimum memory utility advantage"
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Execute one configured benchmark and persist auditable evidence."""
-
     arguments = _build_argument_parser().parse_args(argv)
     if not math.isfinite(arguments.minimum_delta):
         raise ValueError("minimum_delta must be finite")
