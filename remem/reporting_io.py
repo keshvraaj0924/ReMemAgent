@@ -18,9 +18,7 @@ def save_experiment_summary(summary: ExperimentSummary, path: str | Path) -> Pat
     validated = ExperimentSummary.from_dict(summary.to_dict())
     destination = Path(path)
     if not destination.parent.is_dir():
-        raise FileNotFoundError(
-            f"summary parent directory does not exist: {destination.parent}"
-        )
+        raise FileNotFoundError(f"summary parent directory does not exist: {destination.parent}")
 
     temporary_path: Path | None = None
     try:
