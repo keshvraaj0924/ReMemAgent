@@ -35,9 +35,7 @@ class VerlRewardRecord:
             raise ValueError("reward record components must be finite")
 
     @classmethod
-    def from_breakdown(
-        cls, sample_index: int, breakdown: GrpoRewardBreakdown
-    ) -> VerlRewardRecord:
+    def from_breakdown(cls, sample_index: int, breakdown: GrpoRewardBreakdown) -> VerlRewardRecord:
         """Create a record from the framework-neutral reward attribution."""
         if not isinstance(breakdown, GrpoRewardBreakdown):
             raise TypeError("breakdown must be a GrpoRewardBreakdown")
