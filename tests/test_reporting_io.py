@@ -64,9 +64,7 @@ def test_load_experiment_summary_rejects_non_object_root(tmp_path) -> None:
 
 def test_load_experiment_summary_rejects_invalid_schema(tmp_path) -> None:
     destination = tmp_path / "summary.json"
-    destination.write_text(
-        json.dumps({"counters": {}, "mean_durations": {}}), encoding="utf-8"
-    )
+    destination.write_text(json.dumps({"counters": {}, "mean_durations": {}}), encoding="utf-8")
 
     with pytest.raises(ValueError, match="unexpected or missing fields"):
         load_experiment_summary(destination)
