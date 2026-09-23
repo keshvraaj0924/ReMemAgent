@@ -16,6 +16,18 @@ from remem.runtime_metadata import RuntimeMetadata
 _PROVENANCE_SCHEMA_VERSION = 1
 
 
+def _sync_directory(path: Path) -> None:
+    """Flush directory metadata when the platform supports directory fsync."""
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    directory_fd = os.open(path, flags)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
 @dataclass(frozen=True, slots=True)
 class ExperimentProvenance:
     """Verified provenance for replaying and auditing one experiment run."""
@@ -115,7 +127,7 @@ class ExperimentProvenance:
         return provenance
 
     def save(self, path: str | Path) -> None:
-        """Atomically persist verified provenance without partial artifacts."""
+        """Atomically and durably persist verified provenance."""
         destination = Path(path)
         if not destination.parent.exists():
             raise FileNotFoundError(f"provenance parent does not exist: {destination.parent}")
@@ -137,6 +149,7 @@ class ExperimentProvenance:
                 os.fsync(temporary_file.fileno())
             os.replace(temporary_path, destination)
             temporary_path = None
+            _sync_directory(destination.parent)
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
