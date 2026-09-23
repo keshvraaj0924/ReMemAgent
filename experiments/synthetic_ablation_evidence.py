@@ -143,7 +143,9 @@ def _parse_result(item: Any, index: int) -> ThresholdAblationResult:
     for field in integer_fields:
         field_value = raw_result[field]
         if isinstance(field_value, bool) or not isinstance(field_value, int) or field_value < 0:
-            raise ValueError(f"benchmark result field {field} at index {index} must be non-negative int")
+            raise ValueError(
+                f"benchmark result field {field} at index {index} must be non-negative int"
+            )
         integer_values[field] = field_value
 
     benchmark_result = BenchmarkResult(
@@ -159,7 +161,9 @@ def _parse_result(item: Any, index: int) -> ThresholdAblationResult:
     for field, expected in expected_derived.items():
         observed = _finite_number(raw_result[field], field)
         if observed != expected:
-            raise ValueError(f"benchmark result derived field {field} at index {index} is inconsistent")
+            raise ValueError(
+                f"benchmark result derived field {field} at index {index} is inconsistent"
+            )
     return ThresholdAblationResult(minimum_delta=minimum_delta, benchmark_result=benchmark_result)
 
 
