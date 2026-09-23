@@ -1,6 +1,7 @@
 """Tests for experiment provenance integrity and replay checks."""
 
 import json
+from unittest.mock import patch
 
 import pytest
 
@@ -37,6 +38,25 @@ def test_save_and_load_round_trip(tmp_path) -> None:
     provenance.save(path)
     assert path.read_text(encoding="utf-8") == provenance.to_json()
     assert ExperimentProvenance.load(path) == provenance
+
+
+def test_save_syncs_parent_directory_after_replace(tmp_path) -> None:
+    path = tmp_path / "provenance.json"
+    with patch("remem.experiment_provenance._sync_directory") as sync_directory:
+        _provenance().save(path)
+    sync_directory.assert_called_once_with(tmp_path)
+
+
+def test_save_does_not_sync_parent_when_replace_fails(tmp_path) -> None:
+    path = tmp_path / "provenance.json"
+    with (
+        patch("remem.experiment_provenance.os.replace", side_effect=OSError("replace failed")),
+        patch("remem.experiment_provenance._sync_directory") as sync_directory,
+        pytest.raises(OSError, match="replace failed"),
+    ):
+        _provenance().save(path)
+    sync_directory.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_save_leaves_no_temporary_artifacts(tmp_path) -> None:
