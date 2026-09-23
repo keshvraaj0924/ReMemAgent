@@ -37,9 +37,7 @@ def _reward_record() -> VerlBatchRewardRecord:
 
 
 def _evidence() -> ProvenancedVerlRewardEvidence:
-    return ProvenancedVerlRewardEvidence(
-        provenance=_provenance(), reward_record=_reward_record()
-    )
+    return ProvenancedVerlRewardEvidence(provenance=_provenance(), reward_record=_reward_record())
 
 
 def test_provenanced_reward_evidence_round_trip(tmp_path) -> None:
@@ -112,7 +110,7 @@ def test_save_requires_existing_parent(tmp_path) -> None:
 
 def test_serialization_is_deterministic() -> None:
     evidence = _evidence()
-    assert evidence.to_json() == ProvenancedVerlRewardEvidence.from_json(
-        evidence.to_json()
-    ).to_json()
+    assert (
+        evidence.to_json() == ProvenancedVerlRewardEvidence.from_json(evidence.to_json()).to_json()
+    )
     assert json.loads(evidence.to_json())["run_id"] == evidence.run_id
