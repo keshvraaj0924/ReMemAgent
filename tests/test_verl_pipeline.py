@@ -13,13 +13,13 @@ def _samples() -> list[dict[str, object]]:
     return [
         {
             "task_reward": 1.0,
-            "memory_delta": 0.2,
-            "memory_tokens": 10,
+            "memory_used": True,
+            "counterfactual_delta": 0.2,
         },
         {
             "task_reward": 0.0,
-            "memory_delta": -0.3,
-            "memory_tokens": 5,
+            "memory_used": True,
+            "counterfactual_delta": -0.3,
         },
     ]
 
