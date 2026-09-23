@@ -63,8 +63,14 @@ def test_loader_reconstructs_verified_environment_evidence(tmp_path: Path) -> No
     [
         (lambda report: report["aggregates"].__setitem__("mean_reward", 0.0), "mean_reward"),
         (lambda report: report["configuration"].__setitem__("seeds", [8]), "seeds"),
-        (lambda report: report["episodes"][0]["result"].__setitem__("total_reward", 0.0), "total_reward"),
-        (lambda report: report.__setitem__("provenance_fingerprint", "0" * 64), "provenance_fingerprint"),
+        (
+            lambda report: report["episodes"][0]["result"].__setitem__("total_reward", 0.0),
+            "total_reward",
+        ),
+        (
+            lambda report: report.__setitem__("provenance_fingerprint", "0" * 64),
+            "provenance_fingerprint",
+        ),
     ],
 )
 def test_loader_rejects_mutated_derived_evidence(tmp_path: Path, mutation, message: str) -> None:
