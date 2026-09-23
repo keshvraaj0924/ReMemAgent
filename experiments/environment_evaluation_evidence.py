@@ -98,7 +98,16 @@ def _episode(payload: object) -> SeededEpisodeResult:
     result_payload = _mapping(episode["result"], "episode.result")
     _require_exact_fields(
         result_payload,
-        frozenset({"initial_observation", "total_reward", "terminated", "truncated", "step_count", "steps"}),
+        frozenset(
+            {
+                "initial_observation",
+                "total_reward",
+                "terminated",
+                "truncated",
+                "step_count",
+                "steps",
+            }
+        ),
         "episode.result",
     )
     steps_payload = result_payload["steps"]
@@ -108,12 +117,16 @@ def _episode(payload: object) -> SeededEpisodeResult:
     if result_payload["step_count"] != len(steps):
         raise ValueError("episode.result.step_count does not match steps")
     total_reward = _finite_number(result_payload["total_reward"], "episode.result.total_reward")
-    if not isclose(total_reward, sum(step.result.reward for step in steps), rel_tol=1e-12, abs_tol=1e-12):
+    if not isclose(
+        total_reward, sum(step.result.reward for step in steps), rel_tol=1e-12, abs_tol=1e-12
+    ):
         raise ValueError("episode total_reward does not match transition rewards")
     return SeededEpisodeResult(
         seed=seed,
         result=EpisodeResult(
-            initial_observation=_string(result_payload["initial_observation"], "initial_observation"),
+            initial_observation=_string(
+                result_payload["initial_observation"], "initial_observation"
+            ),
             steps=steps,
             total_reward=total_reward,
             terminated=_boolean(result_payload["terminated"], "terminated"),
@@ -124,9 +137,15 @@ def _episode(payload: object) -> SeededEpisodeResult:
 
 def _step(payload: object) -> EpisodeStep:
     step = _mapping(payload, "step")
-    _require_exact_fields(step, frozenset({"step_index", "observation", "action", "result"}), "step")
+    _require_exact_fields(
+        step, frozenset({"step_index", "observation", "action", "result"}), "step"
+    )
     result = _mapping(step["result"], "step.result")
-    _require_exact_fields(result, frozenset({"observation", "reward", "terminated", "truncated", "info"}), "step.result")
+    _require_exact_fields(
+        result,
+        frozenset({"observation", "reward", "terminated", "truncated", "info"}),
+        "step.result",
+    )
     return EpisodeStep(
         step_index=step["step_index"],
         observation=_string(step["observation"], "step.observation"),
@@ -164,7 +183,9 @@ def _verify_aggregates(aggregates: Mapping[str, Any], evaluation: EnvironmentEva
 def _require_exact_fields(payload: Mapping[str, Any], expected: frozenset[str], label: str) -> None:
     actual = set(payload)
     if actual != expected:
-        raise ValueError(f"{label} fields mismatch: missing={sorted(expected - actual)}, unknown={sorted(actual - expected)}")
+        raise ValueError(
+            f"{label} fields mismatch: missing={sorted(expected - actual)}, unknown={sorted(actual - expected)}"
+        )
 
 
 def _mapping(value: object, field_name: str) -> Mapping[str, Any]:
