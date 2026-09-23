@@ -9,6 +9,7 @@ def test_training_package_exports_validated_integration_contracts() -> None:
         "GrpoRewardBreakdown",
         "GrpoRewardConfig",
         "GrpoTrajectory",
+        "ProvenancedVerlRewardEvidence",
         "VerlBatchRewardRecord",
         "VerlRewardAdapter",
         "VerlRewardFields",

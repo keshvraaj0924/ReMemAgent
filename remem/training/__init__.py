@@ -9,6 +9,7 @@ from remem.training.grpo import (
 )
 from remem.training.grpo_metrics import GrpoBatchMetrics, summarize_grpo_breakdowns
 from remem.training.verl_adapter import VerlRewardAdapter, VerlRewardFields
+from remem.training.verl_provenance import ProvenancedVerlRewardEvidence
 from remem.training.verl_records import (
     VerlBatchRewardRecord,
     VerlRewardRecord,
@@ -21,6 +22,7 @@ __all__ = [
     "GrpoRewardBreakdown",
     "GrpoRewardConfig",
     "GrpoTrajectory",
+    "ProvenancedVerlRewardEvidence",
     "VerlBatchRewardRecord",
     "VerlRewardAdapter",
     "VerlRewardFields",
