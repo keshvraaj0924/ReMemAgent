@@ -12,7 +12,13 @@ from remem.training.verl_records import VerlBatchRewardRecord, VerlRewardRecord
 
 _TOP_LEVEL_FIELDS = frozenset({"schema_version", "rewards", "metrics"})
 _REWARD_FIELDS = frozenset(
-    {"sample_index", "task_component", "transfer_component", "memory_cost_component", "total_reward"}
+    {
+        "sample_index",
+        "task_component",
+        "transfer_component",
+        "memory_cost_component",
+        "total_reward",
+    }
 )
 _METRIC_FIELDS = frozenset(
     {
@@ -46,7 +52,9 @@ def verify_verl_reward_evidence(payload: dict[str, Any]) -> VerlBatchRewardRecor
     if frozenset(payload) != _TOP_LEVEL_FIELDS:
         raise ValueError("reward evidence must contain exactly the supported top-level fields")
     if payload["schema_version"] != SCHEMA_VERSION:
-        raise ValueError(f"unsupported reward evidence schema_version: {payload['schema_version']!r}")
+        raise ValueError(
+            f"unsupported reward evidence schema_version: {payload['schema_version']!r}"
+        )
 
     rewards_payload = payload["rewards"]
     metrics_payload = payload["metrics"]
