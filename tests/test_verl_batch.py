@@ -51,18 +51,14 @@ def test_compute_verl_batch_rewards_preserves_adapter_validation() -> None:
 
 
 def test_batch_result_rejects_scalar_record_divergence() -> None:
-    result = compute_verl_batch_rewards(
-        [{"task_reward": 1.0, "memory_used": False}]
-    )
+    result = compute_verl_batch_rewards([{"task_reward": 1.0, "memory_used": False}])
 
     with pytest.raises(ValueError, match="scalar rewards must match"):
         replace(result, rewards=(0.0,))
 
 
 def test_batch_result_rejects_empty_scalar_rewards() -> None:
-    result = compute_verl_batch_rewards(
-        [{"task_reward": 1.0, "memory_used": False}]
-    )
+    result = compute_verl_batch_rewards([{"task_reward": 1.0, "memory_used": False}])
 
     with pytest.raises(ValueError, match="at least one scalar reward"):
         VerlBatchRewardResult(rewards=(), record=result.record)
