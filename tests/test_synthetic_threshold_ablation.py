@@ -5,6 +5,7 @@ import pytest
 
 from experiments.synthetic_negative_transfer import BenchmarkCase
 from experiments.synthetic_threshold_ablation import (
+    main,
     run_threshold_ablation,
     save_threshold_ablation_evidence,
 )
@@ -65,3 +66,63 @@ def test_save_threshold_ablation_evidence_is_auditable_and_deterministic(tmp_pat
     save_threshold_ablation_evidence(cases, [0.0, 0.5], output_path)
     assert output_path.read_bytes() == first_bytes
     assert not list(output_path.parent.glob(".*.tmp"))
+
+
+def test_threshold_ablation_cli_uses_shared_case_loader_and_persists_evidence(tmp_path) -> None:
+    cases_path = tmp_path / "cases.json"
+    output_path = tmp_path / "evidence" / "thresholds.json"
+    cases_path.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "beneficial",
+                    "utility_with_memory": 0.9,
+                    "utility_without_memory": 0.6,
+                },
+                {
+                    "case_id": "harmful",
+                    "utility_with_memory": 0.4,
+                    "utility_without_memory": 0.8,
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "--cases",
+            str(cases_path),
+            "--output",
+            str(output_path),
+            "--minimum-delta",
+            "0.0",
+            "--minimum-delta",
+            "0.5",
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["minimum_deltas"] == [0.0, 0.5]
+    assert [case["case_id"] for case in payload["cases"]] == ["beneficial", "harmful"]
+    assert len(payload["results"]) == 2
+
+
+def test_threshold_ablation_cli_rejects_duplicate_thresholds(tmp_path) -> None:
+    cases_path = tmp_path / "cases.json"
+    cases_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="minimum_deltas must be unique"):
+        main(
+            [
+                "--cases",
+                str(cases_path),
+                "--output",
+                str(tmp_path / "out.json"),
+                "--minimum-delta",
+                "0.1",
+                "--minimum-delta",
+                "0.1",
+            ]
+        )
