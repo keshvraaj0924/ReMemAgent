@@ -79,9 +79,7 @@ class ProvenancedVerlRewardEvidence:
         if payload["run_id"] != provenance.run_id:
             raise ValueError("run_id does not match embedded experiment provenance")
         if payload["runtime_fingerprint"] != provenance.runtime_fingerprint:
-            raise ValueError(
-                "runtime_fingerprint does not match embedded experiment provenance"
-            )
+            raise ValueError("runtime_fingerprint does not match embedded experiment provenance")
         reward_record = verify_verl_reward_evidence(payload["reward_evidence"])
         return cls(provenance=provenance, reward_record=reward_record)
 
