@@ -12,7 +12,9 @@ from remem.experiment_provenance import ExperimentProvenance
 from remem.observability_artifact import ObservabilityArtifact
 
 _SCHEMA_VERSION = 1
-_REQUIRED_FIELDS = frozenset({"schema_version", "run_id", "provenance", "observability", "bundle_sha256"})
+_REQUIRED_FIELDS = frozenset(
+    {"schema_version", "run_id", "provenance", "observability", "bundle_sha256"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +55,9 @@ class ProvenancedObservability:
         if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int):
             raise TypeError("schema_version must be an integer")
         if self.schema_version != _SCHEMA_VERSION:
-            raise ValueError(f"unsupported provenanced observability version: {self.schema_version}")
+            raise ValueError(
+                f"unsupported provenanced observability version: {self.schema_version}"
+            )
         self.provenance.verify()
         self.observability.verify()
         if self.run_id != self.provenance.run_id:
