@@ -63,9 +63,7 @@ def test_atomic_write_json_cleans_temporary_file_when_replace_fails(
     assert list(tmp_path.glob(f".{output_path.name}.*.tmp")) == []
 
 
-def test_fsync_directory_is_noop_off_posix(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_fsync_directory_is_noop_off_posix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     open_calls: list[object] = []
     monkeypatch.setattr(report_io.os, "name", "nt")
     monkeypatch.setattr(report_io.os, "open", lambda *args: open_calls.append(call(*args)))
