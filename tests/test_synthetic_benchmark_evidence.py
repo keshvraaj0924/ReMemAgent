@@ -2,7 +2,10 @@ import json
 
 import pytest
 
-from experiments.synthetic_benchmark_evidence import load_verified_synthetic_benchmark_evidence
+from experiments.synthetic_benchmark_evidence import (
+    load_verified_synthetic_benchmark_evidence,
+    main,
+)
 from experiments.synthetic_negative_transfer import BenchmarkCase, save_benchmark_evidence
 from remem.routing.counterfactual import CounterfactualRouter
 
@@ -27,6 +30,22 @@ def test_load_verified_evidence_replays_benchmark(tmp_path) -> None:
     assert verified.minimum_delta == 0.05
     assert verified.result.total_cases == 3
     assert verified.result.memory_selected == 1
+
+
+def test_verifier_cli_accepts_valid_evidence(tmp_path) -> None:
+    path = _write_valid_evidence(tmp_path)
+
+    assert main(["--input", str(path)]) == 0
+
+
+def test_verifier_cli_rejects_tampered_evidence(tmp_path) -> None:
+    path = _write_valid_evidence(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["result"]["memory_selected"] = 2
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="deterministic replay"):
+        main(["--input", str(path)])
 
 
 def test_load_verified_evidence_rejects_tampered_aggregate(tmp_path) -> None:
