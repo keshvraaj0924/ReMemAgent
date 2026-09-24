@@ -94,7 +94,9 @@ def _parse_cases(value: Any) -> tuple[BenchmarkCase, ...]:
         cases.append(
             BenchmarkCase(
                 case_id=case_id,
-                utility_with_memory=_finite_number(item["utility_with_memory"], "utility_with_memory"),
+                utility_with_memory=_finite_number(
+                    item["utility_with_memory"], "utility_with_memory"
+                ),
                 utility_without_memory=_finite_number(
                     item["utility_without_memory"], "utility_without_memory"
                 ),
