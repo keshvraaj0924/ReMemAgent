@@ -55,7 +55,9 @@ class ProvenancedObservability:
 
     def verify(self) -> None:
         """Reject detached provenance, telemetry tampering, and schema drift."""
-        if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int):
+        if isinstance(self.schema_version, bool) or not isinstance(
+            self.schema_version, int
+        ):
             raise TypeError("schema_version must be an integer")
         if self.schema_version != _SCHEMA_VERSION:
             raise ValueError(
@@ -90,7 +92,9 @@ class ProvenancedObservability:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
-            raise ValueError("provenanced observability payload must contain valid JSON") from error
+            raise ValueError(
+                "provenanced observability payload must contain valid JSON"
+            ) from error
         if not isinstance(raw, dict):
             raise TypeError("provenanced observability JSON root must be an object")
         _validate_fields(raw)
@@ -102,7 +106,9 @@ class ProvenancedObservability:
             schema_version=raw["schema_version"],
             run_id=raw["run_id"],
             provenance=ExperimentProvenance.from_json(_canonical_json(raw["provenance"])),
-            observability=ObservabilityArtifact.from_json(_canonical_json(raw["observability"])),
+            observability=ObservabilityArtifact.from_json(
+                _canonical_json(raw["observability"])
+            ),
             bundle_sha256=raw["bundle_sha256"],
         )
         bundle.verify()
@@ -147,7 +153,10 @@ class ProvenancedObservability:
         return cls.from_json(Path(path).read_text(encoding="utf-8"))
 
 
-def _bundle_digest(provenance: ExperimentProvenance, observability: ObservabilityArtifact) -> str:
+def _bundle_digest(
+    provenance: ExperimentProvenance,
+    observability: ObservabilityArtifact,
+) -> str:
     payload = {
         "provenance": json.loads(provenance.to_json()),
         "observability": json.loads(observability.to_json()),
