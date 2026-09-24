@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import remem.provenanced_observability as provenanced_observability_module
 from remem.experiment_provenance import ExperimentProvenance
 from remem.observability import MetricsRecorder
 from remem.observability_artifact import ObservabilityArtifact
@@ -47,6 +48,24 @@ def test_provenanced_observability_persists_and_loads_verified_bundle(
     assert saved_path == destination
     assert restored == bundle
     assert destination.read_text(encoding="utf-8") == f"{bundle.to_json()}\n"
+    assert list(tmp_path.glob(".telemetry.json.*.tmp")) == []
+
+
+def test_provenanced_observability_save_cleans_temporary_file_when_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "telemetry.json"
+
+    def fail_replace(source: Path, target: Path) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(provenanced_observability_module.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        _bundle().save(destination)
+
+    assert not destination.exists()
     assert list(tmp_path.glob(".telemetry.json.*.tmp")) == []
 
 
@@ -108,6 +127,68 @@ def test_provenanced_observability_rejects_schema_drift() -> None:
     payload["unexpected"] = True
 
     with pytest.raises(ValueError, match="fields do not match schema"):
+        ProvenancedObservability.from_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("schema_version", [True, "1"])
+def test_provenanced_observability_requires_integer_schema_version(
+    schema_version: object,
+) -> None:
+    payload = json.loads(_bundle().to_json())
+    payload["schema_version"] = schema_version
+
+    with pytest.raises(TypeError, match="schema_version must be an integer"):
+        ProvenancedObservability.from_json(json.dumps(payload))
+
+
+def test_provenanced_observability_rejects_unsupported_schema_version() -> None:
+    payload = json.loads(_bundle().to_json())
+    payload["schema_version"] = 2
+
+    with pytest.raises(ValueError, match="unsupported provenanced observability version"):
+        ProvenancedObservability.from_json(json.dumps(payload))
+
+
+def test_provenanced_observability_rejects_non_string_bundle_digest() -> None:
+    payload = json.loads(_bundle().to_json())
+    payload["bundle_sha256"] = 42
+
+    with pytest.raises(TypeError, match="bundle_sha256 must be a string"):
+        ProvenancedObservability.from_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    ("payload", "error_type", "message"),
+    [
+        ("not-json", ValueError, "must contain valid JSON"),
+        ("[]", TypeError, "JSON root must be an object"),
+    ],
+)
+def test_provenanced_observability_rejects_malformed_payloads(
+    payload: str,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(error_type, match=message):
+        ProvenancedObservability.from_json(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("provenance", [], "provenance must be an object"),
+        ("observability", [], "observability must be an object"),
+    ],
+)
+def test_provenanced_observability_requires_object_components(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    payload = json.loads(_bundle().to_json())
+    payload[field] = value
+
+    with pytest.raises(TypeError, match=message):
         ProvenancedObservability.from_json(json.dumps(payload))
 
 
