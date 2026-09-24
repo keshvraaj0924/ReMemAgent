@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Self
 
 from remem.experiment_provenance import ExperimentProvenance
@@ -105,8 +108,48 @@ class ProvenancedObservability:
         bundle.verify()
         return bundle
 
+    def save(self, path: str | Path) -> Path:
+        """Atomically persist the verified bundle and durably commit its directory entry."""
+        self.verify()
+        destination = Path(path)
+        if not destination.parent.is_dir():
+            raise FileNotFoundError(
+                f"provenanced observability parent directory does not exist: {destination.parent}"
+            )
 
-def _bundle_digest(provenance: ExperimentProvenance, observability: ObservabilityArtifact) -> str:
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_file.write(self.to_json())
+                temporary_file.write("\n")
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+                temporary_path = Path(temporary_file.name)
+            os.replace(temporary_path, destination)
+            _sync_directory(destination.parent)
+        except Exception:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+            raise
+        return destination
+
+    @classmethod
+    def load(cls, path: str | Path) -> Self:
+        """Load and verify a persisted provenance-bound telemetry bundle."""
+        return cls.from_json(Path(path).read_text(encoding="utf-8"))
+
+
+def _bundle_digest(
+    provenance: ExperimentProvenance,
+    observability: ObservabilityArtifact,
+) -> str:
     payload = {
         "provenance": json.loads(provenance.to_json()),
         "observability": json.loads(observability.to_json()),
@@ -127,6 +170,17 @@ def _validate_fields(payload: Mapping[str, Any]) -> None:
             "provenanced observability fields do not match schema: "
             f"missing={missing_fields}, unknown={unknown_fields}"
         )
+
+
+def _sync_directory(directory: Path) -> None:
+    """Durably flush a replaced directory entry where POSIX supports it."""
+    if os.name != "posix":
+        return
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 __all__ = ["ProvenancedObservability"]
