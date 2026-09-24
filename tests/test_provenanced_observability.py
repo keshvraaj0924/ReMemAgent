@@ -35,7 +35,9 @@ def test_provenanced_observability_round_trip_is_deterministic() -> None:
     assert restored.run_id == restored.provenance.run_id
 
 
-def test_provenanced_observability_persists_and_loads_verified_bundle(tmp_path: Path) -> None:
+def test_provenanced_observability_persists_and_loads_verified_bundle(
+    tmp_path: Path,
+) -> None:
     bundle = _bundle()
     destination = tmp_path / "telemetry.json"
 
@@ -48,7 +50,9 @@ def test_provenanced_observability_persists_and_loads_verified_bundle(tmp_path: 
     assert list(tmp_path.glob(".telemetry.json.*.tmp")) == []
 
 
-def test_provenanced_observability_load_rejects_persisted_tampering(tmp_path: Path) -> None:
+def test_provenanced_observability_load_rejects_persisted_tampering(
+    tmp_path: Path,
+) -> None:
     destination = _bundle().save(tmp_path / "telemetry.json")
     payload = json.loads(destination.read_text(encoding="utf-8"))
     payload["observability"]["snapshot"]["counters"]["episodes"] = 999
@@ -58,7 +62,9 @@ def test_provenanced_observability_load_rejects_persisted_tampering(tmp_path: Pa
         ProvenancedObservability.load(destination)
 
 
-def test_provenanced_observability_save_requires_existing_parent(tmp_path: Path) -> None:
+def test_provenanced_observability_save_requires_existing_parent(
+    tmp_path: Path,
+) -> None:
     destination = tmp_path / "missing" / "telemetry.json"
 
     with pytest.raises(FileNotFoundError, match="parent directory does not exist"):
