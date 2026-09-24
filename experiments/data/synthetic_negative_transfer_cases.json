@@ -1,0 +1,42 @@
+[
+  {
+    "case_id": "strong_memory_gain",
+    "utility_with_memory": 0.9,
+    "utility_without_memory": 0.3
+  },
+  {
+    "case_id": "moderate_memory_gain",
+    "utility_with_memory": 0.78,
+    "utility_without_memory": 0.55
+  },
+  {
+    "case_id": "marginal_memory_gain",
+    "utility_with_memory": 0.63,
+    "utility_without_memory": 0.6
+  },
+  {
+    "case_id": "neutral_transfer",
+    "utility_with_memory": 0.5,
+    "utility_without_memory": 0.5
+  },
+  {
+    "case_id": "marginal_negative_transfer",
+    "utility_with_memory": 0.58,
+    "utility_without_memory": 0.62
+  },
+  {
+    "case_id": "moderate_negative_transfer",
+    "utility_with_memory": 0.42,
+    "utility_without_memory": 0.7
+  },
+  {
+    "case_id": "strong_negative_transfer",
+    "utility_with_memory": 0.2,
+    "utility_without_memory": 0.88
+  },
+  {
+    "case_id": "low_utility_memory_gain",
+    "utility_with_memory": 0.35,
+    "utility_without_memory": 0.22
+  }
+]
