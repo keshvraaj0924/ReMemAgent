@@ -8,8 +8,10 @@ match exactly.
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -164,7 +166,33 @@ def _finite_number(value: Any, field_name: str) -> float:
     return converted
 
 
+def _build_argument_parser() -> argparse.ArgumentParser:
+    """Build the command-line interface for evidence verification."""
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--input",
+        required=True,
+        type=Path,
+        help="persisted synthetic benchmark evidence to verify",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Verify one persisted benchmark artifact by deterministic replay."""
+
+    arguments = _build_argument_parser().parse_args(argv)
+    load_verified_synthetic_benchmark_evidence(arguments.input)
+    return 0
+
+
 __all__ = [
     "VerifiedSyntheticBenchmarkEvidence",
     "load_verified_synthetic_benchmark_evidence",
+    "main",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
